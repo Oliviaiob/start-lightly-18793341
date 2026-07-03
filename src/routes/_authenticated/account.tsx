@@ -21,7 +21,6 @@ function Page() {
     last_name: "",
     display_name: "",
     email: "",
-    phone: "",
   });
 
   useEffect(() => {
@@ -31,7 +30,7 @@ function Page() {
       setUserId(u.user.id);
       const { data } = await supabase
         .from("profiles")
-        .select("first_name, last_name, display_name, email, phone")
+        .select("first_name, last_name, display_name, email")
         .eq("id", u.user.id)
         .maybeSingle();
       if (data) {
@@ -40,7 +39,6 @@ function Page() {
           last_name: data.last_name || "",
           display_name: data.display_name || "",
           email: data.email || u.user.email || "",
-          phone: data.phone || "",
         });
       }
       setLoading(false);
@@ -56,7 +54,6 @@ function Page() {
         first_name: form.first_name,
         last_name: form.last_name,
         display_name: form.display_name,
-        phone: form.phone,
       })
       .eq("id", userId);
     setSaving(false);
@@ -109,11 +106,8 @@ function Page() {
               <p className="text-[11px] text-muted-foreground">Managed via authentication.</p>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="phone">Phone</Label>
               <Input
-                id="phone"
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                onChange={(e) => setForm({ ...form: e.target.value })}
               />
             </div>
             <div className="pt-2 flex justify-end">
