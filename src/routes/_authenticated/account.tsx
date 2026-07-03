@@ -105,11 +105,6 @@ function Page() {
               <Input id="email" value={form.email} disabled />
               <p className="text-[11px] text-muted-foreground">Managed via authentication.</p>
             </div>
-            <div className="space-y-1.5">
-              <Input
-                onChange={(e) => setForm({ ...form: e.target.value })}
-              />
-            </div>
             <div className="pt-2 flex justify-end">
               <button
                 onClick={save}
