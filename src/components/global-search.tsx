@@ -50,10 +50,14 @@ export function GlobalSearch() {
           .limit(5),
         supabase
           .from("jobs")
-          .select("id, title, status, client:clients(name)")
+          .select("id, title, status")
           .ilike("title", like)
           .limit(5),
-        supabase.from("clients").select("id, name, city").ilike("name", like).limit(5),
+        supabase
+          .from("clients")
+          .select("id, company_name, address")
+          .ilike("company_name", like)
+          .limit(5),
       ]);
 
       const list: Result[] = [];
@@ -70,20 +74,15 @@ export function GlobalSearch() {
           kind: "job",
           id: j.id,
           label: j.title || "Untitled role",
-          sub: [
-            (j.client as { name?: string } | null)?.name,
-            j.status,
-          ]
-            .filter(Boolean)
-            .join(" · "),
+          sub: j.status || undefined,
         }),
       );
       (cliRes.data || []).forEach((cl) =>
         list.push({
           kind: "client",
           id: cl.id,
-          label: cl.name || "Client",
-          sub: cl.city || undefined,
+          label: cl.company_name || "Client",
+          sub: cl.address || undefined,
         }),
       );
       setResults(list);
