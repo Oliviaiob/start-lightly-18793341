@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ShieldCheck } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 
 export const Route = createFileRoute("/_authenticated/compliance")({
@@ -7,11 +9,15 @@ export const Route = createFileRoute("/_authenticated/compliance")({
 
 function Page() {
   return (
-    <div className="max-w-[1400px] mx-auto">
-      <h1 className="text-2xl font-semibold tracking-tight capitalize mb-1">compliance</h1>
-      <p className="text-sm text-muted-foreground mb-6">This page will be built next.</p>
-      <Card className="p-12 text-center border-transparent shadow-sm">
-        <p className="text-muted-foreground">Coming soon — the compliance module.</p>
+    <div className="max-w-[1400px] mx-auto space-y-6 pt-2">
+      <PageHeader
+        eyebrow="Operations"
+        title="Compliance"
+        description="Track DBS, references and safeguarding documents across candidates."
+        icon={ShieldCheck}
+      />
+      <Card className="p-12 text-center rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
+        <p className="text-muted-foreground">Compliance checklist coming soon.</p>
       </Card>
     </div>
   );
