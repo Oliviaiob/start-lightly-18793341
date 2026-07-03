@@ -16,7 +16,7 @@ import { Users, Star, Search, Plus, X, Check, HelpCircle } from "lucide-react";
 import { useEffectiveScope, useScope } from "@/contexts/scope-context";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_authenticated/candidates")({
+export const Route = createFileRoute("/_authenticated/candidates/")({
   component: Page,
 });
 
