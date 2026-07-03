@@ -182,7 +182,7 @@ function Dashboard() {
         supabase
           .from("compliance_checklists")
           .select("id", { count: "exact", head: true })
-          .eq("status", "pending"),
+          .neq("overall_status", "completed"),
         supabase
           .from("interview_details")
           .select("id, scheduled_at, interview_type, candidate:candidates(first_name,last_name), job:jobs(title, client:clients(name))")
