@@ -12,10 +12,19 @@ import {
 
 const options = [
   {
-    label: "Add Candidate",
-    description: "Register a new candidate in the pipeline",
+    label: "Add Temporary Candidate",
+    description: "Register a candidate available for temp shifts",
     icon: Users,
-    route: "/candidates",
+    route: "/candidates/new",
+    search: { type: "temporary" },
+    accent: "bg-navy/10 text-navy",
+  },
+  {
+    label: "Add Permanent Candidate",
+    description: "Register a candidate for permanent placement",
+    icon: Users,
+    route: "/candidates/new",
+    search: { type: "permanent" },
     accent: "bg-navy/10 text-navy",
   },
   {
@@ -57,7 +66,7 @@ export function QuickAddMenu() {
               key={opt.label}
               onClick={() => {
                 setOpen(false);
-                navigate({ to: opt.route });
+                navigate({ to: opt.route, search: "search" in opt ? opt.search : undefined });
               }}
               className="w-full flex items-center gap-3 p-3 rounded-xl border border-border/70 hover:border-navy/40 hover:bg-muted/60 transition-all group text-left"
             >
