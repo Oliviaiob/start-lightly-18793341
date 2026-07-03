@@ -6,11 +6,14 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 type Activity = {
   id: string;
-  action: string | null;
+  activity_type: string | null;
   entity_type: string | null;
+  description: string | null;
   created_at: string | null;
-  actor?: { display_name: string | null; first_name: string | null; last_name: string | null } | null;
+  created_by: string | null;
 };
+
+type Profile = { id: string; display_name: string | null; first_name: string | null; last_name: string | null };
 
 function initialsFrom(name: string) {
   return name
@@ -36,15 +39,30 @@ function timeAgo(iso: string) {
 
 export function NotificationsMenu() {
   const [items, setItems] = useState<Activity[] | null>(null);
+  const [actors, setActors] = useState<Record<string, Profile>>({});
   const [open, setOpen] = useState(false);
 
   const load = async () => {
     const { data } = await supabase
       .from("activity_log")
-      .select("id, action, entity_type, created_at, actor:profiles(display_name, first_name, last_name)")
+      .select("id, activity_type, entity_type, description, created_at, created_by")
       .order("created_at", { ascending: false })
       .limit(10);
-    setItems((data as unknown as Activity[]) || []);
+    const list = (data as Activity[]) || [];
+    setItems(list);
+
+    const ids = Array.from(new Set(list.map((a) => a.created_by).filter((x): x is string => !!x)));
+    if (ids.length) {
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("id, display_name, first_name, last_name")
+        .in("id", ids);
+      const map: Record<string, Profile> = {};
+      (profs || []).forEach((p) => (map[p.id] = p as Profile));
+      setActors(map);
+    } else {
+      setActors({});
+    }
   };
 
   useEffect(() => {
@@ -81,10 +99,11 @@ export function NotificationsMenu() {
             <div className="px-4 py-8 text-sm text-muted-foreground text-center">No recent activity</div>
           )}
           {items?.map((a) => {
+            const actor = a.created_by ? actors[a.created_by] : null;
             const name =
-              a.actor?.display_name ||
-              [a.actor?.first_name, a.actor?.last_name].filter(Boolean).join(" ") ||
-              "Someone";
+              actor?.display_name ||
+              [actor?.first_name, actor?.last_name].filter(Boolean).join(" ") ||
+              "System";
             return (
               <div key={a.id} className="flex items-start gap-3 px-4 py-3 hover:bg-muted/60 border-b last:border-0">
                 <Avatar className="h-8 w-8">
@@ -96,7 +115,7 @@ export function NotificationsMenu() {
                   <div className="text-sm leading-snug">
                     <span className="font-medium">{name}</span>{" "}
                     <span className="text-muted-foreground">
-                      {a.action || "updated"} {a.entity_type || ""}
+                      {a.description || `${a.activity_type || "updated"} ${a.entity_type || ""}`.trim()}
                     </span>
                   </div>
                   <div className="text-[11px] text-muted-foreground mt-0.5">
