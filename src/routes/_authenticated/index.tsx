@@ -328,7 +328,7 @@ function Dashboard() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="p-5 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card lg:col-span-1">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold flex items-center gap-2"><Star className="h-4 w-4 text-warning fill-warning" /> Starred Candidates</h2>
@@ -354,10 +354,6 @@ function Dashboard() {
             </div>
           )}
         </Card>
-
-        <div className="lg:col-span-1">
-          <NotesCard />
-        </div>
 
         <Card className="p-5 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
@@ -391,6 +387,10 @@ function Dashboard() {
             </ul>
           )}
         </Card>
+      </div>
+
+      <div className="mt-6">
+        <NotesCard />
       </div>
     </div>
   );
