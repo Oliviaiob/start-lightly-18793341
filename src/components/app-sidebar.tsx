@@ -175,7 +175,7 @@ export function AppSidebar() {
       <SidebarContent className="gap-0">
         {renderGroup("Overview", overview)}
         {renderGroup("PERMANENT", recruitment)}
-        {renderGroup("Operations", operations)}
+        {renderGroup("TEMPORARY", operations)}
         {renderGroup("Workspace", workspace)}
       </SidebarContent>
 
