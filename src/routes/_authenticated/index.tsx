@@ -15,6 +15,7 @@ import {
   Star,
 } from "lucide-react";
 import { NotesCard } from "@/components/notes-card";
+import { useEffectiveScope, useScope } from "@/contexts/scope-context";
 
 export const Route = createFileRoute("/_authenticated/")({
   component: Dashboard,
@@ -124,8 +125,14 @@ function Dashboard() {
   const [starred, setStarred] = useState<Candidate[]>([]);
   const [activity, setActivity] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
+  const scope = useEffectiveScope({ dashboard: true });
+  const { userId } = useScope();
 
   useEffect(() => {
+    if (!userId) return;
+    const mine = scope === "mine";
+    const scoped = <T extends { eq: (col: string, val: string) => T }>(q: T): T =>
+      mine ? q.eq("created_by", userId) : q;
     const hour = new Date().getHours();
     setGreeting(hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening");
 
