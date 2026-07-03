@@ -165,7 +165,7 @@ export function AppSidebar() {
         onClick={toggleSidebar}
         aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-20 hidden md:grid h-6 w-6 place-items-center rounded-full bg-sidebar border border-sidebar-border text-sidebar-foreground hover:bg-sidebar-accent shadow-sm transition-colors"
+        className="absolute right-0 top-5 translate-x-1/2 z-20 hidden md:grid h-6 w-6 place-items-center rounded-full bg-sidebar border border-sidebar-border text-sidebar-foreground hover:bg-sidebar-accent shadow-sm transition-colors"
       >
         {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
       </button>
