@@ -50,7 +50,7 @@ export function GlobalSearch() {
           .limit(5),
         supabase
           .from("jobs")
-          .select("id, title, status, client:clients(company_name)")
+          .select("id, title, status")
           .ilike("title", like)
           .limit(5),
         supabase
