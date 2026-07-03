@@ -74,12 +74,7 @@ export function GlobalSearch() {
           kind: "job",
           id: j.id,
           label: j.title || "Untitled role",
-          sub: [
-            (j.client as { name?: string } | null)?.name,
-            j.status,
-          ]
-            .filter(Boolean)
-            .join(" · "),
+          sub: j.status || undefined,
         }),
       );
       (cliRes.data || []).forEach((cl) =>
