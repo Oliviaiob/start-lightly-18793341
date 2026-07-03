@@ -12,10 +12,19 @@ import {
 
 const options = [
   {
-    label: "Add Candidate",
-    description: "Register a new candidate in the pipeline",
+    label: "Add Temporary Candidate",
+    description: "Register a candidate available for temp shifts",
     icon: Users,
-    route: "/candidates",
+    route: "/candidates/new",
+    search: { type: "temporary" },
+    accent: "bg-navy/10 text-navy",
+  },
+  {
+    label: "Add Permanent Candidate",
+    description: "Register a candidate for permanent placement",
+    icon: Users,
+    route: "/candidates/new",
+    search: { type: "permanent" },
     accent: "bg-navy/10 text-navy",
   },
   {
