@@ -22,6 +22,7 @@ import { Route as AuthenticatedClientsRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedCandidatesRouteImport } from './routes/_authenticated/candidates'
 import { Route as AuthenticatedBookingsRouteImport } from './routes/_authenticated/bookings'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
+import { Route as AuthenticatedCandidatesIndexRouteImport } from './routes/_authenticated/candidates.index'
 import { Route as AuthenticatedCandidatesNewRouteImport } from './routes/_authenticated/candidates.new'
 import { Route as AuthenticatedCandidatesIdRouteImport } from './routes/_authenticated/candidates.$id'
 
@@ -89,6 +90,12 @@ const AuthenticatedAccountRoute = AuthenticatedAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedCandidatesIndexRoute =
+  AuthenticatedCandidatesIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedCandidatesRoute,
+  } as any)
 const AuthenticatedCandidatesNewRoute =
   AuthenticatedCandidatesNewRouteImport.update({
     id: '/new',
@@ -117,12 +124,12 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/candidates/$id': typeof AuthenticatedCandidatesIdRoute
   '/candidates/new': typeof AuthenticatedCandidatesNewRoute
+  '/candidates/': typeof AuthenticatedCandidatesIndexRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/account': typeof AuthenticatedAccountRoute
   '/bookings': typeof AuthenticatedBookingsRoute
-  '/candidates': typeof AuthenticatedCandidatesRouteWithChildren
   '/clients': typeof AuthenticatedClientsRoute
   '/compliance': typeof AuthenticatedComplianceRoute
   '/interviews': typeof AuthenticatedInterviewsRoute
@@ -133,6 +140,7 @@ export interface FileRoutesByTo {
   '/': typeof AuthenticatedIndexRoute
   '/candidates/$id': typeof AuthenticatedCandidatesIdRoute
   '/candidates/new': typeof AuthenticatedCandidatesNewRoute
+  '/candidates': typeof AuthenticatedCandidatesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -151,6 +159,7 @@ export interface FileRoutesById {
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/candidates/$id': typeof AuthenticatedCandidatesIdRoute
   '/_authenticated/candidates/new': typeof AuthenticatedCandidatesNewRoute
+  '/_authenticated/candidates/': typeof AuthenticatedCandidatesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -169,12 +178,12 @@ export interface FileRouteTypes {
     | '/settings'
     | '/candidates/$id'
     | '/candidates/new'
+    | '/candidates/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
     | '/account'
     | '/bookings'
-    | '/candidates'
     | '/clients'
     | '/compliance'
     | '/interviews'
@@ -185,6 +194,7 @@ export interface FileRouteTypes {
     | '/'
     | '/candidates/$id'
     | '/candidates/new'
+    | '/candidates'
   id:
     | '__root__'
     | '/_authenticated'
@@ -202,6 +212,7 @@ export interface FileRouteTypes {
     | '/_authenticated/'
     | '/_authenticated/candidates/$id'
     | '/_authenticated/candidates/new'
+    | '/_authenticated/candidates/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -302,6 +313,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAccountRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/candidates/': {
+      id: '/_authenticated/candidates/'
+      path: '/'
+      fullPath: '/candidates/'
+      preLoaderRoute: typeof AuthenticatedCandidatesIndexRouteImport
+      parentRoute: typeof AuthenticatedCandidatesRoute
+    }
     '/_authenticated/candidates/new': {
       id: '/_authenticated/candidates/new'
       path: '/new'
@@ -322,12 +340,14 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedCandidatesRouteChildren {
   AuthenticatedCandidatesIdRoute: typeof AuthenticatedCandidatesIdRoute
   AuthenticatedCandidatesNewRoute: typeof AuthenticatedCandidatesNewRoute
+  AuthenticatedCandidatesIndexRoute: typeof AuthenticatedCandidatesIndexRoute
 }
 
 const AuthenticatedCandidatesRouteChildren: AuthenticatedCandidatesRouteChildren =
   {
     AuthenticatedCandidatesIdRoute: AuthenticatedCandidatesIdRoute,
     AuthenticatedCandidatesNewRoute: AuthenticatedCandidatesNewRoute,
+    AuthenticatedCandidatesIndexRoute: AuthenticatedCandidatesIndexRoute,
   }
 
 const AuthenticatedCandidatesRouteWithChildren =
