@@ -11,8 +11,11 @@ import {
   Map as MapIcon,
   Settings,
   LogOut,
-  ChevronsUpDown,
   Activity,
+  ChevronLeft,
+  ChevronRight,
+  UserCircle2,
+  Building,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -30,38 +33,44 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 
-type NavItem = { title: string; url: string; icon: React.ComponentType<{ className?: string }>; exact?: boolean };
+type NavItem = { title: string; url: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; exact?: boolean };
 
-const overview: NavItem[] = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard, exact: true },
-];
-
+const overview: NavItem[] = [{ title: "Dashboard", url: "/", icon: LayoutDashboard, exact: true }];
 const recruitment: NavItem[] = [
   { title: "Candidates", url: "/candidates", icon: Users },
   { title: "Clients", url: "/clients", icon: Building2 },
   { title: "Jobs", url: "/jobs", icon: Briefcase },
   { title: "Interviews", url: "/interviews", icon: CalendarCheck },
 ];
-
 const operations: NavItem[] = [
   { title: "Booking Board", url: "/bookings", icon: CalendarRange },
   { title: "Placements", url: "/placements", icon: Trophy },
   { title: "Compliance", url: "/compliance", icon: ShieldCheck },
   { title: "Map", url: "/map", icon: MapIcon },
 ];
-
-const workspace: NavItem[] = [
-  { title: "Settings", url: "/settings", icon: Settings },
-];
+const workspace: NavItem[] = [{ title: "Settings", url: "/settings", icon: Settings }];
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<{ display_name: string | null; email: string | null; first_name: string | null; last_name: string | null } | null>(null);
+  const [profile, setProfile] = useState<{
+    display_name: string | null;
+    email: string | null;
+    first_name: string | null;
+    last_name: string | null;
+  } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -106,10 +115,10 @@ export function AppSidebar() {
                   asChild
                   isActive={active}
                   tooltip={item.title}
-                  className="relative h-9 rounded-lg mx-1 data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-foreground data-[active=true]:font-semibold hover:bg-sidebar-accent/60 hover:text-sidebar-foreground text-sidebar-foreground/70"
+                  className="relative h-9 rounded-lg mx-1 group-data-[collapsible=icon]:mx-0 group-data-[collapsible=icon]:justify-center data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-foreground data-[active=true]:font-semibold hover:bg-sidebar-accent/60 hover:text-sidebar-foreground text-sidebar-foreground/70"
                 >
                   <Link to={item.url}>
-                    {active && (
+                    {active && !collapsed && (
                       <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-sidebar-primary" />
                     )}
                     <item.icon className="h-4 w-4" />
@@ -130,17 +139,37 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r-0">
       <SidebarHeader className="pt-4 pb-3">
-        <div className="flex items-center gap-3 px-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal to-sidebar-primary text-teal-foreground grid place-items-center shrink-0 shadow-sm">
-            <Activity className="h-4 w-4" strokeWidth={2.5} />
+        <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between"} gap-2 px-2`}>
+          <div className={`flex items-center gap-3 ${collapsed ? "" : "px-1"}`}>
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal to-sidebar-primary text-teal-foreground grid place-items-center shrink-0 shadow-sm">
+              <Activity className="h-4 w-4" strokeWidth={2.5} />
+            </div>
+            {!collapsed && (
+              <div className="min-w-0">
+                <div className="text-sidebar-foreground font-semibold text-sm tracking-tight truncate">SOAR</div>
+                <div className="text-sidebar-foreground/50 text-[11px] truncate">Recruitment CRM</div>
+              </div>
+            )}
           </div>
           {!collapsed && (
-            <div className="min-w-0">
-              <div className="text-sidebar-foreground font-semibold text-sm tracking-tight truncate">SOAR</div>
-              <div className="text-sidebar-foreground/50 text-[11px] truncate">Recruitment CRM</div>
-            </div>
+            <button
+              onClick={toggleSidebar}
+              aria-label="Collapse sidebar"
+              className="h-7 w-7 grid place-items-center rounded-md text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
           )}
         </div>
+        {collapsed && (
+          <button
+            onClick={toggleSidebar}
+            aria-label="Expand sidebar"
+            className="mt-2 mx-auto h-7 w-7 grid place-items-center rounded-md text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        )}
       </SidebarHeader>
 
       <SidebarContent className="gap-0">
@@ -153,36 +182,58 @@ export function AppSidebar() {
       <SidebarFooter className="border-t border-sidebar-border/50 pt-3">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              size="lg"
-              tooltip={displayName}
-              className="rounded-lg mx-1 h-12 hover:bg-sidebar-accent/60 text-sidebar-foreground"
-            >
-              <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarFallback className="rounded-lg bg-sidebar-primary text-sidebar-primary-foreground text-xs font-semibold">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              {!collapsed && (
-                <>
-                  <div className="grid flex-1 text-left leading-tight min-w-0">
-                    <span className="text-sm font-medium truncate">{displayName}</span>
-                    <span className="text-[11px] text-sidebar-foreground/50 truncate">{profile?.email}</span>
-                  </div>
-                  <ChevronsUpDown className="ml-auto h-4 w-4 text-sidebar-foreground/40" />
-                </>
-              )}
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              onClick={handleSignOut}
-              tooltip="Sign out"
-              className="rounded-lg mx-1 text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
-            >
-              <LogOut className="h-4 w-4" />
-              <span>Sign out</span>
-            </SidebarMenuButton>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton
+                  size="lg"
+                  tooltip={displayName}
+                  className="rounded-lg mx-1 group-data-[collapsible=icon]:mx-0 group-data-[collapsible=icon]:justify-center h-12 hover:bg-sidebar-accent/60 text-sidebar-foreground data-[state=open]:bg-sidebar-accent/60"
+                >
+                  <Avatar className="h-8 w-8 rounded-lg shrink-0">
+                    <AvatarFallback className="rounded-lg bg-sidebar-primary text-sidebar-primary-foreground text-xs font-semibold">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  {!collapsed && (
+                    <>
+                      <div className="grid flex-1 text-left leading-tight min-w-0">
+                        <span className="text-sm font-medium truncate">{displayName}</span>
+                        <span className="text-[11px] text-sidebar-foreground/50 truncate">{profile?.email}</span>
+                      </div>
+                      <ChevronRight className="ml-auto h-4 w-4 text-sidebar-foreground/40 rotate-90" />
+                    </>
+                  )}
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="right" align="end" className="w-60 rounded-xl">
+                <DropdownMenuLabel className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                  Switch context
+                </DropdownMenuLabel>
+                <DropdownMenuItem asChild>
+                  <Link to="/account" className="cursor-pointer">
+                    <UserCircle2 className="h-4 w-4" />
+                    <div className="flex-1">
+                      <div className="text-sm font-medium">My Account</div>
+                      <div className="text-[11px] text-muted-foreground">Personal profile & preferences</div>
+                    </div>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/settings" className="cursor-pointer">
+                    <Building className="h-4 w-4" />
+                    <div className="flex-1">
+                      <div className="text-sm font-medium">Company Settings</div>
+                      <div className="text-[11px] text-muted-foreground">Rates, team & workspace</div>
+                    </div>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-destructive focus:text-destructive">
+                  <LogOut className="h-4 w-4" />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
