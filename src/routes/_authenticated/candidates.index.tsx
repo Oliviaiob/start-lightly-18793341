@@ -213,6 +213,10 @@ function Page() {
     }
   };
 
+  const openCandidate = (id: string) => {
+    navigate({ to: "/candidates/$id", params: { id } });
+  };
+
   return (
     <div className="max-w-[1400px] mx-auto space-y-6 pt-2">
       <PageHeader
@@ -342,7 +346,7 @@ function Page() {
                     <tr
                       key={r.id}
                       data-candidate-id={r.id}
-                      onClick={() => navigate({ to: "/candidates/$id", params: { id: r.id } })}
+                      onClick={() => openCandidate(r.id)}
                       className="border-b last:border-b-0 hover:bg-muted/40 transition-colors cursor-pointer"
                     >
                       <td className="py-3 px-4">
