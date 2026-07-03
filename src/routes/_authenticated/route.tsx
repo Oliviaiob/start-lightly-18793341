@@ -5,6 +5,8 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { GlobalSearch } from "@/components/global-search";
 import { NotificationsMenu } from "@/components/notifications-menu";
 import { QuickAddMenu } from "@/components/quick-add-menu";
+import { ScopeProvider } from "@/contexts/scope-context";
+import { ScopeToggle } from "@/components/scope-toggle";
 import { HelpCircle } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated")({
@@ -19,28 +21,31 @@ export const Route = createFileRoute("/_authenticated")({
 
 function AuthedLayout() {
   return (
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-background">
-        <AppSidebar />
-        <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-16 flex items-center gap-3 px-6 sticky top-0 z-20 bg-background/70 backdrop-blur-xl">
-            <SidebarTrigger className="shrink-0 h-9 w-9 rounded-full bg-card border border-border/60 text-muted-foreground hover:text-foreground" />
-            <GlobalSearch />
-            <div className="flex-1" />
-            <button
-              className="h-9 w-9 grid place-items-center rounded-full bg-card border border-border/60 text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="Help"
-            >
-              <HelpCircle className="h-4 w-4" />
-            </button>
-            <NotificationsMenu />
-            <QuickAddMenu />
-          </header>
-          <main className="flex-1 px-6 md:px-8 pb-8">
-            <Outlet />
-          </main>
+    <ScopeProvider>
+      <SidebarProvider>
+        <div className="min-h-screen flex w-full bg-background">
+          <AppSidebar />
+          <div className="flex-1 flex flex-col min-w-0">
+            <header className="h-16 flex items-center gap-3 px-6 sticky top-0 z-20 bg-background/70 backdrop-blur-xl">
+              <SidebarTrigger className="shrink-0 h-9 w-9 rounded-full bg-card border border-border/60 text-muted-foreground hover:text-foreground" />
+              <GlobalSearch />
+              <div className="flex-1" />
+              <ScopeToggle />
+              <button
+                className="h-9 w-9 grid place-items-center rounded-full bg-card border border-border/60 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Help"
+              >
+                <HelpCircle className="h-4 w-4" />
+              </button>
+              <NotificationsMenu />
+              <QuickAddMenu />
+            </header>
+            <main className="flex-1 px-6 md:px-8 pb-8">
+              <Outlet />
+            </main>
+          </div>
         </div>
-      </div>
-    </SidebarProvider>
+      </SidebarProvider>
+    </ScopeProvider>
   );
 }

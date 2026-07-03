@@ -15,6 +15,7 @@ import {
   Star,
 } from "lucide-react";
 import { NotesCard } from "@/components/notes-card";
+import { useEffectiveScope, useScope } from "@/contexts/scope-context";
 
 export const Route = createFileRoute("/_authenticated/")({
   component: Dashboard,
@@ -124,8 +125,14 @@ function Dashboard() {
   const [starred, setStarred] = useState<Candidate[]>([]);
   const [activity, setActivity] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
+  const scope = useEffectiveScope({ dashboard: true });
+  const { userId } = useScope();
 
   useEffect(() => {
+    if (!userId) return;
+    const mine = scope === "mine";
+    const withScope = <Q extends { eq: (c: string, v: string) => Q }>(q: Q): Q =>
+      mine ? q.eq("created_by", userId) : q;
     const hour = new Date().getHours();
     setGreeting(hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening");
 
@@ -164,44 +171,58 @@ function Dashboard() {
         starredRes,
         activityRes,
       ] = await Promise.all([
-        supabase.from("candidates").select("id", { count: "exact", head: true }),
-        supabase.from("jobs").select("id", { count: "exact", head: true }).in("status", ["Live", "Interviewing"]),
-        supabase
-          .from("interview_details")
-          .select("id", { count: "exact", head: true })
-          .gte("scheduled_at", startOfMonth)
-          .lt("scheduled_at", endOfMonth),
-        supabase
-          .from("temp_shifts")
-          .select("id", { count: "exact", head: true })
-          .gte("shift_date", weekStartDate)
-          .lt("shift_date", weekEndDate),
-        supabase
-          .from("placements")
-          .select("id", { count: "exact", head: true })
-          .gte("start_date", startOfMonth.slice(0, 10))
-          .lt("start_date", endOfMonth.slice(0, 10)),
-        supabase
-          .from("compliance_checklists")
-          .select("id", { count: "exact", head: true })
-          .neq("overall_status", "completed"),
-        supabase
-          .from("interview_details")
-          .select("id, scheduled_at, interview_type, candidate:candidates(first_name,last_name), job:jobs(title, client:clients(name))")
-          .gte("scheduled_at", now.toISOString())
-          .order("scheduled_at", { ascending: true })
-          .limit(5),
-        supabase
-          .from("temp_shifts")
-          .select("id, shift_date, start_time, end_time, status, client:clients(name)")
-          .gte("shift_date", today)
-          .order("shift_date", { ascending: true })
-          .limit(5),
-        supabase
-          .from("candidates")
-          .select("id, first_name, last_name, qualification_level, candidate_type")
-          .eq("is_starred", true)
-          .limit(8),
+        withScope(supabase.from("candidates").select("id", { count: "exact", head: true })),
+        withScope(supabase.from("jobs").select("id", { count: "exact", head: true }).in("status", ["Live", "Interviewing"])),
+        withScope(
+          supabase
+            .from("interview_details")
+            .select("id", { count: "exact", head: true })
+            .gte("scheduled_at", startOfMonth)
+            .lt("scheduled_at", endOfMonth),
+        ),
+        withScope(
+          supabase
+            .from("temp_shifts")
+            .select("id", { count: "exact", head: true })
+            .gte("shift_date", weekStartDate)
+            .lt("shift_date", weekEndDate),
+        ),
+        withScope(
+          supabase
+            .from("placements")
+            .select("id", { count: "exact", head: true })
+            .gte("start_date", startOfMonth.slice(0, 10))
+            .lt("start_date", endOfMonth.slice(0, 10)),
+        ),
+        withScope(
+          supabase
+            .from("compliance_checklists")
+            .select("id", { count: "exact", head: true })
+            .neq("overall_status", "completed"),
+        ),
+        withScope(
+          supabase
+            .from("interview_details")
+            .select("id, scheduled_at, interview_type, candidate:candidates(first_name,last_name), job:jobs(title, client:clients(name))")
+            .gte("scheduled_at", now.toISOString())
+            .order("scheduled_at", { ascending: true })
+            .limit(5),
+        ),
+        withScope(
+          supabase
+            .from("temp_shifts")
+            .select("id, shift_date, start_time, end_time, status, client:clients(name)")
+            .gte("shift_date", today)
+            .order("shift_date", { ascending: true })
+            .limit(5),
+        ),
+        withScope(
+          supabase
+            .from("candidates")
+            .select("id, first_name, last_name, qualification_level, candidate_type")
+            .eq("is_starred", true)
+            .limit(8),
+        ),
         supabase
           .from("activity_log")
           .select("id, action, entity_type, created_at, actor:profiles(display_name, first_name, last_name)")
@@ -223,7 +244,7 @@ function Dashboard() {
       setActivity((activityRes.data as unknown as Activity[]) || []);
       setLoading(false);
     })();
-  }, []);
+  }, [userId, scope]);
 
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
