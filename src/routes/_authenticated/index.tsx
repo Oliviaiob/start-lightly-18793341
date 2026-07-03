@@ -224,21 +224,40 @@ function Dashboard() {
     })();
   }, []);
 
+  const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+
   return (
-    <div className="max-w-[1400px] mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {greeting}{displayName ? `, ${displayName}` : ""}
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">Here's what's happening across your recruitment pipeline.</p>
-      </div>
+    <div className="max-w-[1400px] mx-auto space-y-6 pt-2">
+      <Card className="relative overflow-hidden p-6 md:p-7 border-transparent rounded-2xl bg-gradient-to-br from-navy via-navy to-[oklch(0.3_0.08_260)] text-navy-foreground shadow-[var(--shadow-card)]">
+        <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-teal/20 blur-3xl" />
+        <div className="absolute -right-8 bottom-0 h-40 w-40 rounded-full bg-teal/10 blur-2xl" />
+        <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="text-xs text-navy-foreground/60 font-medium">{today}</div>
+            <h1 className="mt-1 text-2xl md:text-[28px] font-bold tracking-tight">
+              {greeting}{displayName ? `, ${displayName}` : ""} 👋
+            </h1>
+            <p className="text-sm text-navy-foreground/70 mt-1.5 max-w-xl">
+              Here's what's happening across your recruitment pipeline today.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link to="/candidates" className="h-9 px-4 grid place-items-center rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 transition-opacity">
+              View candidates
+            </Link>
+            <Link to="/jobs" className="h-9 px-4 grid place-items-center rounded-full bg-white/10 text-navy-foreground text-sm font-medium hover:bg-white/20 transition-colors border border-white/10">
+              Open jobs
+            </Link>
+          </div>
+        </div>
+      </Card>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatCard to="/candidates" label="Active Candidates" value={loading ? "…" : stats.activeCandidates} icon={Users} accent="navy" />
         <StatCard to="/jobs" label="Open Jobs" value={loading ? "…" : stats.openJobs} icon={Briefcase} accent="navy" />
-        <StatCard to="/interviews" label="Interviews This Month" value={loading ? "…" : stats.interviewsThisMonth} icon={CalendarCheck} accent="teal" />
-        <StatCard to="/bookings" label="Temp Booked This Week" value={loading ? "…" : stats.tempBookedThisWeek} icon={CalendarRange} accent="teal" />
-        <StatCard to="/placements" label="Placements This Month" value={loading ? "…" : stats.placementsThisMonth} icon={Trophy} accent="success" />
+        <StatCard to="/interviews" label="Interviews / Month" value={loading ? "…" : stats.interviewsThisMonth} icon={CalendarCheck} accent="teal" />
+        <StatCard to="/bookings" label="Temp / Week" value={loading ? "…" : stats.tempBookedThisWeek} icon={CalendarRange} accent="teal" />
+        <StatCard to="/placements" label="Placements / Month" value={loading ? "…" : stats.placementsThisMonth} icon={Trophy} accent="success" />
         <StatCard to="/compliance" label="Pending Compliance" value={loading ? "…" : stats.pendingCompliance} icon={ShieldAlert} accent="warning" />
       </div>
 
