@@ -50,9 +50,9 @@ export function QuickAddMenu() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <button className="h-9 px-3.5 grid place-items-center rounded-full bg-navy text-navy-foreground text-sm font-medium hover:opacity-90 transition-opacity flex-row flex gap-1.5">
+        <button className="h-9 px-3.5 inline-flex items-center rounded-full bg-navy text-navy-foreground hover:opacity-90 transition-opacity gap-1.5">
           <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
-          <span className="hidden sm:inline">Add new</span>
+          <span className="text-xs font-semibold">Add new</span>
         </button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md rounded-2xl">
