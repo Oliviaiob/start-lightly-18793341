@@ -62,7 +62,7 @@ export function NotesCard() {
     <Card className="p-5 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold flex items-center gap-2">
-          <StickyNote className="h-4 w-4 text-warning" /> Quick Notes
+          <StickyNote className="h-4 w-4 text-warning" /> Quick Notes / To Dos
         </h2>
         <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
           {notes.filter((n) => !n.completed).length} open
