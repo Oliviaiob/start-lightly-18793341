@@ -71,35 +71,36 @@ function StatCard({
   value,
   icon: Icon,
   accent = "navy",
+  trend,
 }: {
   to: string;
   label: string;
   value: number | string;
   icon: React.ComponentType<{ className?: string }>;
   accent?: "navy" | "teal" | "warning" | "success";
+  trend?: string;
 }) {
   const accentClasses: Record<string, string> = {
-    navy: "bg-navy/10 text-navy",
-    teal: "bg-teal/20 text-teal-foreground",
-    warning: "bg-warning/20 text-foreground",
-    success: "bg-success/20 text-foreground",
+    navy: "bg-navy/8 text-navy",
+    teal: "bg-teal/25 text-teal-foreground",
+    warning: "bg-warning/25 text-[oklch(0.45_0.12_75)]",
+    success: "bg-success/20 text-[oklch(0.4_0.12_155)]",
   };
   return (
     <Link to={to} className="group">
-      <Card className="p-5 hover:shadow-md transition-shadow border-transparent shadow-sm">
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              {label}
-            </div>
-            <div className="mt-3 text-3xl font-bold tracking-tight">{value}</div>
+      <Card className="p-5 border-transparent shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-card-hover)] hover:-translate-y-0.5 transition-all duration-200 rounded-2xl bg-card h-full">
+        <div className="flex items-start justify-between gap-3">
+          <div className={`w-11 h-11 rounded-xl grid place-items-center ${accentClasses[accent]}`}>
+            <Icon className="h-5 w-5" strokeWidth={2.25} />
           </div>
-          <div className={`w-10 h-10 rounded-lg grid place-items-center ${accentClasses[accent]}`}>
-            <Icon className="h-5 w-5" />
-          </div>
+          <ArrowUpRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-navy group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all" />
         </div>
-        <div className="mt-3 text-xs text-muted-foreground flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          View all <ArrowUpRight className="h-3 w-3" />
+        <div className="mt-5 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.1em]">
+          {label}
+        </div>
+        <div className="mt-1.5 flex items-baseline gap-2">
+          <div className="text-[28px] font-bold tracking-tight leading-none">{value}</div>
+          {trend && <span className="text-[11px] font-medium text-success">{trend}</span>}
         </div>
       </Card>
     </Link>
