@@ -50,10 +50,14 @@ export function GlobalSearch() {
           .limit(5),
         supabase
           .from("jobs")
-          .select("id, title, status, client:clients(name)")
+          .select("id, title, status, client:clients(company_name)")
           .ilike("title", like)
           .limit(5),
-        supabase.from("clients").select("id, name, city").ilike("name", like).limit(5),
+        supabase
+          .from("clients")
+          .select("id, company_name, address")
+          .ilike("company_name", like)
+          .limit(5),
       ]);
 
       const list: Result[] = [];
