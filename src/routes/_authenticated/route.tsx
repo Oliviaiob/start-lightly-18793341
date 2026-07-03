@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { GlobalSearch } from "@/components/global-search";
 import { NotificationsMenu } from "@/components/notifications-menu";
@@ -27,7 +27,6 @@ function AuthedLayout() {
           <AppSidebar />
           <div className="flex-1 flex flex-col min-w-0">
             <header className="h-16 flex items-center gap-3 px-6 sticky top-0 z-20 bg-background/70 backdrop-blur-xl">
-              <SidebarTrigger className="shrink-0 h-9 w-9 rounded-full bg-card border border-border/60 text-muted-foreground hover:text-foreground" />
               <GlobalSearch />
               <div className="flex-1" />
               <ScopeToggle />
