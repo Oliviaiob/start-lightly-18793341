@@ -262,7 +262,7 @@ function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-5 shadow-sm border-transparent">
+        <Card className="p-5 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold">Upcoming Interviews</h2>
             <Link to="/interviews" className="text-xs text-muted-foreground hover:text-foreground">View all</Link>
@@ -294,7 +294,7 @@ function Dashboard() {
           )}
         </Card>
 
-        <Card className="p-5 shadow-sm border-transparent">
+        <Card className="p-5 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold">Upcoming Shifts</h2>
             <Link to="/bookings" className="text-xs text-muted-foreground hover:text-foreground">View all</Link>
@@ -328,7 +328,7 @@ function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="p-5 shadow-sm border-transparent lg:col-span-1">
+        <Card className="p-5 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card lg:col-span-1">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold flex items-center gap-2"><Star className="h-4 w-4 text-warning fill-warning" /> Starred Candidates</h2>
             <Link to="/candidates" className="text-xs text-muted-foreground hover:text-foreground">All</Link>
@@ -354,7 +354,7 @@ function Dashboard() {
           )}
         </Card>
 
-        <Card className="p-5 shadow-sm border-transparent lg:col-span-2">
+        <Card className="p-5 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold">Recent Activity</h2>
           </div>
