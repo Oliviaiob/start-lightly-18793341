@@ -71,35 +71,36 @@ function StatCard({
   value,
   icon: Icon,
   accent = "navy",
+  trend,
 }: {
   to: string;
   label: string;
   value: number | string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   accent?: "navy" | "teal" | "warning" | "success";
+  trend?: string;
 }) {
   const accentClasses: Record<string, string> = {
-    navy: "bg-navy/10 text-navy",
-    teal: "bg-teal/20 text-teal-foreground",
-    warning: "bg-warning/20 text-foreground",
-    success: "bg-success/20 text-foreground",
+    navy: "bg-navy/8 text-navy",
+    teal: "bg-teal/25 text-teal-foreground",
+    warning: "bg-warning/25 text-[oklch(0.45_0.12_75)]",
+    success: "bg-success/20 text-[oklch(0.4_0.12_155)]",
   };
   return (
     <Link to={to} className="group">
-      <Card className="p-5 hover:shadow-md transition-shadow border-transparent shadow-sm">
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              {label}
-            </div>
-            <div className="mt-3 text-3xl font-bold tracking-tight">{value}</div>
+      <Card className="p-5 border-transparent shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-card-hover)] hover:-translate-y-0.5 transition-all duration-200 rounded-2xl bg-card h-full">
+        <div className="flex items-start justify-between gap-3">
+          <div className={`w-11 h-11 rounded-xl grid place-items-center ${accentClasses[accent]}`}>
+            <Icon className="h-5 w-5" strokeWidth={2.25} />
           </div>
-          <div className={`w-10 h-10 rounded-lg grid place-items-center ${accentClasses[accent]}`}>
-            <Icon className="h-5 w-5" />
-          </div>
+          <ArrowUpRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-navy group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-all" />
         </div>
-        <div className="mt-3 text-xs text-muted-foreground flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          View all <ArrowUpRight className="h-3 w-3" />
+        <div className="mt-5 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.1em]">
+          {label}
+        </div>
+        <div className="mt-1.5 flex items-baseline gap-2">
+          <div className="text-[28px] font-bold tracking-tight leading-none">{value}</div>
+          {trend && <span className="text-[11px] font-medium text-success">{trend}</span>}
         </div>
       </Card>
     </Link>
@@ -223,26 +224,45 @@ function Dashboard() {
     })();
   }, []);
 
+  const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+
   return (
-    <div className="max-w-[1400px] mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {greeting}{displayName ? `, ${displayName}` : ""}
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">Here's what's happening across your recruitment pipeline.</p>
-      </div>
+    <div className="max-w-[1400px] mx-auto space-y-6 pt-2">
+      <Card className="relative overflow-hidden p-6 md:p-7 border-transparent rounded-2xl bg-gradient-to-br from-navy via-navy to-[oklch(0.3_0.08_260)] text-navy-foreground shadow-[var(--shadow-card)]">
+        <div className="absolute -right-16 -top-16 h-56 w-56 rounded-full bg-teal/20 blur-3xl" />
+        <div className="absolute -right-8 bottom-0 h-40 w-40 rounded-full bg-teal/10 blur-2xl" />
+        <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div className="text-xs text-navy-foreground/60 font-medium">{today}</div>
+            <h1 className="mt-1 text-2xl md:text-[28px] font-bold tracking-tight">
+              {greeting}{displayName ? `, ${displayName}` : ""} 👋
+            </h1>
+            <p className="text-sm text-navy-foreground/70 mt-1.5 max-w-xl">
+              Here's what's happening across your recruitment pipeline today.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link to="/candidates" className="h-9 px-4 grid place-items-center rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 transition-opacity">
+              View candidates
+            </Link>
+            <Link to="/jobs" className="h-9 px-4 grid place-items-center rounded-full bg-white/10 text-navy-foreground text-sm font-medium hover:bg-white/20 transition-colors border border-white/10">
+              Open jobs
+            </Link>
+          </div>
+        </div>
+      </Card>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatCard to="/candidates" label="Active Candidates" value={loading ? "…" : stats.activeCandidates} icon={Users} accent="navy" />
         <StatCard to="/jobs" label="Open Jobs" value={loading ? "…" : stats.openJobs} icon={Briefcase} accent="navy" />
-        <StatCard to="/interviews" label="Interviews This Month" value={loading ? "…" : stats.interviewsThisMonth} icon={CalendarCheck} accent="teal" />
-        <StatCard to="/bookings" label="Temp Booked This Week" value={loading ? "…" : stats.tempBookedThisWeek} icon={CalendarRange} accent="teal" />
-        <StatCard to="/placements" label="Placements This Month" value={loading ? "…" : stats.placementsThisMonth} icon={Trophy} accent="success" />
+        <StatCard to="/interviews" label="Interviews / Month" value={loading ? "…" : stats.interviewsThisMonth} icon={CalendarCheck} accent="teal" />
+        <StatCard to="/bookings" label="Temp / Week" value={loading ? "…" : stats.tempBookedThisWeek} icon={CalendarRange} accent="teal" />
+        <StatCard to="/placements" label="Placements / Month" value={loading ? "…" : stats.placementsThisMonth} icon={Trophy} accent="success" />
         <StatCard to="/compliance" label="Pending Compliance" value={loading ? "…" : stats.pendingCompliance} icon={ShieldAlert} accent="warning" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-5 shadow-sm border-transparent">
+        <Card className="p-5 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold">Upcoming Interviews</h2>
             <Link to="/interviews" className="text-xs text-muted-foreground hover:text-foreground">View all</Link>
@@ -274,7 +294,7 @@ function Dashboard() {
           )}
         </Card>
 
-        <Card className="p-5 shadow-sm border-transparent">
+        <Card className="p-5 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold">Upcoming Shifts</h2>
             <Link to="/bookings" className="text-xs text-muted-foreground hover:text-foreground">View all</Link>
@@ -308,7 +328,7 @@ function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="p-5 shadow-sm border-transparent lg:col-span-1">
+        <Card className="p-5 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card lg:col-span-1">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold flex items-center gap-2"><Star className="h-4 w-4 text-warning fill-warning" /> Starred Candidates</h2>
             <Link to="/candidates" className="text-xs text-muted-foreground hover:text-foreground">All</Link>
@@ -334,7 +354,7 @@ function Dashboard() {
           )}
         </Card>
 
-        <Card className="p-5 shadow-sm border-transparent lg:col-span-2">
+        <Card className="p-5 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold">Recent Activity</h2>
           </div>
