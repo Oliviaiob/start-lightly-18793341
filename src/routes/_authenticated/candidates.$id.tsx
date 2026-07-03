@@ -322,7 +322,7 @@ function Page() {
     if (!c) return;
     const prev = c;
     setC({ ...c, ...fields });
-    const { error } = await supabase.from("candidates").update(fields).eq("id", c.id);
+    const { error } = await supabase.from("candidates").update(fields as never).eq("id", c.id);
     if (error) {
       toast.error("Save failed");
       setC(prev);
