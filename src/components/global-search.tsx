@@ -86,8 +86,8 @@ export function GlobalSearch() {
         list.push({
           kind: "client",
           id: cl.id,
-          label: cl.name || "Client",
-          sub: cl.city || undefined,
+          label: cl.company_name || "Client",
+          sub: cl.address || undefined,
         }),
       );
       setResults(list);
