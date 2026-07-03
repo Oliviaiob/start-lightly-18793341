@@ -17,7 +17,7 @@ const options = [
     icon: Users,
     route: "/candidates/new",
     search: { type: "temporary" },
-    accent: "bg-navy/10 text-navy",
+    accent: "bg-teal text-teal-foreground",
   },
   {
     label: "Add Permanent Candidate",
