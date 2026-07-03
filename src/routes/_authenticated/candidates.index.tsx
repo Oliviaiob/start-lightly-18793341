@@ -98,7 +98,7 @@ function StatusPill({ label, tone }: { label: string; tone: "navy" | "teal" }) {
 }
 
 function Page() {
-  const navigate = useNavigate();
+  const navigate = useNavigate({ from: "/candidates" });
   const scope = useEffectiveScope();
   const { userId } = useScope();
 
@@ -341,6 +341,7 @@ function Page() {
                   return (
                     <tr
                       key={r.id}
+                      data-candidate-id={r.id}
                       onClick={() => navigate({ to: "/candidates/$id", params: { id: r.id } })}
                       className="border-b last:border-b-0 hover:bg-muted/40 transition-colors cursor-pointer"
                     >
