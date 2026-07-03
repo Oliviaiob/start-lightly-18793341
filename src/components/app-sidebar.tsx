@@ -151,25 +151,7 @@ export function AppSidebar() {
               </div>
             )}
           </div>
-          {!collapsed && (
-            <button
-              onClick={toggleSidebar}
-              aria-label="Collapse sidebar"
-              className="h-7 w-7 grid place-items-center rounded-md text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-          )}
         </div>
-        {collapsed && (
-          <button
-            onClick={toggleSidebar}
-            aria-label="Expand sidebar"
-            className="mt-2 mx-auto h-7 w-7 grid place-items-center rounded-md text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        )}
       </SidebarHeader>
 
       <SidebarContent className="gap-0">
@@ -178,6 +160,15 @@ export function AppSidebar() {
         {renderGroup("TEMPORARY", operations)}
         {renderGroup("Workspace", workspace)}
       </SidebarContent>
+
+      <button
+        onClick={toggleSidebar}
+        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-20 hidden md:grid h-6 w-6 place-items-center rounded-full bg-sidebar border border-sidebar-border text-sidebar-foreground hover:bg-sidebar-accent shadow-sm transition-colors"
+      >
+        {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+      </button>
 
       <SidebarFooter className="border-t border-sidebar-border/50 pt-3">
         <SidebarMenu>
