@@ -76,7 +76,7 @@ function StatCard({
   to: string;
   label: string;
   value: number | string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   accent?: "navy" | "teal" | "warning" | "success";
   trend?: string;
 }) {
