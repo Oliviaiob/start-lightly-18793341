@@ -137,7 +137,7 @@ export function AppSidebar() {
   const initials = `${profile?.first_name?.[0] || displayName[0] || "?"}${profile?.last_name?.[0] || ""}`.toUpperCase();
 
   return (
-    <Sidebar collapsible="icon" className="border-r-0">
+    <Sidebar collapsible="icon" className="border-r-0 z-30">
       <SidebarHeader className="pt-4 pb-3">
         <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between"} gap-2 px-2`}>
           <div className={`flex items-center gap-3 ${collapsed ? "" : "px-1"}`}>
