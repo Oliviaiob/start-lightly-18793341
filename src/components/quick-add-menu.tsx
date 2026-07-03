@@ -66,7 +66,7 @@ export function QuickAddMenu() {
               key={opt.label}
               onClick={() => {
                 setOpen(false);
-                navigate({ to: opt.route });
+                navigate({ to: opt.route, search: "search" in opt ? opt.search : undefined });
               }}
               className="w-full flex items-center gap-3 p-3 rounded-xl border border-border/70 hover:border-navy/40 hover:bg-muted/60 transition-all group text-left"
             >

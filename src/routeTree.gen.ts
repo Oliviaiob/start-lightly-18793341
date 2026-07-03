@@ -22,6 +22,7 @@ import { Route as AuthenticatedClientsRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedCandidatesRouteImport } from './routes/_authenticated/candidates'
 import { Route as AuthenticatedBookingsRouteImport } from './routes/_authenticated/bookings'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
+import { Route as AuthenticatedCandidatesNewRouteImport } from './routes/_authenticated/candidates.new'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -87,13 +88,19 @@ const AuthenticatedAccountRoute = AuthenticatedAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedCandidatesNewRoute =
+  AuthenticatedCandidatesNewRouteImport.update({
+    id: '/new',
+    path: '/new',
+    getParentRoute: () => AuthenticatedCandidatesRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
   '/account': typeof AuthenticatedAccountRoute
   '/bookings': typeof AuthenticatedBookingsRoute
-  '/candidates': typeof AuthenticatedCandidatesRoute
+  '/candidates': typeof AuthenticatedCandidatesRouteWithChildren
   '/clients': typeof AuthenticatedClientsRoute
   '/compliance': typeof AuthenticatedComplianceRoute
   '/interviews': typeof AuthenticatedInterviewsRoute
@@ -101,12 +108,13 @@ export interface FileRoutesByFullPath {
   '/map': typeof AuthenticatedMapRoute
   '/placements': typeof AuthenticatedPlacementsRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/candidates/new': typeof AuthenticatedCandidatesNewRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/account': typeof AuthenticatedAccountRoute
   '/bookings': typeof AuthenticatedBookingsRoute
-  '/candidates': typeof AuthenticatedCandidatesRoute
+  '/candidates': typeof AuthenticatedCandidatesRouteWithChildren
   '/clients': typeof AuthenticatedClientsRoute
   '/compliance': typeof AuthenticatedComplianceRoute
   '/interviews': typeof AuthenticatedInterviewsRoute
@@ -115,6 +123,7 @@ export interface FileRoutesByTo {
   '/placements': typeof AuthenticatedPlacementsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/': typeof AuthenticatedIndexRoute
+  '/candidates/new': typeof AuthenticatedCandidatesNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -122,7 +131,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/account': typeof AuthenticatedAccountRoute
   '/_authenticated/bookings': typeof AuthenticatedBookingsRoute
-  '/_authenticated/candidates': typeof AuthenticatedCandidatesRoute
+  '/_authenticated/candidates': typeof AuthenticatedCandidatesRouteWithChildren
   '/_authenticated/clients': typeof AuthenticatedClientsRoute
   '/_authenticated/compliance': typeof AuthenticatedComplianceRoute
   '/_authenticated/interviews': typeof AuthenticatedInterviewsRoute
@@ -131,6 +140,7 @@ export interface FileRoutesById {
   '/_authenticated/placements': typeof AuthenticatedPlacementsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/candidates/new': typeof AuthenticatedCandidatesNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -147,6 +157,7 @@ export interface FileRouteTypes {
     | '/map'
     | '/placements'
     | '/settings'
+    | '/candidates/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
@@ -161,6 +172,7 @@ export interface FileRouteTypes {
     | '/placements'
     | '/settings'
     | '/'
+    | '/candidates/new'
   id:
     | '__root__'
     | '/_authenticated'
@@ -176,6 +188,7 @@ export interface FileRouteTypes {
     | '/_authenticated/placements'
     | '/_authenticated/settings'
     | '/_authenticated/'
+    | '/_authenticated/candidates/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -276,13 +289,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAccountRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/candidates/new': {
+      id: '/_authenticated/candidates/new'
+      path: '/new'
+      fullPath: '/candidates/new'
+      preLoaderRoute: typeof AuthenticatedCandidatesNewRouteImport
+      parentRoute: typeof AuthenticatedCandidatesRoute
+    }
   }
 }
+
+interface AuthenticatedCandidatesRouteChildren {
+  AuthenticatedCandidatesNewRoute: typeof AuthenticatedCandidatesNewRoute
+}
+
+const AuthenticatedCandidatesRouteChildren: AuthenticatedCandidatesRouteChildren =
+  {
+    AuthenticatedCandidatesNewRoute: AuthenticatedCandidatesNewRoute,
+  }
+
+const AuthenticatedCandidatesRouteWithChildren =
+  AuthenticatedCandidatesRoute._addFileChildren(
+    AuthenticatedCandidatesRouteChildren,
+  )
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAccountRoute: typeof AuthenticatedAccountRoute
   AuthenticatedBookingsRoute: typeof AuthenticatedBookingsRoute
-  AuthenticatedCandidatesRoute: typeof AuthenticatedCandidatesRoute
+  AuthenticatedCandidatesRoute: typeof AuthenticatedCandidatesRouteWithChildren
   AuthenticatedClientsRoute: typeof AuthenticatedClientsRoute
   AuthenticatedComplianceRoute: typeof AuthenticatedComplianceRoute
   AuthenticatedInterviewsRoute: typeof AuthenticatedInterviewsRoute
@@ -296,7 +330,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAccountRoute: AuthenticatedAccountRoute,
   AuthenticatedBookingsRoute: AuthenticatedBookingsRoute,
-  AuthenticatedCandidatesRoute: AuthenticatedCandidatesRoute,
+  AuthenticatedCandidatesRoute: AuthenticatedCandidatesRouteWithChildren,
   AuthenticatedClientsRoute: AuthenticatedClientsRoute,
   AuthenticatedComplianceRoute: AuthenticatedComplianceRoute,
   AuthenticatedInterviewsRoute: AuthenticatedInterviewsRoute,
