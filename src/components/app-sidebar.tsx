@@ -151,15 +151,6 @@ export function AppSidebar() {
               </div>
             )}
           </div>
-          {!collapsed && (
-            <button
-              onClick={toggleSidebar}
-              aria-label="Collapse sidebar"
-              className="h-7 w-7 grid place-items-center rounded-md text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-          )}
         </div>
       </SidebarHeader>
 
