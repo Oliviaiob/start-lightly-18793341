@@ -754,7 +754,6 @@ function Page() {
             <TabTrig value="docs" icon={FolderOpen}>Documents</TabTrig>
             <TabTrig value="refs" icon={UserRound}>References</TabTrig>
             {isTemp && <TabTrig value="availability" icon={Clock}>Availability</TabTrig>}
-            {isTemp && <TabTrig value="shifts" icon={CalendarRange}>Shifts</TabTrig>}
           </TabsList>
 
           <TabsContent value="personal" className="mt-5">
