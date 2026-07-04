@@ -28,8 +28,9 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 
 
 function createSupabaseClient() {
-  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-  const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  const serverEnv = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || serverEnv?.SUPABASE_URL;
+  const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || serverEnv?.SUPABASE_PUBLISHABLE_KEY;
 
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
     const missing = [
