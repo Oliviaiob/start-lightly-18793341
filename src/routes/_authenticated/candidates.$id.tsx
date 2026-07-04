@@ -754,7 +754,6 @@ function Page() {
             <TabTrig value="docs" icon={FolderOpen}>Documents</TabTrig>
             <TabTrig value="refs" icon={UserRound}>References</TabTrig>
             {isTemp && <TabTrig value="availability" icon={Clock}>Availability</TabTrig>}
-            {isTemp && <TabTrig value="shifts" icon={CalendarRange}>Shifts</TabTrig>}
           </TabsList>
 
           <TabsContent value="personal" className="mt-5">
@@ -914,33 +913,6 @@ function Page() {
           {isTemp && (
             <TabsContent value="availability" className="mt-5 text-sm">
               <div className="text-muted-foreground">Availability grid coming soon.</div>
-            </TabsContent>
-          )}
-
-          {isTemp && (
-            <TabsContent value="shifts" className="mt-5">
-              {shifts.length === 0 ? (
-                <div className="text-sm text-muted-foreground py-4">No shifts worked yet.</div>
-              ) : (
-                <ul className="divide-y">
-                  {shifts.map((s) => (
-                    <li key={s.id} className="py-3 flex items-center justify-between text-sm">
-                      <div>
-                        <div className="font-medium">{s.client?.name || "Booking"}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {s.shift_date} · {s.start_time?.slice(0, 5)}–{s.end_time?.slice(0, 5)}
-                        </div>
-                      </div>
-                      <div className="text-right text-xs">
-                        {s.total_amount ? (
-                          <div className="font-medium">£{Number(s.total_amount).toFixed(2)}</div>
-                        ) : null}
-                        <div className="text-muted-foreground">{s.total_hours ?? "—"} hrs</div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </TabsContent>
           )}
         </Tabs>
