@@ -584,29 +584,53 @@ function Page() {
       )}
 
       {isTemp && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="p-5 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
-            <h3 className="font-semibold text-sm mb-3">Rate of Pay</h3>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">£</span>
-                <Input
-                  value={rateInput}
-                  onChange={(e) => setRateInput(e.target.value)}
-                  placeholder="0.00"
-                  inputMode="decimal"
-                  className="pl-6 h-9 rounded-lg"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">/hr</span>
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card className="p-5 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
+              <h3 className="font-semibold text-sm mb-3">Rate of Pay</h3>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">£</span>
+                  <Input
+                    value={rateInput}
+                    onChange={(e) => setRateInput(e.target.value)}
+                    placeholder="0.00"
+                    inputMode="decimal"
+                    className="pl-6 h-9 rounded-lg"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">/hr</span>
+                </div>
+                <button
+                  onClick={saveRate}
+                  className="h-9 px-3 rounded-lg bg-navy text-navy-foreground text-sm font-medium hover:opacity-90 inline-flex items-center gap-1.5"
+                >
+                  <Save className="h-3.5 w-3.5" /> Save
+                </button>
               </div>
-              <button
-                onClick={saveRate}
-                className="h-9 px-3 rounded-lg bg-navy text-navy-foreground text-sm font-medium hover:opacity-90 inline-flex items-center gap-1.5"
-              >
-                <Save className="h-3.5 w-3.5" /> Save
-              </button>
-            </div>
-          </Card>
+            </Card>
+
+            <Card className="p-5 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card lg:col-span-2">
+              <div className="flex items-center gap-2 mb-3">
+                <MapPin className="h-4 w-4 text-teal-foreground" />
+                <h3 className="font-semibold text-sm">Nearby Clients</h3>
+              </div>
+              {nearbyClients.length === 0 ? (
+                <div className="text-sm text-muted-foreground py-3">No clients found within 10 miles</div>
+              ) : (
+                <ul className="space-y-2 max-h-[220px] overflow-auto">
+                  {nearbyClients.map((cl) => (
+                    <li key={cl.id} className="p-2 rounded-lg bg-muted/40 text-xs flex items-center justify-between">
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{cl.company_name || "—"}</div>
+                        <div className="text-muted-foreground">{cl.postcode || ""}</div>
+                      </div>
+                      <span className="text-[10px] font-semibold text-teal-foreground">{cl.miles.toFixed(1)} mi</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </div>
 
           <Card className="p-5 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
             <div className="flex items-center gap-2 mb-3">
@@ -624,28 +648,6 @@ function Page() {
                       {s.shift_date} · {s.start_time?.slice(0, 5)}–{s.end_time?.slice(0, 5)}
                       {s.rate_per_hour ? ` · £${s.rate_per_hour}/hr` : ""}
                     </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-
-          <Card className="p-5 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
-            <div className="flex items-center gap-2 mb-3">
-              <MapPin className="h-4 w-4 text-teal-foreground" />
-              <h3 className="font-semibold text-sm">Nearby Clients</h3>
-            </div>
-            {nearbyClients.length === 0 ? (
-              <div className="text-sm text-muted-foreground py-3">No clients found within 10 miles</div>
-            ) : (
-              <ul className="space-y-2 max-h-[220px] overflow-auto">
-                {nearbyClients.map((cl) => (
-                  <li key={cl.id} className="p-2 rounded-lg bg-muted/40 text-xs flex items-center justify-between">
-                    <div className="min-w-0">
-                      <div className="font-medium truncate">{cl.company_name || "—"}</div>
-                      <div className="text-muted-foreground">{cl.postcode || ""}</div>
-                    </div>
-                    <span className="text-[10px] font-semibold text-teal-foreground">{cl.miles.toFixed(1)} mi</span>
                   </li>
                 ))}
               </ul>
