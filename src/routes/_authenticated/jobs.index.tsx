@@ -450,7 +450,7 @@ function Page() {
                         <div className="font-medium">{r.title}</div>
                       </div>
                     </td>
-                    <td className="py-3 px-3 text-xs text-muted-foreground">{r.client_name ?? "—"}</td>
+                    <td className="py-3 px-3 text-xs text-foreground">{r.client_name ?? "—"}</td>
                     <td className="py-3 px-3"><StatusBadge status={r.status} /></td>
                     <td className="py-3 px-3 text-xs">{qualLabel(r.qualification_required)}</td>
                     <td className="py-3 px-3 text-xs">

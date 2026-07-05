@@ -1544,6 +1544,8 @@ export type Database = {
         Row: {
           booking_group_id: string | null
           branch_id: string | null
+          cancellation_within_24h: boolean | null
+          cancelled_at: string | null
           candidate_id: string | null
           client_id: string | null
           confirmed_at: string | null
@@ -1563,6 +1565,8 @@ export type Database = {
         Insert: {
           booking_group_id?: string | null
           branch_id?: string | null
+          cancellation_within_24h?: boolean | null
+          cancelled_at?: string | null
           candidate_id?: string | null
           client_id?: string | null
           confirmed_at?: string | null
@@ -1582,6 +1586,8 @@ export type Database = {
         Update: {
           booking_group_id?: string | null
           branch_id?: string | null
+          cancellation_within_24h?: boolean | null
+          cancelled_at?: string | null
           candidate_id?: string | null
           client_id?: string | null
           confirmed_at?: string | null
