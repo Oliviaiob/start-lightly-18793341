@@ -432,9 +432,13 @@ function Page() {
           <h1 className="text-2xl font-bold">{job.title}</h1>
           <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1 flex-wrap">
             {job.client_name && <span className="font-medium text-foreground">{job.client_name}</span>}
-            {job.client_name && <span>·</span>}
-            <span>Posted {relTime(job.posted_at)}</span>
+            {(() => {
+              const branchName = branches.find((b) => b.id === job.branch_id)?.branch_name;
+              return branchName ? <><span>·</span><span>{branchName}</span></> : null;
+            })()}
             {job.location_postcode && <><span>·</span><span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.location_postcode}</span></>}
+            <span>·</span>
+            <span>Posted {relTime(job.posted_at)}</span>
             <span>·</span>
             <span>Created by {userId ? "you" : "system"}</span>
           </div>
