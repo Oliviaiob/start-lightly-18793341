@@ -675,7 +675,7 @@ function Page() {
           {loggingNote ? (
             <div className="space-y-2">
               <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="Add a note…" rows={3}
-                className="w-full text-sm bg-muted/40 rounded-xl p-3 border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" />
+                className="w-full text-sm bg-card rounded-xl p-3 border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" />
               <div className="flex gap-2">
                 <button onClick={logNote} className="h-8 px-4 rounded-full bg-navy text-white text-xs font-medium hover:opacity-90">Save note</button>
                 <button onClick={() => { setLoggingNote(false); setNoteText(""); }} className="h-8 px-4 rounded-full border text-xs font-medium hover:bg-muted">Cancel</button>
