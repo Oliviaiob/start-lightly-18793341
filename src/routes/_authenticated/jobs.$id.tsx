@@ -1,23 +1,34 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { PageHeader } from "@/components/page-header";
-import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
-  Briefcase,
-  ArrowLeft,
-  Building2,
-  Users,
-  GraduationCap,
-  Banknote,
-  MapPin,
-  Pencil,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Briefcase, ArrowLeft, Building2, Users, GraduationCap,
+  Banknote, MapPin, Clock, MessageSquare, PhoneCall,
+  Plus, ChevronDown, Star,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useScope } from "@/contexts/scope-context";
 
 export const Route = createFileRoute("/_authenticated/jobs/$id")({
   component: Page,
 });
+
+// ── Types ──────────────────────────────────────────────────────────────────────
 
 type Job = {
   id: string;
@@ -30,351 +41,674 @@ type Job = {
   salary_max: number | null;
   location_postcode: string | null;
   description: string | null;
-  posted_at: string | null;
   notes: string | null;
+  hours: string | null;
+  room: string | null;
+  advertising_notes: string | null;
+  source_boards: string[] | null;
+  branch_id: string | null;
+  posted_at: string | null;
 };
 
 type PipelineEntry = {
   id: string;
-  stage: string | null;
+  stage: string;
   stage_changed_at: string | null;
-  candidate: {
-    id: string;
-    first_name: string | null;
-    last_name: string | null;
-    qualification_level: string | null;
-  } | null;
+  candidate: { id: string; first_name: string | null; last_name: string | null; qualification_level: string | null } | null;
 };
 
+type BranchOption = { id: string; branch_name: string };
+type CandidateOption = { id: string; first_name: string | null; last_name: string | null };
+type Activity = { id: string; activity_type: string; description: string | null; created_by: string | null; created_at: string };
+
 const STAGES = [
-  { key: "matched", label: "Matched" },
-  { key: "shortlisted", label: "Shortlisted" },
-  { key: "cv_submitted", label: "CV Submitted" },
-  { key: "interview_arranged", label: "Interview" },
-  { key: "interviewed", label: "Interviewed" },
-  { key: "offer_made", label: "Offer Made" },
-  { key: "placed", label: "Placed" },
+  { key: "matched", label: "Matched", group: "early" },
+  { key: "shortlisted", label: "Shortlisted", group: "early" },
+  { key: "cv_submitted", label: "CV Submitted", group: "early" },
+  { key: "interview_arranged", label: "Interview Arranged", group: "early" },
+  { key: "interviewed", label: "Interviewed", group: "later" },
+  { key: "offer_made", label: "Offer Made", group: "later" },
+  { key: "placed", label: "Placed", group: "later" },
+  { key: "rejected", label: "Rejected", group: "rejected" },
 ];
 
-function statusLabel(s: string | null) {
-  const map: Record<string, string> = {
-    live: "Live",
-    interviewing: "Interviewing",
-    filled: "Filled",
-    lost: "Lost",
-  };
-  return map[s ?? ""] ?? s ?? "—";
+const SOURCE_BOARDS = [
+  { key: "cv_library", label: "CV-Library" },
+  { key: "reed", label: "Reed" },
+  { key: "soar_website", label: "SOAR Website" },
+];
+
+const QUAL_OPTIONS = [
+  { value: "unqualified", label: "Unqualified" },
+  { value: "level_2", label: "Level 2" },
+  { value: "level_3", label: "Level 3" },
+  { value: "room_leader", label: "Room Leader" },
+  { value: "deputy_manager", label: "Deputy Manager" },
+  { value: "manager", label: "Manager" },
+];
+
+const QUAL_ORDER = ["unqualified", "level_2", "level_3", "room_leader", "deputy_manager", "manager"];
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function qualLabel(q: string | null) {
+  return QUAL_OPTIONS.find((o) => o.value === q)?.label ?? q ?? "—";
 }
 
-function StatusBadge({ status }: { status: string | null }) {
+function fmtDate(iso: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function relTime(iso?: string | null) {
+  if (!iso) return "";
+  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (d === 0) return "today";
+  if (d === 1) return "yesterday";
+  if (d < 7) return `${d}d ago`;
+  return fmtDate(iso);
+}
+
+function activityIcon(type: string) {
+  if (type === "call_logged") return <PhoneCall className="h-3.5 w-3.5 text-teal-foreground" />;
+  return <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />;
+}
+
+function scoreQual(jobQual: string | null, candQual: string | null): number {
+  if (!jobQual || !candQual) return 0;
+  if (jobQual === candQual) return 40;
+  const ji = QUAL_ORDER.indexOf(jobQual);
+  const ci = QUAL_ORDER.indexOf(candQual);
+  if (ji < 0 || ci < 0) return 0;
+  const diff = Math.abs(ji - ci);
+  if (diff === 1) return 25;
+  if (diff === 2) return 10;
+  return 0;
+}
+
+// ── Status Dropdown ────────────────────────────────────────────────────────────
+
+function StatusDropdown({ jobId, current, onUpdate }: { jobId: string; current: string | null; onUpdate: (v: string) => void }) {
   const colours: Record<string, string> = {
     live: "bg-success/20 text-[oklch(0.4_0.12_155)]",
     interviewing: "bg-teal/20 text-teal-foreground",
     filled: "bg-navy/10 text-navy",
     lost: "bg-muted text-muted-foreground",
   };
+  const labels: Record<string, string> = { live: "Live", interviewing: "Interviewing", filled: "Filled", lost: "Lost" };
+  const [open, setOpen] = useState(false);
+  const save = async (v: string) => {
+    setOpen(false);
+    const { error } = await supabase.from("jobs").update({ status: v }).eq("id", jobId);
+    if (error) { toast.error("Failed to update"); return; }
+    onUpdate(v);
+  };
   return (
-    <span
-      className={`inline-flex items-center h-6 px-3 rounded-full text-xs font-semibold ${colours[status ?? ""] ?? "bg-muted text-muted-foreground"}`}
-    >
-      {statusLabel(status)}
-    </span>
+    <div className="relative">
+      <button onClick={() => setOpen((o) => !o)}
+        className={`h-9 px-3 rounded-lg border inline-flex items-center gap-1.5 text-sm font-medium ${colours[current ?? ""] ?? "bg-muted text-muted-foreground"}`}>
+        {labels[current ?? ""] ?? "—"} <ChevronDown className="h-3.5 w-3.5" />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-11 z-50 w-40 bg-card rounded-xl shadow-lg border py-1">
+          {Object.entries(labels).map(([v, l]) => (
+            <button key={v} onClick={() => save(v)} className="w-full text-left px-4 py-2 text-sm hover:bg-muted/60">{l}</button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
-function qualLabel(q: string | null) {
-  const map: Record<string, string> = {
-    unqualified: "Unqualified",
-    level_2: "Level 2",
-    level_3: "Level 3",
-    room_leader: "Room Leader",
-    deputy_manager: "Deputy Manager",
-    manager: "Manager",
-  };
-  return map[q ?? ""] ?? q ?? "—";
-}
+// ── Add to Pipeline Modal ──────────────────────────────────────────────────────
 
-function formatDate(iso: string | null) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function relTime(iso?: string | null) {
-  if (!iso) return "";
-  const diff = Date.now() - new Date(iso).getTime();
-  const d = Math.floor(diff / 86400000);
-  if (d === 0) return "today";
-  if (d === 1) return "yesterday";
-  if (d < 7) return `${d}d ago`;
-  return formatDate(iso);
-}
-
-function Page() {
-  const { id } = Route.useParams();
-  const navigate = useNavigate();
-  const [job, setJob] = useState<Job | null>(null);
-  const [pipeline, setPipeline] = useState<PipelineEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeStage, setActiveStage] = useState<string | null>(null);
+function AddPipelineModal({ open, jobId, onClose, onAdded }: {
+  open: boolean; jobId: string; onClose: () => void; onAdded: () => void;
+}) {
+  const [candidates, setCandidates] = useState<CandidateOption[]>([]);
+  const [candidateId, setCandidateId] = useState("");
+  const [stage, setStage] = useState("matched");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      const [jobRes, pipelineRes] = await Promise.all([
-        supabase
-          .from("jobs")
-          .select(
-            "id,title,client_id,status,qualification_required,salary_min,salary_max,location_postcode,description,posted_at,notes,clients(company_name)",
-          )
-          .eq("id", id)
-          .maybeSingle(),
-        supabase
-          .from("job_pipeline")
-          .select(
-            "id,stage,stage_changed_at,candidates(id,first_name,last_name,qualification_level)",
-          )
-          .eq("job_id", id)
-          .not("stage", "eq", "rejected")
-          .not("stage", "eq", "withdrawn")
-          .order("stage_changed_at", { ascending: false }),
-      ]);
+    if (!open) { setCandidateId(""); setStage("matched"); return; }
+    supabase.from("candidates").select("id,first_name,last_name").order("first_name").then(({ data }) => setCandidates((data as CandidateOption[]) ?? []));
+  }, [open]);
 
-      if (jobRes.error) {
-        toast.error("Could not load job");
-      } else {
-        const j = jobRes.data as any;
-        setJob({
-          ...j,
-          client_name: j?.clients?.company_name ?? null,
-        });
-      }
-
-      const entries = (pipelineRes.data ?? []).map((p: any) => ({
-        id: p.id,
-        stage: p.stage,
-        stage_changed_at: p.stage_changed_at,
-        candidate: p.candidates ?? null,
-      }));
-      setPipeline(entries);
-      setLoading(false);
-    })();
-  }, [id]);
-
-  if (loading) {
-    return (
-      <div className="max-w-[1400px] mx-auto pt-2">
-        <div className="h-32 flex items-center justify-center text-muted-foreground">
-          Loading…
-        </div>
-      </div>
-    );
-  }
-
-  if (!job) {
-    return (
-      <div className="max-w-[1400px] mx-auto pt-2">
-        <div className="h-32 flex items-center justify-center text-muted-foreground">
-          Job not found.
-        </div>
-      </div>
-    );
-  }
-
-  const stageEntries =
-    activeStage === null
-      ? pipeline
-      : pipeline.filter((p) => p.stage === activeStage);
-
-  const countByStage = STAGES.reduce(
-    (acc, s) => {
-      acc[s.key] = pipeline.filter((p) => p.stage === s.key).length;
-      return acc;
-    },
-    {} as Record<string, number>,
-  );
+  const save = async () => {
+    if (!candidateId) { toast.error("Select a candidate"); return; }
+    setSaving(true);
+    // check for existing entry
+    const { data: existing } = await supabase.from("job_pipeline").select("id").eq("job_id", jobId).eq("candidate_id", candidateId).maybeSingle();
+    if (existing) {
+      // update stage
+      const { error } = await supabase.from("job_pipeline").update({ stage, stage_changed_at: new Date().toISOString() }).eq("id", existing.id);
+      setSaving(false);
+      if (error) { toast.error("Failed"); return; }
+    } else {
+      const { error } = await supabase.from("job_pipeline").insert({ job_id: jobId, candidate_id: candidateId, stage, stage_changed_at: new Date().toISOString() });
+      setSaving(false);
+      if (error) { toast.error("Failed: " + error.message); return; }
+    }
+    toast.success("Added to pipeline");
+    onAdded();
+  };
 
   return (
-    <div className="max-w-[1400px] mx-auto space-y-6 pt-2">
-      <PageHeader
-        eyebrow="Recruitment"
-        title={job.title}
-        description={job.client_name ?? ""}
-        icon={Briefcase}
-        actions={
-          <>
-            <button
-              onClick={() => navigate({ to: "/jobs" })}
-              className="h-9 px-3.5 rounded-full bg-white/10 text-navy-foreground text-sm font-medium hover:bg-white/20 transition-colors border border-white/20 inline-flex items-center gap-1.5"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" /> Back
-            </button>
-            <button
-              onClick={() => toast.info("Edit job — coming soon")}
-              className="h-9 px-3.5 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-1.5"
-            >
-              <Pencil className="h-3.5 w-3.5" /> Edit
-            </button>
-          </>
-        }
-      />
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add to Pipeline</DialogTitle>
+          <DialogDescription>Add a candidate to this job's recruitment pipeline.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 mt-2">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Candidate *</label>
+            <Select value={candidateId} onValueChange={setCandidateId}>
+              <SelectTrigger className="h-10"><SelectValue placeholder="Select candidate…" /></SelectTrigger>
+              <SelectContent>{candidates.map((c) => <SelectItem key={c.id} value={c.id}>{c.first_name} {c.last_name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Stage</label>
+            <Select value={stage} onValueChange={setStage}>
+              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {STAGES.filter((s) => s.key !== "rejected").map((s) => <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="flex justify-end gap-3 mt-4">
+          <button onClick={onClose} className="h-10 px-5 rounded-full border text-sm font-medium hover:bg-muted">Cancel</button>
+          <button onClick={save} disabled={saving}
+            className="h-10 px-5 rounded-full bg-navy text-white text-sm font-medium hover:opacity-90 disabled:opacity-50">
+            {saving ? "Adding…" : "Add to pipeline"}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
-      <div className="flex gap-2 items-center">
-        <StatusBadge status={job.status} />
-        <span className="text-xs text-muted-foreground">
-          Posted {formatDate(job.posted_at)}
-        </span>
+// ── Stage Column ───────────────────────────────────────────────────────────────
+
+function StageColumn({ stage, label, entries, onCandidateClick, onMoveStage }: {
+  stage: string; label: string; entries: PipelineEntry[];
+  onCandidateClick: (id: string) => void;
+  onMoveStage: (entryId: string, newStage: string) => void;
+}) {
+  return (
+    <div className="bg-muted/30 rounded-xl p-3 min-w-[180px] flex-1">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</span>
+        <span className="text-[10px] font-bold bg-muted rounded-full h-5 w-5 flex items-center justify-center">{entries.length}</span>
       </div>
-
-      {/* Job details */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="md:col-span-1 p-5 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card space-y-4">
-          <h3 className="text-sm font-semibold">Job Details</h3>
-          <div className="space-y-3">
-            <InfoRow icon={<Building2 className="h-4 w-4" />} label="Client" value={job.client_name} />
-            <InfoRow icon={<GraduationCap className="h-4 w-4" />} label="Qualification" value={qualLabel(job.qualification_required)} />
-            <InfoRow
-              icon={<Banknote className="h-4 w-4" />}
-              label="Salary"
-              value={
-                job.salary_min || job.salary_max
-                  ? `£${job.salary_min?.toLocaleString() ?? "?"} – £${job.salary_max?.toLocaleString() ?? "?"}`
-                  : null
-              }
-            />
-            <InfoRow icon={<MapPin className="h-4 w-4" />} label="Location" value={job.location_postcode} />
-          </div>
-          {job.description && (
-            <div className="pt-2 border-t">
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium mb-1">
-                Description
+      <div className="space-y-2">
+        {entries.map((e) => {
+          const c = e.candidate;
+          const name = c ? `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() : "Unknown";
+          const initials = c ? `${c.first_name?.[0] ?? ""}${c.last_name?.[0] ?? ""}`.toUpperCase() : "?";
+          return (
+            <div key={e.id} className="bg-card rounded-lg p-2.5 shadow-sm group">
+              <div className="flex items-center gap-2 cursor-pointer" onClick={() => c && onCandidateClick(c.id)}>
+                <div className="h-7 w-7 rounded-full bg-navy flex items-center justify-center flex-shrink-0">
+                  <span className="text-[9px] font-bold text-white">{initials}</span>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-medium truncate hover:text-teal transition-colors">{name}</div>
+                  <div className="text-[10px] text-muted-foreground">{qualLabel(c?.qualification_level ?? null)}</div>
+                </div>
               </div>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                {job.description}
-              </p>
+              {/* Move stage */}
+              <div className="mt-2 hidden group-hover:flex items-center gap-1 flex-wrap">
+                {STAGES.filter((s) => s.key !== stage && s.key !== "rejected").slice(0, 3).map((s) => (
+                  <button key={s.key} onClick={() => onMoveStage(e.id, s.key)}
+                    className="text-[9px] px-1.5 py-0.5 rounded-full bg-navy/10 text-navy font-medium hover:bg-navy/20 transition-colors">
+                    → {s.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          )}
-        </Card>
-
-        {/* Pipeline */}
-        <Card className="md:col-span-2 p-5 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">
-              Pipeline ({pipeline.length})
-            </h3>
-            {activeStage !== null && (
-              <button
-                onClick={() => setActiveStage(null)}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                Show all
-              </button>
-            )}
-          </div>
-
-          {/* Stage filter pills */}
-          <div className="flex flex-wrap gap-2">
-            {STAGES.map((s) => (
-              <button
-                key={s.key}
-                onClick={() =>
-                  setActiveStage(activeStage === s.key ? null : s.key)
-                }
-                className={`h-7 px-3 rounded-full text-xs font-medium transition-colors ${
-                  activeStage === s.key
-                    ? "bg-navy text-navy-foreground"
-                    : "bg-muted/60 text-foreground/70 hover:bg-muted"
-                }`}
-              >
-                {s.label}
-                {countByStage[s.key] > 0 && (
-                  <span className="ml-1.5 opacity-60">
-                    {countByStage[s.key]}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          {stageEntries.length === 0 ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">
-              {pipeline.length === 0
-                ? "No candidates in the pipeline yet."
-                : "No candidates at this stage."}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {stageEntries.map((entry) => {
-                const c = entry.candidate;
-                const name = c
-                  ? `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim()
-                  : "Unknown";
-                const initials = c
-                  ? `${c.first_name?.[0] ?? ""}${c.last_name?.[0] ?? ""}`.toUpperCase()
-                  : "?";
-                return (
-                  <div
-                    key={entry.id}
-                    onClick={() =>
-                      c &&
-                      navigate({
-                        to: "/candidates/$id",
-                        params: { id: c.id },
-                      })
-                    }
-                    className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/40 transition-colors cursor-pointer"
-                  >
-                    <div className="h-8 w-8 rounded-full bg-navy flex items-center justify-center flex-shrink-0">
-                      <span className="text-[10px] font-semibold text-navy-foreground">
-                        {initials}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium">{name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {qualLabel(c?.qualification_level ?? null)}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-muted text-muted-foreground">
-                        {STAGES.find((s) => s.key === entry.stage)?.label ??
-                          entry.stage}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {relTime(entry.stage_changed_at)}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </Card>
+          );
+        })}
+        {entries.length === 0 && (
+          <div className="text-center py-4 text-[11px] text-muted-foreground/60">Empty</div>
+        )}
       </div>
     </div>
   );
 }
 
-function InfoRow({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string | null | undefined;
-}) {
+// ── Page ───────────────────────────────────────────────────────────────────────
+
+type Tab = "details" | "pipeline" | "smart_match" | "advertised" | "activity_log";
+
+function Page() {
+  const { id } = Route.useParams();
+  const navigate = useNavigate();
+  const { userId } = useScope();
+
+  const [job, setJob] = useState<Job | null>(null);
+  const [branches, setBranches] = useState<BranchOption[]>([]);
+  const [pipeline, setPipeline] = useState<PipelineEntry[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<Tab>("details");
+
+  // details edit
+  const [draft, setDraft] = useState<Partial<Job>>({});
+  const [saving, setSaving] = useState(false);
+
+  // activity
+  const [noteText, setNoteText] = useState("");
+  const [loggingNote, setLoggingNote] = useState(false);
+
+  // pipeline
+  const [showAddPipeline, setShowAddPipeline] = useState(false);
+
+  // smart match
+  const [matchResults, setMatchResults] = useState<{ id: string; name: string; qual: string | null; score: number }[]>([]);
+  const [matching, setMatching] = useState(false);
+
+  const loadAll = async () => {
+    const [jRes, pRes, aRes] = await Promise.all([
+      supabase.from("jobs").select("id,title,client_id,status,qualification_required,salary_min,salary_max,location_postcode,description,notes,hours,room,advertising_notes,source_boards,branch_id,posted_at,clients(company_name)").eq("id", id).maybeSingle(),
+      supabase.from("job_pipeline").select("id,stage,stage_changed_at,candidates(id,first_name,last_name,qualification_level)").eq("job_id", id).order("stage_changed_at", { ascending: false }),
+      supabase.from("activity_log").select("id,activity_type,description,created_by,created_at").eq("entity_id", id).eq("entity_type", "job").order("created_at", { ascending: false }).limit(30),
+    ]);
+    if (jRes.error) { toast.error("Could not load job"); setLoading(false); return; }
+    const j = jRes.data as any;
+    const jobData: Job = { ...j, client_name: j?.clients?.company_name ?? null };
+    setJob(jobData);
+    setDraft(jobData);
+    // Load branches for this client
+    if (j?.client_id) {
+      const { data: bData } = await supabase.from("client_branches").select("id,branch_name").eq("client_id", j.client_id).order("branch_name");
+      setBranches((bData as BranchOption[]) ?? []);
+    }
+    setPipeline(((pRes.data ?? []) as any[]).map((p) => ({ id: p.id, stage: p.stage ?? "matched", stage_changed_at: p.stage_changed_at, candidate: p.candidates ?? null })));
+    setActivities((aRes.data as Activity[]) ?? []);
+    setLoading(false);
+  };
+
+  useEffect(() => { loadAll(); }, [id]);
+
+  const setD = (k: keyof Job, v: any) => setDraft((p) => ({ ...p, [k]: v }));
+
+  const saveDetails = async () => {
+    setSaving(true);
+    const { error } = await supabase.from("jobs").update({
+      title: draft.title,
+      qualification_required: draft.qualification_required || null,
+      salary_min: draft.salary_min ?? null,
+      salary_max: draft.salary_max ?? null,
+      location_postcode: draft.location_postcode || null,
+      branch_id: draft.branch_id || null,
+      room: draft.room || null,
+      hours: draft.hours || null,
+      description: draft.description || null,
+      notes: draft.notes || null,
+    }).eq("id", id);
+    setSaving(false);
+    if (error) { toast.error("Failed: " + error.message); return; }
+    toast.success("Changes saved");
+    setJob((prev) => prev ? { ...prev, ...draft } : prev);
+  };
+
+  const saveAdvertised = async () => {
+    setSaving(true);
+    const { error } = await supabase.from("jobs").update({
+      source_boards: draft.source_boards ?? [],
+      advertising_notes: draft.advertising_notes || null,
+    }).eq("id", id);
+    setSaving(false);
+    if (error) { toast.error("Failed"); return; }
+    toast.success("Advertising updated");
+    setJob((prev) => prev ? { ...prev, ...draft } : prev);
+  };
+
+  const toggleSourceBoard = (key: string) => {
+    const current = draft.source_boards ?? [];
+    const updated = current.includes(key) ? current.filter((k) => k !== key) : [...current, key];
+    setD("source_boards", updated);
+  };
+
+  const logNote = async () => {
+    if (!noteText.trim()) return;
+    await supabase.from("activity_log").insert({ entity_type: "job", entity_id: id, activity_type: "note", description: noteText.trim(), created_by: userId ?? "system" });
+    setNoteText(""); setLoggingNote(false);
+    loadAll();
+    toast.success("Note saved");
+  };
+
+  const moveStage = async (entryId: string, newStage: string) => {
+    const { error } = await supabase.from("job_pipeline").update({ stage: newStage, stage_changed_at: new Date().toISOString() }).eq("id", entryId);
+    if (error) { toast.error("Failed to move"); return; }
+    setPipeline((prev) => prev.map((e) => e.id === entryId ? { ...e, stage: newStage } : e));
+    toast.success("Stage updated");
+  };
+
+  const findMatches = async () => {
+    setMatching(true);
+    const { data } = await supabase.from("candidates").select("id,first_name,last_name,qualification_level");
+    const results = ((data ?? []) as any[]).map((c) => ({
+      id: c.id,
+      name: `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim(),
+      qual: c.qualification_level,
+      score: scoreQual(job?.qualification_required ?? null, c.qualification_level),
+    })).filter((r) => r.score > 0).sort((a, b) => b.score - a.score);
+    setMatchResults(results);
+    setMatching(false);
+  };
+
+  if (loading) return <div className="max-w-[1400px] mx-auto pt-16 text-center text-muted-foreground">Loading…</div>;
+  if (!job) return <div className="max-w-[1400px] mx-auto pt-16 text-center text-muted-foreground">Job not found.</div>;
+
+  const grouped = {
+    early: STAGES.filter((s) => s.group === "early"),
+    later: STAGES.filter((s) => s.group === "later"),
+    rejected: STAGES.filter((s) => s.group === "rejected"),
+  };
+
+  const TABS: { key: Tab; label: string }[] = [
+    { key: "details", label: "Details" },
+    { key: "pipeline", label: "Pipeline" },
+    { key: "smart_match", label: "Smart Match" },
+    { key: "advertised", label: "Advertised" },
+    { key: "activity_log", label: "Activity Log" },
+  ];
+
   return (
-    <div className="flex items-start gap-3">
-      <span className="text-muted-foreground mt-0.5 flex-shrink-0">{icon}</span>
-      <div className="min-w-0">
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium mb-0.5">
-          {label}
+    <div className="max-w-[1400px] mx-auto space-y-5 pt-2">
+
+      {/* ── Header ── */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <button onClick={() => navigate({ to: "/jobs" })}
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-2 transition-colors">
+            <ArrowLeft className="h-3.5 w-3.5" /> Back to jobs
+          </button>
+          <h1 className="text-2xl font-bold">{job.title}</h1>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1 flex-wrap">
+            {job.client_name && <span className="font-medium text-foreground">{job.client_name}</span>}
+            {job.client_name && <span>·</span>}
+            <span>Posted {relTime(job.posted_at)}</span>
+            {job.location_postcode && <><span>·</span><span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.location_postcode}</span></>}
+            <span>·</span>
+            <span>Created by {userId ? "you" : "system"}</span>
+          </div>
         </div>
-        <div className="text-sm font-medium">{value || "—"}</div>
+        <StatusDropdown jobId={id} current={job.status} onUpdate={(v) => setJob((prev) => prev ? { ...prev, status: v } : prev)} />
       </div>
+
+      {/* ── Tabs ── */}
+      <div className="flex gap-1 border-b">
+        {TABS.map((t) => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`h-10 px-4 text-sm font-medium border-b-2 transition-colors ${tab === t.key ? "border-navy text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Details Tab ── */}
+      {tab === "details" && (
+        <div className="space-y-4 max-w-2xl">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1 col-span-2">
+              <label className="text-xs font-medium text-muted-foreground">Title</label>
+              <Input value={draft.title ?? ""} onChange={(e) => setD("title", e.target.value)} className="h-10" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Qualification</label>
+              <Select value={draft.qualification_required ?? "__none__"} onValueChange={(v) => setD("qualification_required", v === "__none__" ? "" : v)}>
+                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— None —</SelectItem>
+                  {QUAL_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Salary min (£)</label>
+              <Input type="number" value={draft.salary_min ?? ""} onChange={(e) => setD("salary_min", e.target.value ? parseFloat(e.target.value) : null)} placeholder="24000" className="h-10" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Salary max (£)</label>
+              <Input type="number" value={draft.salary_max ?? ""} onChange={(e) => setD("salary_max", e.target.value ? parseFloat(e.target.value) : null)} placeholder="28000" className="h-10" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Postcode</label>
+              <Input value={draft.location_postcode ?? ""} onChange={(e) => setD("location_postcode", e.target.value)} placeholder="SW1A 1AA" className="h-10" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Branch</label>
+              <Select value={draft.branch_id ?? "__none__"} onValueChange={(v) => setD("branch_id", v === "__none__" ? "" : v)}>
+                <SelectTrigger className="h-10"><SelectValue placeholder="— None —" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— None —</SelectItem>
+                  {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.branch_name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Room</label>
+              <Input value={draft.room ?? ""} onChange={(e) => setD("room", e.target.value)} placeholder="e.g. Baby Room" className="h-10" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Hours</label>
+              <Input value={draft.hours ?? ""} onChange={(e) => setD("hours", e.target.value)} placeholder="e.g. 30 hours per week, term time only" className="h-10" />
+            </div>
+            <div className="space-y-1 col-span-2">
+              <label className="text-xs font-medium text-muted-foreground">Description</label>
+              <textarea value={draft.description ?? ""} onChange={(e) => setD("description", e.target.value)} rows={5}
+                className="w-full text-sm bg-muted/40 rounded-xl p-3 border border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" />
+            </div>
+            <div className="space-y-1 col-span-2">
+              <label className="text-xs font-medium text-muted-foreground">Notes</label>
+              <textarea value={draft.notes ?? ""} onChange={(e) => setD("notes", e.target.value)} rows={3}
+                className="w-full text-sm bg-muted/40 rounded-xl p-3 border border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <button onClick={saveDetails} disabled={saving}
+              className="h-10 px-6 rounded-full bg-navy text-white text-sm font-medium hover:opacity-90 disabled:opacity-50">
+              {saving ? "Saving…" : "Save changes"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Pipeline Tab ── */}
+      {tab === "pipeline" && (
+        <div className="space-y-5">
+          <div className="flex justify-end">
+            <button onClick={() => setShowAddPipeline(true)}
+              className="h-9 px-4 rounded-full bg-navy text-white text-sm font-medium hover:opacity-90 inline-flex items-center gap-1.5">
+              <Plus className="h-3.5 w-3.5" /> Add to Pipeline
+            </button>
+          </div>
+
+          {/* Early Stages */}
+          <div>
+            <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-3">Early Stages</div>
+            <div className="flex gap-3 overflow-x-auto pb-2">
+              {grouped.early.map((s) => (
+                <StageColumn key={s.key} stage={s.key} label={s.label}
+                  entries={pipeline.filter((e) => e.stage === s.key)}
+                  onCandidateClick={(cId) => navigate({ to: "/candidates/$id", params: { id: cId } })}
+                  onMoveStage={moveStage} />
+              ))}
+            </div>
+          </div>
+
+          {/* Later Stages */}
+          <div>
+            <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-3">Later Stages</div>
+            <div className="flex gap-3 overflow-x-auto pb-2">
+              {grouped.later.map((s) => (
+                <StageColumn key={s.key} stage={s.key} label={s.label}
+                  entries={pipeline.filter((e) => e.stage === s.key)}
+                  onCandidateClick={(cId) => navigate({ to: "/candidates/$id", params: { id: cId } })}
+                  onMoveStage={moveStage} />
+              ))}
+            </div>
+          </div>
+
+          {/* Rejected */}
+          <div>
+            <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-3">Rejected</div>
+            <div className="bg-muted/20 rounded-xl p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-muted-foreground">Rejected</span>
+                <span className="text-[10px] font-bold bg-muted rounded-full h-5 w-5 flex items-center justify-center">
+                  {pipeline.filter((e) => e.stage === "rejected").length}
+                </span>
+              </div>
+              {pipeline.filter((e) => e.stage === "rejected").length === 0 ? (
+                <div className="text-center py-3 text-xs text-muted-foreground/60">Drag candidates here to mark as rejected.</div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {pipeline.filter((e) => e.stage === "rejected").map((e) => {
+                    const c = e.candidate;
+                    return (
+                      <div key={e.id} className="text-xs bg-card rounded-lg px-3 py-1.5 cursor-pointer hover:bg-muted/50"
+                        onClick={() => c && navigate({ to: "/candidates/$id", params: { id: c.id } })}>
+                        {c?.first_name} {c?.last_name}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Smart Match Tab ── */}
+      {tab === "smart_match" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Score = qualification match (0–40) + proximity (0–40) + availability (0–20 for temp shifts).
+            </p>
+            <button onClick={findMatches} disabled={matching}
+              className="h-9 px-4 rounded-full bg-navy text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5">
+              <Star className="h-3.5 w-3.5" /> {matching ? "Matching…" : "Find Matching Candidates"}
+            </button>
+          </div>
+          {matchResults.length === 0 && !matching && (
+            <div className="rounded-2xl border border-dashed border-muted-foreground/30 py-16 text-center text-sm text-muted-foreground">
+              Click <strong>Find Matching Candidates</strong> to score candidates against this job.
+            </div>
+          )}
+          {matchResults.length > 0 && (
+            <div className="rounded-2xl border border-transparent shadow-[var(--shadow-card)] bg-card overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-[11px] uppercase tracking-widest text-muted-foreground border-b">
+                    <th className="text-left font-semibold py-3 px-4">Candidate</th>
+                    <th className="text-left font-semibold py-3 px-3">Qualification</th>
+                    <th className="text-right font-semibold py-3 px-4">Match Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {matchResults.map((r) => (
+                    <tr key={r.id} onClick={() => navigate({ to: "/candidates/$id", params: { id: r.id } })}
+                      className="border-b last:border-b-0 hover:bg-muted/30 cursor-pointer transition-colors">
+                      <td className="py-3 px-4 font-medium">{r.name}</td>
+                      <td className="py-3 px-3 text-xs text-muted-foreground">{qualLabel(r.qual)}</td>
+                      <td className="py-3 px-4 text-right">
+                        <span className={`inline-flex items-center h-6 px-3 rounded-full text-xs font-bold ${r.score >= 40 ? "bg-success/20 text-[oklch(0.4_0.12_155)]" : r.score >= 20 ? "bg-teal/20 text-teal-foreground" : "bg-muted text-muted-foreground"}`}>
+                          {r.score} / 40
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Advertised Tab ── */}
+      {tab === "advertised" && (
+        <div className="space-y-4 max-w-lg">
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-muted-foreground">Source boards</label>
+            <div className="flex gap-4">
+              {SOURCE_BOARDS.map((sb) => (
+                <label key={sb.key} className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox"
+                    checked={(draft.source_boards ?? []).includes(sb.key)}
+                    onChange={() => toggleSourceBoard(sb.key)}
+                    className="h-4 w-4 rounded accent-[#1B2B4B]" />
+                  <span className="text-sm font-medium">{sb.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Advertising notes</label>
+            <textarea value={draft.advertising_notes ?? ""} onChange={(e) => setD("advertising_notes", e.target.value)}
+              placeholder="Ad copy, posting dates, tracking references…" rows={6}
+              className="w-full text-sm bg-muted/40 rounded-xl p-3 border border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" />
+          </div>
+          <div className="flex justify-end">
+            <button onClick={saveAdvertised} disabled={saving}
+              className="h-10 px-6 rounded-full bg-navy text-white text-sm font-medium hover:opacity-90 disabled:opacity-50">
+              {saving ? "Saving…" : "Save changes"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Activity Log Tab ── */}
+      {tab === "activity_log" && (
+        <div className="space-y-4 max-w-2xl">
+          {loggingNote ? (
+            <div className="space-y-2">
+              <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="Add a note…" rows={3}
+                className="w-full text-sm bg-muted/40 rounded-xl p-3 border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" />
+              <div className="flex gap-2">
+                <button onClick={logNote} className="h-8 px-4 rounded-full bg-navy text-white text-xs font-medium hover:opacity-90">Save note</button>
+                <button onClick={() => { setLoggingNote(false); setNoteText(""); }} className="h-8 px-4 rounded-full border text-xs font-medium hover:bg-muted">Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setLoggingNote(true)}
+              className="w-full h-10 rounded-xl bg-muted/40 text-muted-foreground text-sm font-medium hover:bg-muted/70 flex items-center gap-2 px-4">
+              <MessageSquare className="h-4 w-4" /> Add a note…
+            </button>
+          )}
+
+          {activities.length === 0 ? (
+            <div className="text-center py-8 text-sm text-muted-foreground">No activity yet.</div>
+          ) : (
+            <div className="rounded-2xl border border-transparent shadow-[var(--shadow-card)] bg-card divide-y overflow-hidden">
+              {activities.map((a) => (
+                <div key={a.id} className="flex items-start gap-3 px-5 py-3.5">
+                  <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center flex-shrink-0 mt-0.5">
+                    {activityIcon(a.activity_type)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-foreground leading-snug">{a.description}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {a.created_by && a.created_by !== "system" ? `${a.created_by} · ` : ""}{fmtDate(a.created_at)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <AddPipelineModal open={showAddPipeline} jobId={id}
+        onClose={() => setShowAddPipeline(false)}
+        onAdded={() => { setShowAddPipeline(false); loadAll(); }} />
     </div>
   );
 }
