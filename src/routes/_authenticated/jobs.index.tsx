@@ -343,8 +343,8 @@ function Page() {
       .not("stage", "eq", "withdrawn");
 
     const countMap: Record<string, number> = {};
-    (pipelineData ?? []).forEach((p: { job_id: string }) => {
-      countMap[p.job_id] = (countMap[p.job_id] ?? 0) + 1;
+    (pipelineData ?? []).forEach((p: { job_id: string | null }) => {
+      if (p.job_id) countMap[p.job_id] = (countMap[p.job_id] ?? 0) + 1;
     });
 
     setRows(
