@@ -89,6 +89,17 @@ const QUAL_OPTIONS = [
 
 const QUAL_ORDER = ["unqualified", "level_2", "level_3", "room_leader", "deputy_manager", "manager"];
 
+const STAGE_COLORS: Record<string, string> = {
+  matched:             "#A8E6CF",
+  shortlisted:         "#5DCAA5",
+  cv_submitted:        "#2DD4BF",
+  interview_arranged:  "#1D9E75",
+  interviewed:         "#FAD07A",
+  offer_made:          "#F59E0B",
+  placed:              "#22C55E",
+  rejected:            "#EF4444",
+};
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function qualLabel(q: string | null) {
@@ -167,13 +178,28 @@ function AddPipelineModal({ open, jobId, onClose, onAdded }: {
 }) {
   const [candidates, setCandidates] = useState<CandidateOption[]>([]);
   const [candidateId, setCandidateId] = useState("");
+  const [candidateName, setCandidateName] = useState("");
+  const [search, setSearch] = useState("");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [stage, setStage] = useState("matched");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!open) { setCandidateId(""); setStage("matched"); return; }
+    if (!open) { setCandidateId(""); setCandidateName(""); setSearch(""); setDropdownOpen(false); setStage("matched"); return; }
     supabase.from("candidates").select("id,first_name,last_name").order("first_name").then(({ data }) => setCandidates((data as CandidateOption[]) ?? []));
   }, [open]);
+
+  const filtered = candidates.filter((c) => {
+    const name = `${c.first_name ?? ""} ${c.last_name ?? ""}`.toLowerCase();
+    return name.includes(search.toLowerCase());
+  });
+
+  const selectCandidate = (c: CandidateOption) => {
+    setCandidateId(c.id);
+    setCandidateName(`${c.first_name ?? ""} ${c.last_name ?? ""}`.trim());
+    setSearch("");
+    setDropdownOpen(false);
+  };
 
   const save = async () => {
     if (!candidateId) { toast.error("Select a candidate"); return; }
@@ -204,10 +230,39 @@ function AddPipelineModal({ open, jobId, onClose, onAdded }: {
         <div className="space-y-3 mt-2">
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">Candidate *</label>
-            <Select value={candidateId} onValueChange={setCandidateId}>
-              <SelectTrigger className="h-10"><SelectValue placeholder="Select candidate…" /></SelectTrigger>
-              <SelectContent>{candidates.map((c) => <SelectItem key={c.id} value={c.id}>{c.first_name} {c.last_name}</SelectItem>)}</SelectContent>
-            </Select>
+            <div className="relative">
+              {candidateId && !dropdownOpen ? (
+                <div className="h-10 px-3 rounded-lg border bg-background flex items-center justify-between text-sm cursor-pointer hover:bg-muted/40 transition-colors"
+                  onClick={() => { setDropdownOpen(true); setSearch(""); }}>
+                  <span className="font-medium">{candidateName}</span>
+                  <span className="text-xs text-muted-foreground">change</span>
+                </div>
+              ) : (
+                <Input
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setDropdownOpen(true); }}
+                  onFocus={() => setDropdownOpen(true)}
+                  placeholder="Search candidates…"
+                  className="h-10"
+                  autoComplete="off"
+                />
+              )}
+              {dropdownOpen && (
+                <div className="absolute left-0 right-0 top-11 z-50 bg-card border rounded-xl shadow-lg max-h-52 overflow-y-auto">
+                  {filtered.length === 0 ? (
+                    <div className="px-4 py-3 text-sm text-muted-foreground">No candidates found</div>
+                  ) : filtered.map((c) => (
+                    <button key={c.id} onMouseDown={() => selectCandidate(c)}
+                      className="w-full text-left px-4 py-2.5 text-sm hover:bg-muted/60 transition-colors flex items-center gap-2">
+                      <div className="h-6 w-6 rounded-full bg-navy flex items-center justify-center flex-shrink-0">
+                        <span className="text-[9px] font-bold text-white">{(c.first_name?.[0] ?? "").toUpperCase()}{(c.last_name?.[0] ?? "").toUpperCase()}</span>
+                      </div>
+                      {c.first_name} {c.last_name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">Stage</label>
@@ -233,13 +288,13 @@ function AddPipelineModal({ open, jobId, onClose, onAdded }: {
 
 // ── Stage Column ───────────────────────────────────────────────────────────────
 
-function StageColumn({ stage, label, entries, onCandidateClick, onMoveStage }: {
-  stage: string; label: string; entries: PipelineEntry[];
+function StageColumn({ stage, label, color, entries, onCandidateClick, onMoveStage }: {
+  stage: string; label: string; color: string; entries: PipelineEntry[];
   onCandidateClick: (id: string) => void;
   onMoveStage: (entryId: string, newStage: string) => void;
 }) {
   return (
-    <div className="bg-muted/30 rounded-xl p-3 min-w-[180px] flex-1">
+    <div className="bg-card rounded-xl p-3 min-w-[180px] flex-1 border border-border" style={{ borderTop: `3px solid ${color}` }}>
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</span>
         <span className="text-[10px] font-bold bg-muted rounded-full h-5 w-5 flex items-center justify-center">{entries.length}</span>
@@ -540,6 +595,7 @@ function Page() {
             <div className="flex gap-3 overflow-x-auto pb-2">
               {grouped.early.map((s) => (
                 <StageColumn key={s.key} stage={s.key} label={s.label}
+                  color={STAGE_COLORS[s.key] ?? "#2DD4BF"}
                   entries={pipeline.filter((e) => e.stage === s.key)}
                   onCandidateClick={(cId) => navigate({ to: "/candidates/$id", params: { id: cId } })}
                   onMoveStage={moveStage} />
@@ -553,6 +609,7 @@ function Page() {
             <div className="flex gap-3 overflow-x-auto pb-2">
               {grouped.later.map((s) => (
                 <StageColumn key={s.key} stage={s.key} label={s.label}
+                  color={STAGE_COLORS[s.key] ?? "#2DD4BF"}
                   entries={pipeline.filter((e) => e.stage === s.key)}
                   onCandidateClick={(cId) => navigate({ to: "/candidates/$id", params: { id: cId } })}
                   onMoveStage={moveStage} />
