@@ -589,7 +589,7 @@ function Section({ title, interviews, onOutcomeUpdate, onOpenNotes, onOpenNewDat
       <h2 className="text-sm font-semibold text-foreground px-1">
         {title} <span className="text-muted-foreground font-normal">({interviews.length})</span>
       </h2>
-      <Card className="rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card overflow-hidden">
+      <Card className="rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
         {interviews.length === 0 ? (
           <div className="py-12 text-center text-sm text-muted-foreground">No {title.toLowerCase()} found.</div>
         ) : (
