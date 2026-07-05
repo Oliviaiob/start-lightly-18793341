@@ -54,7 +54,7 @@ type PipelineEntry = {
   id: string;
   stage: string;
   stage_changed_at: string | null;
-  candidate: { id: string; first_name: string | null; last_name: string | null; qualification_level: string | null } | null;
+  candidate: { id: string; first_name: string | null; last_name: string | null; qualification_level: string | null; postcode: string | null; phone: string | null } | null;
 };
 
 type BranchOption = { id: string; branch_name: string };
@@ -467,16 +467,12 @@ function StageColumn({ stage, label, color, entries, onCandidateClick, onMoveSta
                 <div className="min-w-0">
                   <div className="text-xs font-medium truncate hover:text-teal transition-colors">{name}</div>
                   <div className="text-[10px] text-muted-foreground">{qualLabel(c?.qualification_level ?? null)}</div>
+                  {(c?.postcode || c?.phone) && (
+                    <div className="text-[10px] text-muted-foreground/70 mt-0.5">
+                      {[c?.postcode, c?.phone].filter(Boolean).join(" · ")}
+                    </div>
+                  )}
                 </div>
-              </div>
-              {/* Move stage */}
-              <div className="mt-2 hidden group-hover:flex items-center gap-1 flex-wrap">
-                {STAGES.filter((s) => s.key !== stage && s.key !== "rejected").slice(0, 3).map((s) => (
-                  <button key={s.key} onClick={() => onMoveStage(e.id, s.key)}
-                    className="text-[9px] px-1.5 py-0.5 rounded-full bg-navy/10 text-navy font-medium hover:bg-navy/20 transition-colors">
-                    → {s.label}
-                  </button>
-                ))}
               </div>
             </div>
           );
@@ -525,7 +521,7 @@ function Page() {
   const loadAll = async () => {
     const [jRes, pRes, aRes] = await Promise.all([
       supabase.from("jobs").select("id,title,client_id,status,qualification_required,salary_min,salary_max,location_postcode,description,notes,hours,room,advertising_notes,source_boards,branch_id,posted_at,clients(company_name)").eq("id", id).maybeSingle(),
-      supabase.from("job_pipeline").select("id,stage,stage_changed_at,candidates(id,first_name,last_name,qualification_level)").eq("job_id", id).order("stage_changed_at", { ascending: false }),
+      supabase.from("job_pipeline").select("id,stage,stage_changed_at,candidates(id,first_name,last_name,qualification_level,postcode,phone)").eq("job_id", id).order("stage_changed_at", { ascending: false }),
       supabase.from("activity_log").select("id,activity_type,description,created_by,created_at").eq("entity_id", id).eq("entity_type", "job").order("created_at", { ascending: false }).limit(30),
     ]);
     if (jRes.error) { toast.error("Could not load job"); setLoading(false); return; }
