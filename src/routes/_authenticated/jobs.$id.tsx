@@ -19,7 +19,7 @@ import {
 import {
   Briefcase, ArrowLeft, Building2, Users, GraduationCap,
   Banknote, MapPin, Clock, MessageSquare, PhoneCall,
-  Plus, ChevronDown, Star,
+  Plus, ChevronDown, Star, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useScope } from "@/contexts/scope-context";
@@ -60,6 +60,36 @@ type PipelineEntry = {
 type BranchOption = { id: string; branch_name: string };
 type CandidateOption = { id: string; first_name: string | null; last_name: string | null };
 type Activity = { id: string; activity_type: string; description: string | null; created_by: string | null; created_at: string };
+
+type MatchResult = {
+  id: string;
+  name: string;
+  qual: string | null;
+  score: number;
+  postcode: string | null;
+  city: string | null;
+  candidate_type: string | null;
+  source: string | null;
+  has_dbs: boolean | null;
+  available_days: string[] | null;
+};
+
+type CandidateFull = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
+  qualification_level: string | null;
+  candidate_type: string | null;
+  status_perm: string | null;
+  status_temp: string | null;
+  postcode: string | null;
+  city: string | null;
+  source: string | null;
+  has_dbs: boolean | null;
+  available_days: string[] | null;
+};
 
 const STAGES = [
   { key: "matched", label: "Matched", group: "early" },
@@ -173,8 +203,9 @@ function StatusDropdown({ jobId, current, onUpdate }: { jobId: string; current: 
 
 // ── Add to Pipeline Modal ──────────────────────────────────────────────────────
 
-function AddPipelineModal({ open, jobId, onClose, onAdded }: {
+function AddPipelineModal({ open, jobId, onClose, onAdded, prefilledCandidateId, prefilledCandidateName }: {
   open: boolean; jobId: string; onClose: () => void; onAdded: () => void;
+  prefilledCandidateId?: string; prefilledCandidateName?: string;
 }) {
   const [candidates, setCandidates] = useState<CandidateOption[]>([]);
   const [candidateId, setCandidateId] = useState("");
@@ -186,6 +217,10 @@ function AddPipelineModal({ open, jobId, onClose, onAdded }: {
 
   useEffect(() => {
     if (!open) { setCandidateId(""); setCandidateName(""); setSearch(""); setDropdownOpen(false); setStage("matched"); return; }
+    if (prefilledCandidateId && prefilledCandidateName) {
+      setCandidateId(prefilledCandidateId);
+      setCandidateName(prefilledCandidateName);
+    }
     supabase.from("candidates").select("id,first_name,last_name").order("first_name").then(({ data }) => setCandidates((data as CandidateOption[]) ?? []));
   }, [open]);
 
@@ -286,6 +321,125 @@ function AddPipelineModal({ open, jobId, onClose, onAdded }: {
   );
 }
 
+// ── Candidate Drawer ──────────────────────────────────────────────────────────
+
+function CandidateDrawer({ candidateId, onClose }: { candidateId: string | null; onClose: () => void }) {
+  const [candidate, setCandidate] = useState<CandidateFull | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!candidateId) { setCandidate(null); return; }
+    setLoading(true);
+    supabase.from("candidates")
+      .select("id,first_name,last_name,email,phone,qualification_level,candidate_type,status_perm,status_temp,postcode,city,source,has_dbs,available_days")
+      .eq("id", candidateId)
+      .maybeSingle()
+      .then(({ data }) => { setCandidate(data as CandidateFull ?? null); setLoading(false); });
+  }, [candidateId]);
+
+  if (!candidateId) return null;
+
+  const name = candidate ? `${candidate.first_name ?? ""} ${candidate.last_name ?? ""}`.trim() : "";
+  const initials = candidate ? `${candidate.first_name?.[0] ?? ""}${candidate.last_name?.[0] ?? ""}`.toUpperCase() : "…";
+
+  const typeLabel = (t: string | null) => {
+    if (t === "perm") return "Permanent";
+    if (t === "temp") return "Temp";
+    if (t === "both") return "Perm & Temp";
+    return t ?? "—";
+  };
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-40 bg-black/20" onClick={onClose} />
+      {/* Drawer */}
+      <div className="fixed inset-y-0 right-0 z-50 w-[400px] bg-card shadow-2xl overflow-y-auto flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b bg-navy">
+          <span className="text-white font-semibold text-sm">Candidate Profile</span>
+          <button onClick={onClose} className="h-7 w-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+            <X className="h-4 w-4 text-white" />
+          </button>
+        </div>
+
+        {loading && <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">Loading…</div>}
+
+        {!loading && candidate && (
+          <div className="flex-1 p-6 space-y-5">
+            {/* Avatar + name */}
+            <div className="flex items-center gap-4">
+              <div className="h-14 w-14 rounded-full bg-navy flex items-center justify-center flex-shrink-0">
+                <span className="text-lg font-bold text-white">{initials}</span>
+              </div>
+              <div>
+                <div className="text-lg font-bold">{name}</div>
+                <div className="text-sm text-muted-foreground">{qualLabel(candidate.qualification_level)}</div>
+              </div>
+            </div>
+
+            {/* Contact */}
+            <div className="rounded-xl bg-muted/30 p-4 space-y-2">
+              <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-1">Contact</div>
+              <Row label="Email" value={candidate.email ?? "—"} />
+              <Row label="Phone" value={candidate.phone ?? "—"} />
+            </div>
+
+            {/* Location */}
+            <div className="rounded-xl bg-muted/30 p-4 space-y-2">
+              <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-1">Location</div>
+              <Row label="City" value={candidate.city ?? "—"} />
+              <Row label="Postcode" value={candidate.postcode ?? "—"} />
+            </div>
+
+            {/* Status */}
+            <div className="rounded-xl bg-muted/30 p-4 space-y-2">
+              <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-1">Status</div>
+              <Row label="Type" value={typeLabel(candidate.candidate_type)} />
+              {(candidate.candidate_type === "perm" || candidate.candidate_type === "both") && (
+                <Row label="Perm status" value={candidate.status_perm ?? "—"} />
+              )}
+              {(candidate.candidate_type === "temp" || candidate.candidate_type === "both") && (
+                <Row label="Temp status" value={candidate.status_temp ?? "—"} />
+              )}
+              <Row label="DBS" value={candidate.has_dbs ? "✓ Valid DBS" : "No DBS"} />
+            </div>
+
+            {/* Availability */}
+            {candidate.available_days && candidate.available_days.length > 0 && (
+              <div className="rounded-xl bg-muted/30 p-4">
+                <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-2">Availability</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {candidate.available_days.map((d) => (
+                    <span key={d} className="text-xs px-2 py-0.5 rounded-full bg-navy/10 text-navy font-medium capitalize">{d}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Source */}
+            {candidate.source && (
+              <div className="rounded-xl bg-muted/30 p-4 space-y-2">
+                <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-1">Source</div>
+                <Row label="Referred via" value={candidate.source} />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium text-right">{value}</span>
+    </div>
+  );
+}
+
 // ── Stage Column ───────────────────────────────────────────────────────────────
 
 function StageColumn({ stage, label, color, entries, onCandidateClick, onMoveStage }: {
@@ -363,8 +517,10 @@ function Page() {
   const [showAddPipeline, setShowAddPipeline] = useState(false);
 
   // smart match
-  const [matchResults, setMatchResults] = useState<{ id: string; name: string; qual: string | null; score: number }[]>([]);
+  const [matchResults, setMatchResults] = useState<MatchResult[]>([]);
   const [matching, setMatching] = useState(false);
+  const [drawerCandidateId, setDrawerCandidateId] = useState<string | null>(null);
+  const [addPipelineCandidate, setAddPipelineCandidate] = useState<{ id: string; name: string } | null>(null);
 
   const loadAll = async () => {
     const [jRes, pRes, aRes] = await Promise.all([
@@ -446,12 +602,18 @@ function Page() {
 
   const findMatches = async () => {
     setMatching(true);
-    const { data } = await supabase.from("candidates").select("id,first_name,last_name,qualification_level");
+    const { data } = await supabase.from("candidates").select("id,first_name,last_name,qualification_level,postcode,city,candidate_type,source,has_dbs,available_days");
     const results = ((data ?? []) as any[]).map((c) => ({
       id: c.id,
       name: `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim(),
       qual: c.qualification_level,
       score: scoreQual(job?.qualification_required ?? null, c.qualification_level),
+      postcode: c.postcode ?? null,
+      city: c.city ?? null,
+      candidate_type: c.candidate_type ?? null,
+      source: c.source ?? null,
+      has_dbs: c.has_dbs ?? null,
+      available_days: c.available_days ?? null,
     })).filter((r) => r.score > 0).sort((a, b) => b.score - a.score);
     setMatchResults(results);
     setMatching(false);
@@ -652,7 +814,7 @@ function Page() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              Score = qualification match (0–40) + proximity (0–40) + availability (0–20 for temp shifts).
+              Score = qualification match (0–40). Click a candidate name to view their profile.
             </p>
             <button onClick={findMatches} disabled={matching}
               className="h-9 px-4 rounded-full bg-navy text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5">
@@ -671,19 +833,51 @@ function Page() {
                   <tr className="text-[11px] uppercase tracking-widest text-muted-foreground border-b">
                     <th className="text-left font-semibold py-3 px-4">Candidate</th>
                     <th className="text-left font-semibold py-3 px-3">Qualification</th>
-                    <th className="text-right font-semibold py-3 px-4">Match Score</th>
+                    <th className="text-left font-semibold py-3 px-3">Location</th>
+                    <th className="text-left font-semibold py-3 px-3">Type</th>
+                    <th className="text-left font-semibold py-3 px-3">DBS</th>
+                    <th className="text-left font-semibold py-3 px-3">Source</th>
+                    <th className="text-center font-semibold py-3 px-3">Score</th>
+                    <th className="py-3 px-4" />
                   </tr>
                 </thead>
                 <tbody>
                   {matchResults.map((r) => (
-                    <tr key={r.id} onClick={() => navigate({ to: "/candidates/$id", params: { id: r.id } })}
-                      className="border-b last:border-b-0 hover:bg-muted/30 cursor-pointer transition-colors">
-                      <td className="py-3 px-4 font-medium">{r.name}</td>
+                    <tr key={r.id} className="border-b last:border-b-0 hover:bg-muted/30 transition-colors">
+                      <td className="py-3 px-4">
+                        <button
+                          onClick={() => setDrawerCandidateId(r.id)}
+                          className="font-medium text-left hover:text-teal transition-colors underline-offset-2 hover:underline">
+                          {r.name}
+                        </button>
+                      </td>
                       <td className="py-3 px-3 text-xs text-muted-foreground">{qualLabel(r.qual)}</td>
-                      <td className="py-3 px-4 text-right">
+                      <td className="py-3 px-3 text-xs text-muted-foreground">
+                        {[r.city, r.postcode].filter(Boolean).join(", ") || "—"}
+                      </td>
+                      <td className="py-3 px-3 text-xs">
+                        {r.candidate_type === "perm" ? <span className="px-2 py-0.5 rounded-full bg-navy/10 text-navy font-medium">Perm</span>
+                          : r.candidate_type === "temp" ? <span className="px-2 py-0.5 rounded-full bg-teal/10 text-teal-foreground font-medium">Temp</span>
+                          : r.candidate_type === "both" ? <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">Both</span>
+                          : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="py-3 px-3 text-xs">
+                        {r.has_dbs
+                          ? <span className="px-2 py-0.5 rounded-full bg-success/20 text-[oklch(0.4_0.12_155)] font-medium">✓ DBS</span>
+                          : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="py-3 px-3 text-xs text-muted-foreground capitalize">{r.source ?? "—"}</td>
+                      <td className="py-3 px-3 text-center">
                         <span className={`inline-flex items-center h-6 px-3 rounded-full text-xs font-bold ${r.score >= 40 ? "bg-success/20 text-[oklch(0.4_0.12_155)]" : r.score >= 20 ? "bg-teal/20 text-teal-foreground" : "bg-muted text-muted-foreground"}`}>
                           {r.score} / 40
                         </span>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <button
+                          onClick={() => setAddPipelineCandidate({ id: r.id, name: r.name })}
+                          className="h-7 px-3 rounded-full bg-navy text-white text-xs font-medium hover:opacity-90 whitespace-nowrap inline-flex items-center gap-1">
+                          <Plus className="h-3 w-3" /> Pipeline
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -767,9 +961,22 @@ function Page() {
         </div>
       )}
 
+      {/* Pipeline tab modal */}
       <AddPipelineModal open={showAddPipeline} jobId={id}
         onClose={() => setShowAddPipeline(false)}
         onAdded={() => { setShowAddPipeline(false); loadAll(); }} />
+
+      {/* Smart Match "Add to Pipeline" modal — prefilled candidate */}
+      <AddPipelineModal
+        open={!!addPipelineCandidate}
+        jobId={id}
+        prefilledCandidateId={addPipelineCandidate?.id}
+        prefilledCandidateName={addPipelineCandidate?.name}
+        onClose={() => setAddPipelineCandidate(null)}
+        onAdded={() => { setAddPipelineCandidate(null); loadAll(); }} />
+
+      {/* Candidate drawer */}
+      <CandidateDrawer candidateId={drawerCandidateId} onClose={() => setDrawerCandidateId(null)} />
     </div>
   );
 }
