@@ -176,7 +176,7 @@ function AddClientModal({
     };
     const { data, error } = await supabase
       .from("clients")
-      .insert(payload)
+      .insert(payload as any)
       .select("id")
       .single();
     setSaving(false);
