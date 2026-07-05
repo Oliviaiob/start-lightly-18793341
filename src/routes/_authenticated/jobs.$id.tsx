@@ -833,7 +833,7 @@ function Page() {
                 <StageColumn key={s.key} stage={s.key} label={s.label}
                   color={STAGE_COLORS[s.key] ?? "#2DD4BF"}
                   entries={pipeline.filter((e) => e.stage === s.key)}
-                  onCandidateClick={(cId) => navigate({ to: "/candidates/$id", params: { id: cId } })}
+                  onCandidateClick={(cId) => setDrawerCandidateId(cId)}
                   onMoveStage={moveStage} />
               ))}
             </div>
@@ -847,7 +847,7 @@ function Page() {
                 <StageColumn key={s.key} stage={s.key} label={s.label}
                   color={STAGE_COLORS[s.key] ?? "#2DD4BF"}
                   entries={pipeline.filter((e) => e.stage === s.key)}
-                  onCandidateClick={(cId) => navigate({ to: "/candidates/$id", params: { id: cId } })}
+                  onCandidateClick={(cId) => setDrawerCandidateId(cId)}
                   onMoveStage={moveStage} />
               ))}
             </div>
@@ -856,7 +856,7 @@ function Page() {
           {/* Rejected */}
           <div>
             <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-3">Rejected</div>
-            <RejectedZone pipeline={pipeline} onMoveStage={moveStage} onCandidateClick={(cId) => navigate({ to: "/candidates/$id", params: { id: cId } })} />
+            <RejectedZone pipeline={pipeline} onMoveStage={moveStage} onCandidateClick={(cId) => setDrawerCandidateId(cId)} />
           </div>
         </div>
       )}
