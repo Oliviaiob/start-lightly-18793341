@@ -90,9 +90,9 @@ function isUpcoming(date: string | null) {
 
 function OutcomeBadge({ outcome }: { outcome: string | null }) {
   if (outcome === "successful")
-    return <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] font-semibold bg-success/20 text-[oklch(0.4_0.12_155)]"><CheckCircle className="h-3 w-3" /> Passed</span>;
+    return <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] font-semibold bg-success/20 text-[oklch(0.4_0.12_155)]"><CheckCircle className="h-3 w-3" /> Successful</span>;
   if (outcome === "unsuccessful")
-    return <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] font-semibold bg-destructive/20 text-destructive"><XCircle className="h-3 w-3" /> Failed</span>;
+    return <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] font-semibold bg-destructive/20 text-destructive"><XCircle className="h-3 w-3" /> Unsuccessful</span>;
   return <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] font-semibold bg-warning/20 text-[oklch(0.45_0.12_75)]"><Clock className="h-3 w-3" /> Pending</span>;
 }
 
@@ -118,8 +118,8 @@ function OutcomeDropdown({ id, onUpdate }: { id: string; onUpdate: (outcome: str
         {saving ? "Saving…" : "Mark outcome"} <ChevronDown className="h-3 w-3" />
       </button>
       {open && (
-        <div className="absolute right-0 top-9 z-50 w-44 bg-card rounded-xl shadow-lg border py-1">
-          {[{ value: "successful", label: "✓ Passed" }, { value: "unsuccessful", label: "✗ Failed" }].map((o) => (
+        <div className="absolute right-0 bottom-9 z-50 w-48 bg-card rounded-xl shadow-lg border py-1">
+          {[{ value: "successful", label: "Successful" }, { value: "unsuccessful", label: "Unsuccessful" }].map((o) => (
             <button key={o.value} onClick={(e) => { e.stopPropagation(); pick(o.value); }}
               className="w-full text-left px-4 py-2 text-sm hover:bg-muted/60 transition-colors">{o.label}</button>
           ))}
