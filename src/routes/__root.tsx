@@ -77,6 +77,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:description", content: "Recruitment CRM for SOAR — childcare and nanny agency." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "SOAR Recruitment CRM" },
+      { name: "twitter:description", content: "Recruitment CRM for SOAR — childcare and nanny agency." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/d30a7213-3d02-4c97-bbaa-15274fd165a8/id-preview-9b6c902b--8887fc20-4843-42d9-8d3a-8259869bf748.lovable.app-1783115629815.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/d30a7213-3d02-4c97-bbaa-15274fd165a8/id-preview-9b6c902b--8887fc20-4843-42d9-8d3a-8259869bf748.lovable.app-1783115629815.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
