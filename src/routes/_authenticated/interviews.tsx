@@ -543,7 +543,7 @@ function Page() {
   };
 
   const goTo = (section: string, id: string) => {
-    navigate({ to: `/${section}/$id` as any, params: { id } });
+    navigate({ to: `/${section}/${id}` as any });
   };
 
   const hasFilters = !!q || typeFilter !== ALL || outcomeFilter !== ALL;

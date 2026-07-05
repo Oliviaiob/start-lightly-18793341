@@ -54,11 +54,13 @@ const recruitment: NavItem[] = [
 ];
 const operations: NavItem[] = [
   { title: "Booking Board", url: "/bookings", icon: CalendarRange },
-  { title: "Placements", url: "/placements", icon: Trophy },
   { title: "Compliance", url: "/compliance", icon: ShieldCheck },
   { title: "Map", url: "/map", icon: MapIcon },
 ];
-const workspace: NavItem[] = [{ title: "Settings", url: "/settings", icon: Settings }];
+const workspace: NavItem[] = [
+  { title: "Placements", url: "/placements", icon: Trophy },
+  { title: "Settings", url: "/settings", icon: Settings },
+];
 
 export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
