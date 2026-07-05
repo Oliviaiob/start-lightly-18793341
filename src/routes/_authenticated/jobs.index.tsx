@@ -11,7 +11,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Briefcase, Search, Plus, X, Users } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Briefcase, Search, Plus, X, Users, Link, Upload, Pencil } from "lucide-react";
 import { useEffectiveScope, useScope } from "@/contexts/scope-context";
 import { toast } from "sonner";
 
@@ -32,7 +39,21 @@ type Job = {
   pipeline_count?: number;
 };
 
+type ClientOption = { id: string; company_name: string };
+
 const ALL = "__all__";
+
+const EMPTY_JOB = {
+  title: "",
+  client_id: "",
+  status: "live",
+  qualification_required: "level_3",
+  salary_min: "",
+  salary_max: "",
+  location_postcode: "",
+  description: "",
+  notes: "",
+};
 
 function relTime(iso?: string | null) {
   if (!iso) return "—";
@@ -49,12 +70,7 @@ function relTime(iso?: string | null) {
 }
 
 function statusLabel(s: string | null) {
-  const map: Record<string, string> = {
-    live: "Live",
-    interviewing: "Interviewing",
-    filled: "Filled",
-    lost: "Lost",
-  };
+  const map: Record<string, string> = { live: "Live", interviewing: "Interviewing", filled: "Filled", lost: "Lost" };
   return map[s ?? ""] ?? s ?? "—";
 }
 
@@ -66,9 +82,7 @@ function StatusBadge({ status }: { status: string | null }) {
     lost: "bg-muted text-muted-foreground",
   };
   return (
-    <span
-      className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold ${colours[status ?? ""] ?? "bg-muted text-muted-foreground"}`}
-    >
+    <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold ${colours[status ?? ""] ?? "bg-muted text-muted-foreground"}`}>
       {statusLabel(status)}
     </span>
   );
@@ -76,25 +90,14 @@ function StatusBadge({ status }: { status: string | null }) {
 
 function qualLabel(q: string | null) {
   const map: Record<string, string> = {
-    unqualified: "Unqualified",
-    level_2: "Level 2",
-    level_3: "Level 3",
-    room_leader: "Room Leader",
-    deputy_manager: "Deputy Manager",
-    manager: "Manager",
+    unqualified: "Unqualified", level_2: "Level 2", level_3: "Level 3",
+    room_leader: "Room Leader", deputy_manager: "Deputy Manager", manager: "Manager",
   };
   return map[q ?? ""] ?? q ?? "—";
 }
 
-function FilterSelect({
-  value,
-  onChange,
-  placeholder,
-  options,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
+function FilterSelect({ value, onChange, placeholder, options }: {
+  value: string; onChange: (v: string) => void; placeholder: string;
   options: { value: string; label: string }[];
 }) {
   return (
@@ -105,14 +108,209 @@ function FilterSelect({
       <SelectContent>
         <SelectItem value={ALL}>All {placeholder}</SelectItem>
         {options.map((o) => (
-          <SelectItem key={o.value} value={o.value}>
-            {o.label}
-          </SelectItem>
+          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
         ))}
       </SelectContent>
     </Select>
   );
 }
+
+// ── Add Job Modal ─────────────────────────────────────────────────────────────
+
+function AddJobModal({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: (id: string) => void;
+}) {
+  const [step, setStep] = useState<"pick" | "manual">("pick");
+  const [form, setForm] = useState({ ...EMPTY_JOB });
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) { setStep("pick"); setForm({ ...EMPTY_JOB }); return; }
+    supabase.from("clients").select("id,company_name").order("company_name").then(({ data }) => {
+      setClients((data as ClientOption[]) ?? []);
+    });
+  }, [open]);
+
+  const set = (key: string, value: string) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
+
+  const handleSave = async () => {
+    if (!form.title.trim()) { toast.error("Job title is required"); return; }
+    setSaving(true);
+    const { data, error } = await supabase
+      .from("jobs")
+      .insert({
+        title: form.title.trim(),
+        client_id: form.client_id || null,
+        status: form.status,
+        qualification_required: form.qualification_required || null,
+        salary_min: form.salary_min ? parseFloat(form.salary_min) : null,
+        salary_max: form.salary_max ? parseFloat(form.salary_max) : null,
+        location_postcode: form.location_postcode.trim() || null,
+        description: form.description.trim() || null,
+        notes: form.notes.trim() || null,
+        posted_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+    setSaving(false);
+    if (error) { toast.error("Failed to save job: " + error.message); return; }
+    toast.success("Job added");
+    onCreated(data.id);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Add Job</DialogTitle>
+          <DialogDescription>
+            {step === "pick" ? "Choose how you want to add this job." : "Enter the job details manually."}
+          </DialogDescription>
+        </DialogHeader>
+
+        {step === "pick" ? (
+          <div className="space-y-3 mt-2">
+            <button
+              onClick={() => toast.info("Import from URL — coming soon")}
+              className="w-full flex items-start gap-4 p-4 rounded-xl border-2 border-transparent hover:border-navy/20 hover:bg-muted/40 transition-all text-left"
+            >
+              <Link className="h-5 w-5 mt-0.5 text-muted-foreground flex-shrink-0" />
+              <div>
+                <div className="font-medium text-sm">Import from URL</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Paste a job posting link and we'll extract the details.</div>
+              </div>
+            </button>
+            <button
+              onClick={() => toast.info("Upload Job Spec — coming soon")}
+              className="w-full flex items-start gap-4 p-4 rounded-xl border-2 border-transparent hover:border-navy/20 hover:bg-muted/40 transition-all text-left"
+            >
+              <Upload className="h-5 w-5 mt-0.5 text-muted-foreground flex-shrink-0" />
+              <div>
+                <div className="font-medium text-sm">Upload Job Spec</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Upload a PDF or Word document.</div>
+              </div>
+            </button>
+            <button
+              onClick={() => setStep("manual")}
+              className="w-full flex items-start gap-4 p-4 rounded-xl border-2 border-navy/20 bg-navy/5 hover:bg-navy/10 transition-all text-left"
+            >
+              <Pencil className="h-5 w-5 mt-0.5 text-navy flex-shrink-0" />
+              <div>
+                <div className="font-medium text-sm">Enter Manually</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Start with a blank form.</div>
+              </div>
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4 mt-2">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Job title *</label>
+              <Input value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="Room Leader — Level 3" className="h-10" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Client</label>
+                <Select value={form.client_id} onValueChange={(v) => set("client_id", v)}>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Select client…" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">No client</SelectItem>
+                    {clients.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Status</label>
+                <Select value={form.status} onValueChange={(v) => set("status", v)}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="live">Live</SelectItem>
+                    <SelectItem value="interviewing">Interviewing</SelectItem>
+                    <SelectItem value="filled">Filled</SelectItem>
+                    <SelectItem value="lost">Lost</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Qualification required</label>
+                <Select value={form.qualification_required} onValueChange={(v) => set("qualification_required", v)}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unqualified">Unqualified</SelectItem>
+                    <SelectItem value="level_2">Level 2</SelectItem>
+                    <SelectItem value="level_3">Level 3</SelectItem>
+                    <SelectItem value="room_leader">Room Leader</SelectItem>
+                    <SelectItem value="deputy_manager">Deputy Manager</SelectItem>
+                    <SelectItem value="manager">Manager</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Location postcode</label>
+                <Input value={form.location_postcode} onChange={(e) => set("location_postcode", e.target.value)} placeholder="SW1A 1AA" className="h-10" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Salary min (£)</label>
+                <Input value={form.salary_min} onChange={(e) => set("salary_min", e.target.value)} placeholder="24000" type="number" className="h-10" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Salary max (£)</label>
+                <Input value={form.salary_max} onChange={(e) => set("salary_max", e.target.value)} placeholder="28000" type="number" className="h-10" />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Description</label>
+              <textarea
+                value={form.description}
+                onChange={(e) => set("description", e.target.value)}
+                placeholder="Role overview, responsibilities, ideal candidate…"
+                rows={4}
+                className="w-full text-sm bg-muted/40 rounded-xl p-3 border border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none"
+              />
+            </div>
+
+            <div className="flex justify-between mt-2">
+              <button onClick={() => setStep("pick")} className="h-10 px-4 text-sm font-medium text-muted-foreground hover:text-foreground">
+                ← Back
+              </button>
+              <div className="flex gap-3">
+                <button onClick={onClose} className="h-10 px-5 rounded-full border text-sm font-medium hover:bg-muted transition-colors">
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="h-10 px-5 rounded-full bg-navy text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
+                >
+                  {saving ? "Saving…" : "Save job"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 
 function Page() {
   const navigate = useNavigate({ from: "/jobs" });
@@ -124,93 +322,70 @@ function Page() {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>(ALL);
   const [qualFilter, setQualFilter] = useState<string>(ALL);
+  const [showAddJob, setShowAddJob] = useState(false);
 
-  useEffect(() => {
+  const loadJobs = async () => {
     if (!userId) return;
     setLoading(true);
-    (async () => {
-      // Fetch jobs with client name via join
-      let query = supabase
-        .from("jobs")
-        .select(
-          "id,title,client_id,status,qualification_required,salary_min,salary_max,posted_at,clients(company_name)",
-        )
-        .order("posted_at", { ascending: false })
-        .limit(500);
-      if (scope === "mine") query = query.eq("created_by", userId);
-      const { data, error } = await query;
-      if (error) {
-        toast.error("Failed to load jobs");
-        setLoading(false);
-        return;
-      }
+    let query = supabase
+      .from("jobs")
+      .select("id,title,client_id,status,qualification_required,salary_min,salary_max,posted_at,clients(company_name)")
+      .order("posted_at", { ascending: false })
+      .limit(500);
+    if (scope === "mine") query = query.eq("created_by", userId);
+    const { data, error } = await query;
+    if (error) { toast.error("Failed to load jobs"); setLoading(false); return; }
 
-      // Fetch pipeline counts per job
-      const { data: pipelineData } = await supabase
-        .from("job_pipeline")
-        .select("job_id")
-        .not("stage", "eq", "rejected")
-        .not("stage", "eq", "withdrawn");
+    const { data: pipelineData } = await supabase
+      .from("job_pipeline")
+      .select("job_id")
+      .not("stage", "eq", "rejected")
+      .not("stage", "eq", "withdrawn");
 
-      const countMap: Record<string, number> = {};
-      (pipelineData ?? []).forEach((p: { job_id: string }) => {
-        countMap[p.job_id] = (countMap[p.job_id] ?? 0) + 1;
-      });
+    const countMap: Record<string, number> = {};
+    (pipelineData ?? []).forEach((p: { job_id: string }) => {
+      countMap[p.job_id] = (countMap[p.job_id] ?? 0) + 1;
+    });
 
-      const jobs = (data ?? []).map((j: any) => ({
-        id: j.id,
-        title: j.title,
-        client_id: j.client_id,
+    setRows(
+      (data ?? []).map((j: any) => ({
+        id: j.id, title: j.title, client_id: j.client_id,
         client_name: j.clients?.company_name ?? null,
-        status: j.status,
-        qualification_required: j.qualification_required,
-        salary_min: j.salary_min,
-        salary_max: j.salary_max,
-        posted_at: j.posted_at,
-        pipeline_count: countMap[j.id] ?? 0,
-      }));
+        status: j.status, qualification_required: j.qualification_required,
+        salary_min: j.salary_min, salary_max: j.salary_max,
+        posted_at: j.posted_at, pipeline_count: countMap[j.id] ?? 0,
+      })),
+    );
+    setLoading(false);
+  };
 
-      setRows(jobs);
-      setLoading(false);
-    })();
-  }, [userId, scope]);
+  useEffect(() => { loadJobs(); }, [userId, scope]);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows.filter((r) => {
       if (statusFilter !== ALL && r.status !== statusFilter) return false;
-      if (qualFilter !== ALL && r.qualification_required !== qualFilter)
-        return false;
+      if (qualFilter !== ALL && r.qualification_required !== qualFilter) return false;
       if (needle) {
-        const hay =
-          `${r.title ?? ""} ${r.client_name ?? ""}`.toLowerCase();
-        if (!hay.includes(needle)) return false;
+        if (!`${r.title ?? ""} ${r.client_name ?? ""}`.toLowerCase().includes(needle)) return false;
       }
       return true;
     });
   }, [rows, q, statusFilter, qualFilter]);
 
   const hasFilters = !!q || statusFilter !== ALL || qualFilter !== ALL;
-  const clearFilters = () => {
-    setQ("");
-    setStatusFilter(ALL);
-    setQualFilter(ALL);
-  };
+  const clearFilters = () => { setQ(""); setStatusFilter(ALL); setQualFilter(ALL); };
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-6 pt-2">
       <PageHeader
         eyebrow="Recruitment"
         title="Jobs"
-        description={
-          loading
-            ? "Loading jobs…"
-            : `${rows.length} total — ${filtered.length} shown`
-        }
+        description={loading ? "Loading jobs…" : `${rows.length} total — ${filtered.length} shown`}
         icon={Briefcase}
         actions={
           <button
-            onClick={() => toast.info("Add job form — coming soon")}
+            onClick={() => setShowAddJob(true)}
             className="h-9 px-3.5 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-1.5"
           >
             <Plus className="h-3.5 w-3.5" /> Add Job
@@ -218,57 +393,30 @@ function Page() {
         }
       />
 
-      {/* Filters */}
       <Card className="p-4 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[240px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search title or client…"
-              className="pl-9 h-9 rounded-full bg-muted/50 border-transparent focus-visible:bg-background"
-            />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title or client…"
+              className="pl-9 h-9 rounded-full bg-muted/50 border-transparent focus-visible:bg-background" />
           </div>
-
-          <FilterSelect
-            value={statusFilter}
-            onChange={setStatusFilter}
-            placeholder="Status"
-            options={[
-              { value: "live", label: "Live" },
-              { value: "interviewing", label: "Interviewing" },
-              { value: "filled", label: "Filled" },
-              { value: "lost", label: "Lost" },
-            ]}
-          />
-
-          <FilterSelect
-            value={qualFilter}
-            onChange={setQualFilter}
-            placeholder="Qualification"
-            options={[
-              { value: "unqualified", label: "Unqualified" },
-              { value: "level_2", label: "Level 2" },
-              { value: "level_3", label: "Level 3" },
-              { value: "room_leader", label: "Room Leader" },
-              { value: "deputy_manager", label: "Deputy Manager" },
-              { value: "manager", label: "Manager" },
-            ]}
-          />
-
+          <FilterSelect value={statusFilter} onChange={setStatusFilter} placeholder="Status" options={[
+            { value: "live", label: "Live" }, { value: "interviewing", label: "Interviewing" },
+            { value: "filled", label: "Filled" }, { value: "lost", label: "Lost" },
+          ]} />
+          <FilterSelect value={qualFilter} onChange={setQualFilter} placeholder="Qualification" options={[
+            { value: "unqualified", label: "Unqualified" }, { value: "level_2", label: "Level 2" },
+            { value: "level_3", label: "Level 3" }, { value: "room_leader", label: "Room Leader" },
+            { value: "deputy_manager", label: "Deputy Manager" }, { value: "manager", label: "Manager" },
+          ]} />
           {hasFilters && (
-            <button
-              onClick={clearFilters}
-              className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 h-9 px-2"
-            >
+            <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 h-9 px-2">
               Clear filters <X className="h-3 w-3" />
             </button>
           )}
         </div>
       </Card>
 
-      {/* Table */}
       <Card className="rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -285,34 +433,15 @@ function Page() {
             </thead>
             <tbody>
               {loading ? (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="py-16 text-center text-muted-foreground"
-                  >
-                    Loading jobs…
-                  </td>
-                </tr>
+                <tr><td colSpan={7} className="py-16 text-center text-muted-foreground">Loading jobs…</td></tr>
               ) : filtered.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="py-16 text-center text-muted-foreground"
-                  >
-                    {rows.length === 0
-                      ? "No jobs yet."
-                      : "No jobs match your filters."}
-                  </td>
-                </tr>
+                <tr><td colSpan={7} className="py-16 text-center text-muted-foreground">
+                  {rows.length === 0 ? "No jobs yet. Click 'Add Job' to get started." : "No jobs match your filters."}
+                </td></tr>
               ) : (
                 filtered.map((r) => (
-                  <tr
-                    key={r.id}
-                    onClick={() =>
-                      navigate({ to: "/jobs/$id", params: { id: r.id } })
-                    }
-                    className="border-b last:border-b-0 hover:bg-muted/40 transition-colors cursor-pointer"
-                  >
+                  <tr key={r.id} onClick={() => navigate({ to: "/jobs/$id", params: { id: r.id } })}
+                    className="border-b last:border-b-0 hover:bg-muted/40 transition-colors cursor-pointer">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
                         <div className="h-9 w-9 rounded-full bg-navy/10 flex items-center justify-center flex-shrink-0">
@@ -321,29 +450,18 @@ function Page() {
                         <div className="font-medium">{r.title}</div>
                       </div>
                     </td>
-                    <td className="py-3 px-3 text-xs text-muted-foreground">
-                      {r.client_name ?? "—"}
-                    </td>
-                    <td className="py-3 px-3">
-                      <StatusBadge status={r.status} />
-                    </td>
+                    <td className="py-3 px-3 text-xs text-muted-foreground">{r.client_name ?? "—"}</td>
+                    <td className="py-3 px-3"><StatusBadge status={r.status} /></td>
+                    <td className="py-3 px-3 text-xs">{qualLabel(r.qualification_required)}</td>
                     <td className="py-3 px-3 text-xs">
-                      {qualLabel(r.qualification_required)}
-                    </td>
-                    <td className="py-3 px-3 text-xs">
-                      {r.salary_min || r.salary_max
-                        ? `£${r.salary_min?.toLocaleString() ?? "?"} – £${r.salary_max?.toLocaleString() ?? "?"}`
-                        : "—"}
+                      {r.salary_min || r.salary_max ? `£${r.salary_min?.toLocaleString() ?? "?"} – £${r.salary_max?.toLocaleString() ?? "?"}` : "—"}
                     </td>
                     <td className="py-3 px-3 text-center">
                       <div className="inline-flex items-center gap-1 text-xs font-medium">
-                        <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                        {r.pipeline_count ?? 0}
+                        <Users className="h-3.5 w-3.5 text-muted-foreground" />{r.pipeline_count ?? 0}
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-right text-xs text-muted-foreground whitespace-nowrap">
-                      {relTime(r.posted_at)}
-                    </td>
+                    <td className="py-3 px-4 text-right text-xs text-muted-foreground whitespace-nowrap">{relTime(r.posted_at)}</td>
                   </tr>
                 ))
               )}
@@ -351,6 +469,12 @@ function Page() {
           </table>
         </div>
       </Card>
+
+      <AddJobModal
+        open={showAddJob}
+        onClose={() => setShowAddJob(false)}
+        onCreated={(id) => { setShowAddJob(false); navigate({ to: "/jobs/$id", params: { id } }); loadJobs(); }}
+      />
     </div>
   );
 }
