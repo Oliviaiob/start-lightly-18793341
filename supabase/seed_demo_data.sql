@@ -108,3 +108,57 @@ VALUES
     NOW() - INTERVAL '5 days'
   )
 ON CONFLICT (id) DO NOTHING;
+
+-- ── Job pipeline entries (needed for interviews) ──────────────────────────────
+
+-- Link Sophie Bramley (perm) to Room Leader job
+INSERT INTO public.job_pipeline (id, job_id, candidate_id, stage)
+SELECT
+  'd1000000-0000-0000-0000-000000000001',
+  'c1000000-0000-0000-0000-000000000001',
+  c.id,
+  'interview_arranged'
+FROM public.candidates c
+WHERE c.first_name = 'Sophie' AND c.last_name = 'Bramley'
+LIMIT 1
+ON CONFLICT (id) DO NOTHING;
+
+-- Link Edward Prideaux (temp) to Teaching Assistant job
+INSERT INTO public.job_pipeline (id, job_id, candidate_id, stage)
+SELECT
+  'd1000000-0000-0000-0000-000000000002',
+  'c1000000-0000-0000-0000-000000000003',
+  c.id,
+  'interview_arranged'
+FROM public.candidates c
+WHERE c.first_name = 'Edward' AND c.last_name = 'Prideaux'
+LIMIT 1
+ON CONFLICT (id) DO NOTHING;
+
+-- ── Demo interviews ───────────────────────────────────────────────────────────
+
+INSERT INTO public.interview_details (id, pipeline_id, interview_date, interview_time, interview_type, interviewer_name, location, notes, outcome)
+VALUES
+  (
+    'e1000000-0000-0000-0000-000000000001',
+    'd1000000-0000-0000-0000-000000000001',
+    (CURRENT_DATE + INTERVAL '3 days')::date,
+    '10:30',
+    'in_person',
+    'Sarah Mitchell',
+    '14 Blossom Lane, NW3 2PQ',
+    'Panel interview with Sarah and deputy. Candidate to bring portfolio and DBS certificate.',
+    NULL
+  ),
+  (
+    'e1000000-0000-0000-0000-000000000002',
+    'd1000000-0000-0000-0000-000000000002',
+    (CURRENT_DATE - INTERVAL '5 days')::date,
+    '14:00',
+    'phone',
+    'James Hargreaves',
+    NULL,
+    'First-stage phone interview for TA role. Ask about SEN experience.',
+    'successful'
+  )
+ON CONFLICT (id) DO NOTHING;
