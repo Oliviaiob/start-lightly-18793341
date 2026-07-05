@@ -49,7 +49,7 @@ type ShiftRow = {
   end_time: string | null;
   status: string | null;
   shift_status: string | null;
-  client?: { name: string | null } | null;
+  booking?: { client?: { company_name: string | null } | null } | null;
 };
 
 type Candidate = {
@@ -226,7 +226,7 @@ function Dashboard() {
           supabase
             .from("interview_details")
             .select(
-              "id, interview_date, interview_time, interview_type, pipeline:job_pipeline(candidate:candidates(id, first_name, last_name), job:jobs(id, title, client:clients(name)))",
+              "id, interview_date, interview_time, interview_type, pipeline:job_pipeline!pipeline_id(candidate:candidates(id, first_name, last_name), job:jobs(id, title, client:clients(company_name)))",
             )
             .gte("interview_date", today)
             .order("interview_date", { ascending: true })
@@ -236,7 +236,7 @@ function Dashboard() {
         withScope(
           supabase
             .from("temp_shifts")
-            .select("id, shift_date, start_time, end_time, status, shift_status, client:clients(name)")
+            .select("id, shift_date, start_time, end_time, status, shift_status, booking:bookings!booking_id(client:clients(company_name))")
             .gte("shift_date", today)
             .neq("shift_status", "cancelled")
             .order("shift_date", { ascending: true })
@@ -334,7 +334,7 @@ function Dashboard() {
                     <div className="min-w-0 flex-1">
                       <div className="font-medium text-sm truncate">
                         {cand ? `${cand.first_name ?? ""} ${cand.last_name ?? ""}`.trim() || "Candidate" : "Candidate"}
-                        <span className="text-muted-foreground font-normal"> · {job?.client?.name || "—"}</span>
+                        <span className="text-muted-foreground font-normal"> · {job?.client?.company_name || "—"}</span>
                       </div>
                       <div className="text-xs text-muted-foreground truncate">
                         {job?.title || "—"}{i.interview_type ? ` · ${i.interview_type}` : ""}
@@ -363,7 +363,7 @@ function Dashboard() {
                     <CalendarRange className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="font-medium text-sm truncate">{s.client?.name || "Booking"}</div>
+                    <div className="font-medium text-sm truncate">{s.booking?.client?.company_name || "Booking"}</div>
                     <div className="text-xs text-muted-foreground truncate">
                       {s.start_time?.slice(0, 5)}{s.end_time ? `–${s.end_time.slice(0, 5)}` : ""}
                     </div>
