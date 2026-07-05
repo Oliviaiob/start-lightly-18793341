@@ -137,7 +137,7 @@ function OutcomeDropdown({ id, onUpdate }: { id: string; onUpdate: (outcome: str
         {saving ? "Saving…" : "Mark outcome"} <ChevronDown className="h-3 w-3" />
       </button>
       {open && (
-        <div className="absolute right-0 bottom-9 z-50 w-48 bg-card rounded-xl shadow-lg border py-1">
+        <div className="absolute right-0 top-8 z-50 w-48 bg-card rounded-xl shadow-lg border py-1">
           {[{ value: "successful", label: "Successful" }, { value: "unsuccessful", label: "Unsuccessful" }].map((o) => (
             <button key={o.value} onClick={(e) => { e.stopPropagation(); pick(o.value); }}
               className="w-full text-left px-4 py-2 text-sm hover:bg-muted/60 transition-colors">{o.label}</button>
