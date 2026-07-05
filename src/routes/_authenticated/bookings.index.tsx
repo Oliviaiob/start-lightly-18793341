@@ -1,0 +1,318 @@
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState, useMemo } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { PageHeader } from "@/components/page-header";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
+import { CalendarRange, Plus, Search, ChevronRight, CheckCircle } from "lucide-react";
+import { toast } from "sonner";
+
+export const Route = createFileRoute("/_authenticated/bookings/")({
+  component: Page,
+});
+
+type Booking = {
+  id: string;
+  client_id: string | null;
+  client_name: string | null;
+  branch_id: string | null;
+  branch_name: string | null;
+  qualification_required: string | null;
+  notes: string | null;
+  status: string;
+  created_at: string;
+  shift_count: number;
+  confirmed_count: number;
+  date_from: string | null;
+  date_to: string | null;
+};
+
+type ClientOption = { id: string; name: string };
+type BranchOption = { id: string; branch_name: string };
+
+const ALL = "__all__";
+
+const QUAL_OPTIONS = [
+  { value: "unqualified", label: "Unqualified" },
+  { value: "level_2", label: "Level 2" },
+  { value: "level_3", label: "Level 3" },
+  { value: "room_leader", label: "Room Leader" },
+  { value: "deputy_manager", label: "Deputy Manager" },
+  { value: "manager", label: "Manager" },
+];
+
+function qualLabel(q: string | null) {
+  return QUAL_OPTIONS.find((o) => o.value === q)?.label ?? q ?? "—";
+}
+
+function fmtDate(iso: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function bookingStyle(confirmed: number, total: number, bookingStatus: string) {
+  if (bookingStatus === "cancelled") return { dot: "bg-muted-foreground", border: "border-l-muted-foreground/30", label: "Cancelled" };
+  if (total === 0) return { dot: "bg-muted-foreground/40", border: "border-l-muted-foreground/20", label: "No shifts" };
+  if (confirmed === total) return { dot: "bg-green-500", border: "border-l-green-400", label: "Fully confirmed" };
+  if (confirmed > 0) return { dot: "bg-amber-400", border: "border-l-amber-400", label: `${confirmed}/${total} confirmed` };
+  return { dot: "bg-muted-foreground/40", border: "border-l-muted-foreground/20", label: "Unfilled" };
+}
+
+function NewBookingModal({ open, onClose, onCreated }: {
+  open: boolean; onClose: () => void; onCreated: (id: string) => void;
+}) {
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [branches, setBranches] = useState<BranchOption[]>([]);
+  const [form, setForm] = useState({ client_id: "", branch_id: "", qualification_required: "__none__", notes: "" });
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientOpen, setClientOpen] = useState(false);
+  const [clientLabel, setClientLabel] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) { setForm({ client_id: "", branch_id: "", qualification_required: "__none__", notes: "" }); setClientLabel(""); setClientSearch(""); setClientOpen(false); setBranches([]); return; }
+    supabase.from("clients").select("id,company_name").eq("status", "active").order("company_name")
+      .then(({ data }) => setClients((data ?? []).map((c: any) => ({ id: c.id, name: c.company_name }))));
+  }, [open]);
+
+  const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
+
+  const selectClient = async (id: string, name: string) => {
+    set("client_id", id); set("branch_id", "");
+    setClientLabel(name); setClientSearch(""); setClientOpen(false);
+    const { data } = await supabase.from("client_branches").select("id,branch_name").eq("client_id", id).order("branch_name");
+    setBranches((data as BranchOption[]) ?? []);
+  };
+
+  const filteredClients = clients.filter((c) => c.name.toLowerCase().includes(clientSearch.toLowerCase()));
+
+  const save = async () => {
+    if (!form.client_id) { toast.error("Select a client"); return; }
+    setSaving(true);
+    const { data, error } = await supabase.from("bookings").insert({
+      client_id: form.client_id,
+      branch_id: form.branch_id || null,
+      qualification_required: form.qualification_required === "__none__" ? null : form.qualification_required,
+      notes: form.notes || null,
+      status: "active",
+    }).select("id").single();
+    setSaving(false);
+    if (error) { toast.error("Failed: " + error.message); return; }
+    toast.success("Booking created");
+    onCreated(data.id);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>New Booking</DialogTitle>
+          <DialogDescription>Create a temp booking for a client. Add shift dates on the next screen.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 mt-2">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Client *</label>
+            <div className="relative">
+              {form.client_id && !clientOpen ? (
+                <div className="h-10 px-3 rounded-lg border bg-background flex items-center justify-between text-sm cursor-pointer hover:bg-muted/40"
+                  onClick={() => { setClientOpen(true); setClientSearch(""); }}>
+                  <span className="font-medium">{clientLabel}</span>
+                  <span className="text-xs text-muted-foreground">change</span>
+                </div>
+              ) : (
+                <Input value={clientSearch} onChange={(e) => { setClientSearch(e.target.value); setClientOpen(true); }}
+                  onFocus={() => setClientOpen(true)} placeholder="Search clients…" className="h-10" autoComplete="off" />
+              )}
+              {clientOpen && (
+                <div className="absolute left-0 right-0 top-11 z-50 bg-card border rounded-xl shadow-lg max-h-52 overflow-y-auto">
+                  {filteredClients.length === 0
+                    ? <div className="px-4 py-3 text-sm text-muted-foreground">No clients found</div>
+                    : filteredClients.map((c) => (
+                      <button key={c.id} onMouseDown={() => selectClient(c.id, c.name)}
+                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-muted/60">{c.name}</button>
+                    ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {branches.length > 0 && (
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Branch</label>
+              <Select value={form.branch_id || "__none__"} onValueChange={(v) => set("branch_id", v === "__none__" ? "" : v)}>
+                <SelectTrigger className="h-10"><SelectValue placeholder="— All branches —" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— All branches —</SelectItem>
+                  {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.branch_name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Qualification required</label>
+            <Select value={form.qualification_required} onValueChange={(v) => set("qualification_required", v)}>
+              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">— Any —</SelectItem>
+                {QUAL_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Notes</label>
+            <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3}
+              placeholder="Any details about this booking…"
+              className="w-full text-sm bg-muted/40 rounded-xl p-3 border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-1">
+            <button onClick={onClose} className="h-10 px-5 rounded-full border text-sm font-medium hover:bg-muted">Cancel</button>
+            <button onClick={save} disabled={saving}
+              className="h-10 px-5 rounded-full bg-navy text-white text-sm font-medium hover:opacity-90 disabled:opacity-50">
+              {saving ? "Creating…" : "Create & add shifts →"}
+            </button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Page() {
+  const navigate = useNavigate();
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState("");
+  const [statusFilter, setStatusFilter] = useState(ALL);
+  const [showNew, setShowNew] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("bookings")
+      .select(`id,client_id,branch_id,qualification_required,notes,status,created_at,clients(company_name),client_branches(branch_name),temp_shifts(id,shift_date,shift_status)`)
+      .order("created_at", { ascending: false });
+
+    if (error) { toast.error("Failed to load"); setLoading(false); return; }
+
+    const mapped: Booking[] = ((data ?? []) as any[]).map((b) => {
+      const shifts = (b.temp_shifts ?? []) as any[];
+      const confirmed = shifts.filter((s: any) => s.shift_status === "confirmed").length;
+      const dates = shifts.map((s: any) => s.shift_date).filter(Boolean).sort();
+      return {
+        id: b.id, client_id: b.client_id, client_name: b.clients?.company_name ?? null,
+        branch_id: b.branch_id, branch_name: b.client_branches?.branch_name ?? null,
+        qualification_required: b.qualification_required, notes: b.notes, status: b.status ?? "active",
+        created_at: b.created_at, shift_count: shifts.length, confirmed_count: confirmed,
+        date_from: dates[0] ?? null, date_to: dates[dates.length - 1] ?? null,
+      };
+    });
+    setBookings(mapped);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return bookings.filter((b) => {
+      if (statusFilter !== ALL && b.status !== statusFilter) return false;
+      if (needle) {
+        const hay = `${b.client_name ?? ""} ${b.branch_name ?? ""} ${b.qualification_required ?? ""}`.toLowerCase();
+        if (!hay.includes(needle)) return false;
+      }
+      return true;
+    });
+  }, [bookings, q, statusFilter]);
+
+  return (
+    <div className="max-w-[1400px] mx-auto space-y-6 pt-2">
+      <PageHeader eyebrow="Temporary" title="Booking Board"
+        description={loading ? "Loading…" : `${bookings.length} booking${bookings.length !== 1 ? "s" : ""}`}
+        icon={CalendarRange}
+        actions={
+          <button onClick={() => setShowNew(true)}
+            className="h-9 px-3.5 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 inline-flex items-center gap-1.5">
+            <Plus className="h-3.5 w-3.5" /> New Booking
+          </button>
+        }
+      />
+
+      <Card className="p-4 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[240px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search client or qualification…"
+              className="pl-9 h-9 rounded-full bg-muted/50 border-transparent" />
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-9 w-auto min-w-[130px] rounded-full bg-muted/40 border-transparent text-xs font-medium">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All statuses</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </Card>
+
+      {loading ? (
+        <Card className="p-16 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card text-center text-muted-foreground">Loading…</Card>
+      ) : filtered.length === 0 ? (
+        <Card className="p-16 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card text-center text-muted-foreground">
+          No bookings found.{" "}
+          <button onClick={() => setShowNew(true)} className="text-teal underline">Create one</button>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((b) => {
+            const style = bookingStyle(b.confirmed_count, b.shift_count, b.status);
+            return (
+              <div key={b.id}
+                onClick={() => navigate({ to: "/bookings/$id", params: { id: b.id } })}
+                className={`bg-card rounded-2xl shadow-[var(--shadow-card)] border-l-4 ${style.border} px-5 py-4 cursor-pointer hover:shadow-md transition-shadow flex items-center gap-4`}>
+                <div className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${style.dot}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-sm">{b.client_name ?? "Unknown client"}</span>
+                    {b.branch_name && <span className="text-xs text-muted-foreground">— {b.branch_name}</span>}
+                    {b.qualification_required && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-navy/10 text-navy font-medium">{qualLabel(b.qualification_required)}</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-3">
+                    {b.shift_count > 0
+                      ? <span>{fmtDate(b.date_from)}{b.date_to !== b.date_from ? ` → ${fmtDate(b.date_to)}` : ""}</span>
+                      : <span>No shifts added yet</span>}
+                    {b.notes && <span className="truncate max-w-[300px] italic">{b.notes}</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 flex-shrink-0">
+                  <div className="text-right">
+                    <div className="text-sm font-semibold">{b.shift_count} shift{b.shift_count !== 1 ? "s" : ""}</div>
+                    <div className={`text-xs ${b.confirmed_count === b.shift_count && b.shift_count > 0 ? "text-green-600" : "text-muted-foreground"}`}>{style.label}</div>
+                  </div>
+                  {b.confirmed_count === b.shift_count && b.shift_count > 0 && <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />}
+                  <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <NewBookingModal open={showNew} onClose={() => setShowNew(false)}
+        onCreated={(id) => { setShowNew(false); navigate({ to: "/bookings/$id", params: { id } }); }} />
+    </div>
+  );
+}

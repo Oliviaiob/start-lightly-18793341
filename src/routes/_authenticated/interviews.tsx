@@ -86,6 +86,25 @@ function isUpcoming(date: string | null) {
   return new Date(date) >= new Date(new Date().toDateString());
 }
 
+// ── Reason helper ────────────────────────────────────────────────────────────
+
+function parseReason(notes: string | null): string | null {
+  if (!notes) return null;
+  const line = notes.split("\n")[0];
+  if (!line.startsWith("Reason: ")) return null;
+  return line.replace("Reason: ", "");
+}
+
+function ReasonBadge({ notes }: { notes: string | null }) {
+  const reason = parseReason(notes);
+  if (!reason) return null;
+  if (reason === "Next Stage Interview")
+    return <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-navy/10 text-navy">Next Stage</span>;
+  if (reason.includes("Rescheduled"))
+    return <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">Rescheduled</span>;
+  return null;
+}
+
 // ── Outcome Badge ─────────────────────────────────────────────────────────────
 
 function OutcomeBadge({ outcome }: { outcome: string | null }) {
@@ -93,7 +112,7 @@ function OutcomeBadge({ outcome }: { outcome: string | null }) {
     return <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] font-semibold bg-success/20 text-[oklch(0.4_0.12_155)]"><CheckCircle className="h-3 w-3" /> Successful</span>;
   if (outcome === "unsuccessful")
     return <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] font-semibold bg-destructive/20 text-destructive"><XCircle className="h-3 w-3" /> Unsuccessful</span>;
-  return <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] font-semibold bg-warning/20 text-[oklch(0.45_0.12_75)]"><Clock className="h-3 w-3" /> Pending</span>;
+  return null;
 }
 
 // ── Inline Outcome Dropdown ───────────────────────────────────────────────────
@@ -507,6 +526,8 @@ function InterviewCard({ interview, onOutcomeUpdate, onOpenNotes, onOpenNewDate,
                 className="text-muted-foreground hover:text-foreground transition-colors">{interview.job_title}</button>
             </>}
           </div>
+          {/* Reason badge (Rescheduled / Next Stage) */}
+          <ReasonBadge notes={interview.notes} />
           {/* Line 2: date, type, location, booked by */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5">
