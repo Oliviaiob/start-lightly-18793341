@@ -720,12 +720,12 @@ function Page() {
             <div className="space-y-1 col-span-2">
               <label className="text-xs font-medium text-muted-foreground">Description</label>
               <textarea value={draft.description ?? ""} onChange={(e) => setD("description", e.target.value)} rows={5}
-                className="w-full text-sm bg-muted/40 rounded-xl p-3 border border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" />
+                className="w-full text-sm bg-card rounded-xl p-3 border border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" />
             </div>
             <div className="space-y-1 col-span-2">
               <label className="text-xs font-medium text-muted-foreground">Notes</label>
               <textarea value={draft.notes ?? ""} onChange={(e) => setD("notes", e.target.value)} rows={3}
-                className="w-full text-sm bg-muted/40 rounded-xl p-3 border border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" />
+                className="w-full text-sm bg-card rounded-xl p-3 border border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" />
             </div>
           </div>
           <div className="flex justify-end">
