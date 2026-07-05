@@ -21,16 +21,16 @@ import { Route as AuthenticatedComplianceRouteImport } from './routes/_authentic
 import { Route as AuthenticatedClientsRouteImport } from './routes/_authenticated/clients'
 import { Route as AuthenticatedCandidatesRouteImport } from './routes/_authenticated/candidates'
 import { Route as AuthenticatedBookingsRouteImport } from './routes/_authenticated/bookings'
-import { Route as AuthenticatedBookingsIndexRouteImport } from './routes/_authenticated/bookings.index'
-import { Route as AuthenticatedBookingsIdRouteImport } from './routes/_authenticated/bookings.$id'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
 import { Route as AuthenticatedJobsIndexRouteImport } from './routes/_authenticated/jobs.index'
 import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
 import { Route as AuthenticatedCandidatesIndexRouteImport } from './routes/_authenticated/candidates.index'
+import { Route as AuthenticatedBookingsIndexRouteImport } from './routes/_authenticated/bookings.index'
 import { Route as AuthenticatedJobsIdRouteImport } from './routes/_authenticated/jobs.$id'
 import { Route as AuthenticatedClientsIdRouteImport } from './routes/_authenticated/clients.$id'
 import { Route as AuthenticatedCandidatesNewRouteImport } from './routes/_authenticated/candidates.new'
 import { Route as AuthenticatedCandidatesIdRouteImport } from './routes/_authenticated/candidates.$id'
+import { Route as AuthenticatedBookingsIdRouteImport } from './routes/_authenticated/bookings.$id'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -91,17 +91,6 @@ const AuthenticatedBookingsRoute = AuthenticatedBookingsRouteImport.update({
   path: '/bookings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedBookingsIndexRoute =
-  AuthenticatedBookingsIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => AuthenticatedBookingsRoute,
-  } as any)
-const AuthenticatedBookingsIdRoute = AuthenticatedBookingsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AuthenticatedBookingsRoute,
-} as any)
 const AuthenticatedAccountRoute = AuthenticatedAccountRouteImport.update({
   id: '/account',
   path: '/account',
@@ -123,6 +112,12 @@ const AuthenticatedCandidatesIndexRoute =
     id: '/',
     path: '/',
     getParentRoute: () => AuthenticatedCandidatesRoute,
+  } as any)
+const AuthenticatedBookingsIndexRoute =
+  AuthenticatedBookingsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedBookingsRoute,
   } as any)
 const AuthenticatedJobsIdRoute = AuthenticatedJobsIdRouteImport.update({
   id: '/$id',
@@ -146,12 +141,17 @@ const AuthenticatedCandidatesIdRoute =
     path: '/$id',
     getParentRoute: () => AuthenticatedCandidatesRoute,
   } as any)
+const AuthenticatedBookingsIdRoute = AuthenticatedBookingsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AuthenticatedBookingsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
   '/account': typeof AuthenticatedAccountRoute
-  '/bookings': typeof AuthenticatedBookingsRoute
+  '/bookings': typeof AuthenticatedBookingsRouteWithChildren
   '/candidates': typeof AuthenticatedCandidatesRouteWithChildren
   '/clients': typeof AuthenticatedClientsRouteWithChildren
   '/compliance': typeof AuthenticatedComplianceRoute
@@ -160,10 +160,12 @@ export interface FileRoutesByFullPath {
   '/map': typeof AuthenticatedMapRoute
   '/placements': typeof AuthenticatedPlacementsRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/bookings/$id': typeof AuthenticatedBookingsIdRoute
   '/candidates/$id': typeof AuthenticatedCandidatesIdRoute
   '/candidates/new': typeof AuthenticatedCandidatesNewRoute
   '/clients/$id': typeof AuthenticatedClientsIdRoute
   '/jobs/$id': typeof AuthenticatedJobsIdRoute
+  '/bookings/': typeof AuthenticatedBookingsIndexRoute
   '/candidates/': typeof AuthenticatedCandidatesIndexRoute
   '/clients/': typeof AuthenticatedClientsIndexRoute
   '/jobs/': typeof AuthenticatedJobsIndexRoute
@@ -171,17 +173,18 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/account': typeof AuthenticatedAccountRoute
-  '/bookings': typeof AuthenticatedBookingsRoute
   '/compliance': typeof AuthenticatedComplianceRoute
   '/interviews': typeof AuthenticatedInterviewsRoute
   '/map': typeof AuthenticatedMapRoute
   '/placements': typeof AuthenticatedPlacementsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/': typeof AuthenticatedIndexRoute
+  '/bookings/$id': typeof AuthenticatedBookingsIdRoute
   '/candidates/$id': typeof AuthenticatedCandidatesIdRoute
   '/candidates/new': typeof AuthenticatedCandidatesNewRoute
   '/clients/$id': typeof AuthenticatedClientsIdRoute
   '/jobs/$id': typeof AuthenticatedJobsIdRoute
+  '/bookings': typeof AuthenticatedBookingsIndexRoute
   '/candidates': typeof AuthenticatedCandidatesIndexRoute
   '/clients': typeof AuthenticatedClientsIndexRoute
   '/jobs': typeof AuthenticatedJobsIndexRoute
@@ -191,7 +194,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/account': typeof AuthenticatedAccountRoute
-  '/_authenticated/bookings': typeof AuthenticatedBookingsRoute
+  '/_authenticated/bookings': typeof AuthenticatedBookingsRouteWithChildren
   '/_authenticated/candidates': typeof AuthenticatedCandidatesRouteWithChildren
   '/_authenticated/clients': typeof AuthenticatedClientsRouteWithChildren
   '/_authenticated/compliance': typeof AuthenticatedComplianceRoute
@@ -201,10 +204,12 @@ export interface FileRoutesById {
   '/_authenticated/placements': typeof AuthenticatedPlacementsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/bookings/$id': typeof AuthenticatedBookingsIdRoute
   '/_authenticated/candidates/$id': typeof AuthenticatedCandidatesIdRoute
   '/_authenticated/candidates/new': typeof AuthenticatedCandidatesNewRoute
   '/_authenticated/clients/$id': typeof AuthenticatedClientsIdRoute
   '/_authenticated/jobs/$id': typeof AuthenticatedJobsIdRoute
+  '/_authenticated/bookings/': typeof AuthenticatedBookingsIndexRoute
   '/_authenticated/candidates/': typeof AuthenticatedCandidatesIndexRoute
   '/_authenticated/clients/': typeof AuthenticatedClientsIndexRoute
   '/_authenticated/jobs/': typeof AuthenticatedJobsIndexRoute
@@ -224,10 +229,12 @@ export interface FileRouteTypes {
     | '/map'
     | '/placements'
     | '/settings'
+    | '/bookings/$id'
     | '/candidates/$id'
     | '/candidates/new'
     | '/clients/$id'
     | '/jobs/$id'
+    | '/bookings/'
     | '/candidates/'
     | '/clients/'
     | '/jobs/'
@@ -235,17 +242,18 @@ export interface FileRouteTypes {
   to:
     | '/auth'
     | '/account'
-    | '/bookings'
     | '/compliance'
     | '/interviews'
     | '/map'
     | '/placements'
     | '/settings'
     | '/'
+    | '/bookings/$id'
     | '/candidates/$id'
     | '/candidates/new'
     | '/clients/$id'
     | '/jobs/$id'
+    | '/bookings'
     | '/candidates'
     | '/clients'
     | '/jobs'
@@ -264,10 +272,12 @@ export interface FileRouteTypes {
     | '/_authenticated/placements'
     | '/_authenticated/settings'
     | '/_authenticated/'
+    | '/_authenticated/bookings/$id'
     | '/_authenticated/candidates/$id'
     | '/_authenticated/candidates/new'
     | '/_authenticated/clients/$id'
     | '/_authenticated/jobs/$id'
+    | '/_authenticated/bookings/'
     | '/_authenticated/candidates/'
     | '/_authenticated/clients/'
     | '/_authenticated/jobs/'
@@ -364,20 +374,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBookingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/bookings/': {
-      id: '/_authenticated/bookings/'
-      path: '/'
-      fullPath: '/bookings/'
-      preLoaderRoute: typeof AuthenticatedBookingsIndexRouteImport
-      parentRoute: typeof AuthenticatedBookingsRoute
-    }
-    '/_authenticated/bookings/$id': {
-      id: '/_authenticated/bookings/$id'
-      path: '/$id'
-      fullPath: '/bookings/$id'
-      preLoaderRoute: typeof AuthenticatedBookingsIdRouteImport
-      parentRoute: typeof AuthenticatedBookingsRoute
-    }
     '/_authenticated/account': {
       id: '/_authenticated/account'
       path: '/account'
@@ -405,6 +401,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/candidates/'
       preLoaderRoute: typeof AuthenticatedCandidatesIndexRouteImport
       parentRoute: typeof AuthenticatedCandidatesRoute
+    }
+    '/_authenticated/bookings/': {
+      id: '/_authenticated/bookings/'
+      path: '/'
+      fullPath: '/bookings/'
+      preLoaderRoute: typeof AuthenticatedBookingsIndexRouteImport
+      parentRoute: typeof AuthenticatedBookingsRoute
     }
     '/_authenticated/jobs/$id': {
       id: '/_authenticated/jobs/$id'
@@ -434,8 +437,30 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCandidatesIdRouteImport
       parentRoute: typeof AuthenticatedCandidatesRoute
     }
+    '/_authenticated/bookings/$id': {
+      id: '/_authenticated/bookings/$id'
+      path: '/$id'
+      fullPath: '/bookings/$id'
+      preLoaderRoute: typeof AuthenticatedBookingsIdRouteImport
+      parentRoute: typeof AuthenticatedBookingsRoute
+    }
   }
 }
+
+interface AuthenticatedBookingsRouteChildren {
+  AuthenticatedBookingsIdRoute: typeof AuthenticatedBookingsIdRoute
+  AuthenticatedBookingsIndexRoute: typeof AuthenticatedBookingsIndexRoute
+}
+
+const AuthenticatedBookingsRouteChildren: AuthenticatedBookingsRouteChildren = {
+  AuthenticatedBookingsIdRoute: AuthenticatedBookingsIdRoute,
+  AuthenticatedBookingsIndexRoute: AuthenticatedBookingsIndexRoute,
+}
+
+const AuthenticatedBookingsRouteWithChildren =
+  AuthenticatedBookingsRoute._addFileChildren(
+    AuthenticatedBookingsRouteChildren,
+  )
 
 interface AuthenticatedCandidatesRouteChildren {
   AuthenticatedCandidatesIdRoute: typeof AuthenticatedCandidatesIdRoute
@@ -467,21 +492,6 @@ const AuthenticatedClientsRouteChildren: AuthenticatedClientsRouteChildren = {
 
 const AuthenticatedClientsRouteWithChildren =
   AuthenticatedClientsRoute._addFileChildren(AuthenticatedClientsRouteChildren)
-
-interface AuthenticatedBookingsRouteChildren {
-  AuthenticatedBookingsIdRoute: typeof AuthenticatedBookingsIdRoute
-  AuthenticatedBookingsIndexRoute: typeof AuthenticatedBookingsIndexRoute
-}
-
-const AuthenticatedBookingsRouteChildren: AuthenticatedBookingsRouteChildren = {
-  AuthenticatedBookingsIdRoute: AuthenticatedBookingsIdRoute,
-  AuthenticatedBookingsIndexRoute: AuthenticatedBookingsIndexRoute,
-}
-
-const AuthenticatedBookingsRouteWithChildren =
-  AuthenticatedBookingsRoute._addFileChildren(
-    AuthenticatedBookingsRouteChildren,
-  )
 
 interface AuthenticatedJobsRouteChildren {
   AuthenticatedJobsIdRoute: typeof AuthenticatedJobsIdRoute

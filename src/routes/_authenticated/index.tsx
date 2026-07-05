@@ -13,6 +13,7 @@ import {
   ShieldAlert,
   ArrowUpRight,
   Star,
+  Activity as ActivityIcon,
 } from "lucide-react";
 import { NotesCard } from "@/components/notes-card";
 import { useEffectiveScope, useScope } from "@/contexts/scope-context";
@@ -30,20 +31,24 @@ type Stats = {
   pendingCompliance: number;
 };
 
-type Interview = {
+type InterviewRow = {
   id: string;
-  scheduled_at: string | null;
+  interview_date: string | null;
+  interview_time: string | null;
   interview_type: string | null;
-  candidate?: { first_name: string | null; last_name: string | null } | null;
-  job?: { title: string | null; client?: { name: string | null } | null } | null;
+  pipeline?: {
+    candidate?: { id: string; first_name: string | null; last_name: string | null } | null;
+    job?: { id: string; title: string | null; client?: { name: string | null } | null } | null;
+  } | null;
 };
 
-type Shift = {
+type ShiftRow = {
   id: string;
   shift_date: string | null;
   start_time: string | null;
   end_time: string | null;
   status: string | null;
+  shift_status: string | null;
   client?: { name: string | null } | null;
 };
 
@@ -55,16 +60,31 @@ type Candidate = {
   candidate_type: string | null;
 };
 
-type Activity = {
+type ActivityRow = {
   id: string;
-  action: string | null;
+  activity_type: string | null;
+  description: string | null;
   entity_type: string | null;
   created_at: string | null;
-  actor?: { display_name: string | null; first_name: string | null; last_name: string | null } | null;
 };
 
 function initials(first?: string | null, last?: string | null) {
   return `${first?.[0] || ""}${last?.[0] || ""}`.toUpperCase() || "?";
+}
+
+function relativeTime(iso: string | null) {
+  if (!iso) return "";
+  const then = new Date(iso).getTime();
+  const diff = Date.now() - then;
+  const sec = Math.round(diff / 1000);
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.round(hr / 24);
+  if (day < 7) return `${day}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function StatCard({
@@ -120,10 +140,10 @@ function Dashboard() {
     placementsThisMonth: 0,
     pendingCompliance: 0,
   });
-  const [interviews, setInterviews] = useState<Interview[]>([]);
-  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [interviews, setInterviews] = useState<InterviewRow[]>([]);
+  const [shifts, setShifts] = useState<ShiftRow[]>([]);
   const [starred, setStarred] = useState<Candidate[]>([]);
-  const [activity, setActivity] = useState<Activity[]>([]);
+  const [activity, setActivity] = useState<ActivityRow[]>([]);
   const [loading, setLoading] = useState(true);
   const scope = useEffectiveScope({ dashboard: true });
   const { userId } = useScope();
@@ -148,14 +168,16 @@ function Dashboard() {
       }
 
       const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
       const startOfWeek = new Date(now);
       startOfWeek.setDate(now.getDate() - now.getDay());
       startOfWeek.setHours(0, 0, 0, 0);
       const endOfWeek = new Date(startOfWeek);
       endOfWeek.setDate(startOfWeek.getDate() + 7);
       const today = now.toISOString().slice(0, 10);
+      const startMonthDate = startOfMonth.toISOString().slice(0, 10);
+      const endMonthDate = endOfMonth.toISOString().slice(0, 10);
       const weekStartDate = startOfWeek.toISOString().slice(0, 10);
       const weekEndDate = endOfWeek.toISOString().slice(0, 10);
 
@@ -177,8 +199,8 @@ function Dashboard() {
           supabase
             .from("interview_details")
             .select("id", { count: "exact", head: true })
-            .gte("scheduled_at", startOfMonth)
-            .lt("scheduled_at", endOfMonth),
+            .gte("interview_date", startMonthDate)
+            .lt("interview_date", endMonthDate),
         ),
         withScope(
           supabase
@@ -191,8 +213,8 @@ function Dashboard() {
           supabase
             .from("placements")
             .select("id", { count: "exact", head: true })
-            .gte("start_date", startOfMonth.slice(0, 10))
-            .lt("start_date", endOfMonth.slice(0, 10)),
+            .gte("start_date", startMonthDate)
+            .lt("start_date", endMonthDate),
         ),
         withScope(
           supabase
@@ -203,17 +225,22 @@ function Dashboard() {
         withScope(
           supabase
             .from("interview_details")
-            .select("id, scheduled_at, interview_type, candidate:candidates(first_name,last_name), job:jobs(title, client:clients(name))")
-            .gte("scheduled_at", now.toISOString())
-            .order("scheduled_at", { ascending: true })
+            .select(
+              "id, interview_date, interview_time, interview_type, pipeline:job_pipeline(candidate:candidates(id, first_name, last_name), job:jobs(id, title, client:clients(name)))",
+            )
+            .gte("interview_date", today)
+            .order("interview_date", { ascending: true })
+            .order("interview_time", { ascending: true })
             .limit(5),
         ),
         withScope(
           supabase
             .from("temp_shifts")
-            .select("id, shift_date, start_time, end_time, status, client:clients(name)")
+            .select("id, shift_date, start_time, end_time, status, shift_status, client:clients(name)")
             .gte("shift_date", today)
+            .neq("shift_status", "cancelled")
             .order("shift_date", { ascending: true })
+            .order("start_time", { ascending: true })
             .limit(5),
         ),
         withScope(
@@ -221,13 +248,13 @@ function Dashboard() {
             .from("candidates")
             .select("id, first_name, last_name, qualification_level, candidate_type")
             .eq("is_starred", true)
-            .limit(8),
+            .limit(5),
         ),
         supabase
           .from("activity_log")
-          .select("id, action, entity_type, created_at, actor:profiles(display_name, first_name, last_name)")
+          .select("id, activity_type, description, entity_type, created_at")
           .order("created_at", { ascending: false })
-          .limit(8),
+          .limit(10),
       ]);
 
       setStats({
@@ -238,10 +265,10 @@ function Dashboard() {
         placementsThisMonth: placementsMonthRes.count || 0,
         pendingCompliance: pendingComplianceRes.count || 0,
       });
-      setInterviews((upcomingInterviewsRes.data as unknown as Interview[]) || []);
-      setShifts((upcomingShiftsRes.data as unknown as Shift[]) || []);
+      setInterviews((upcomingInterviewsRes.data as unknown as InterviewRow[]) || []);
+      setShifts((upcomingShiftsRes.data as unknown as ShiftRow[]) || []);
       setStarred((starredRes.data as Candidate[]) || []);
-      setActivity((activityRes.data as unknown as Activity[]) || []);
+      setActivity((activityRes.data as unknown as ActivityRow[]) || []);
       setLoading(false);
     })();
   }, [userId, scope]);
@@ -293,25 +320,30 @@ function Dashboard() {
             <div className="text-sm text-muted-foreground py-6 text-center">No upcoming interviews</div>
           ) : (
             <ul className="divide-y">
-              {interviews.map((i) => (
-                <li key={i.id} className="py-3 flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-navy/10 text-navy grid place-items-center shrink-0">
-                    <CalendarCheck className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium text-sm truncate">
-                      {i.candidate?.first_name} {i.candidate?.last_name}
-                      <span className="text-muted-foreground font-normal"> · {i.job?.client?.name || "—"}</span>
+              {interviews.map((i) => {
+                const cand = i.pipeline?.candidate;
+                const job = i.pipeline?.job;
+                const when = i.interview_date
+                  ? `${new Date(i.interview_date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}${i.interview_time ? ` · ${i.interview_time.slice(0, 5)}` : ""}`
+                  : "—";
+                return (
+                  <li key={i.id} className="py-3 flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-navy/10 text-navy grid place-items-center shrink-0">
+                      <CalendarCheck className="h-4 w-4" />
                     </div>
-                    <div className="text-xs text-muted-foreground truncate">
-                      {i.job?.title || "—"} {i.interview_type ? `· ${i.interview_type}` : ""}
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium text-sm truncate">
+                        {cand ? `${cand.first_name ?? ""} ${cand.last_name ?? ""}`.trim() || "Candidate" : "Candidate"}
+                        <span className="text-muted-foreground font-normal"> · {job?.client?.name || "—"}</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {job?.title || "—"}{i.interview_type ? ` · ${i.interview_type}` : ""}
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-xs text-muted-foreground shrink-0">
-                    {i.scheduled_at ? new Date(i.scheduled_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
-                  </div>
-                </li>
-              ))}
+                    <div className="text-xs text-muted-foreground shrink-0">{when}</div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Card>
@@ -340,7 +372,9 @@ function Dashboard() {
                     <span className="text-muted-foreground">
                       {s.shift_date ? new Date(s.shift_date).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—"}
                     </span>
-                    {s.status && <Badge variant="secondary" className="text-[10px]">{s.status}</Badge>}
+                    {(s.shift_status || s.status) && (
+                      <Badge variant="secondary" className="text-[10px]">{s.shift_status || s.status}</Badge>
+                    )}
                   </div>
                 </li>
               ))}
@@ -360,7 +394,12 @@ function Dashboard() {
           ) : (
             <div className="grid grid-cols-1 gap-2">
               {starred.map((c) => (
-                <div key={c.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted transition-colors">
+                <Link
+                  key={c.id}
+                  to="/candidates/$id"
+                  params={{ id: c.id }}
+                  className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted transition-colors"
+                >
                   <Avatar className="h-9 w-9">
                     <AvatarFallback className="bg-navy text-navy-foreground text-xs">
                       {initials(c.first_name, c.last_name)}
@@ -370,7 +409,7 @@ function Dashboard() {
                     <div className="text-sm font-medium truncate">{c.first_name} {c.last_name}</div>
                     <div className="text-[11px] text-muted-foreground truncate">{c.qualification_level || c.candidate_type || "—"}</div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}
@@ -384,27 +423,19 @@ function Dashboard() {
             <div className="text-sm text-muted-foreground py-6 text-center">No recent activity</div>
           ) : (
             <ul className="space-y-3">
-              {activity.map((a) => {
-                const name = a.actor?.display_name || [a.actor?.first_name, a.actor?.last_name].filter(Boolean).join(" ") || "Someone";
-                return (
-                  <li key={a.id} className="flex items-start gap-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="bg-muted text-foreground text-[10px]">
-                        {name.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm">
-                        <span className="font-medium">{name}</span>{" "}
-                        <span className="text-muted-foreground">{a.action || "updated"} {a.entity_type || ""}</span>
-                      </div>
-                      <div className="text-[11px] text-muted-foreground">
-                        {a.created_at ? new Date(a.created_at).toLocaleString() : ""}
-                      </div>
+              {activity.map((a) => (
+                <li key={a.id} className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-muted text-foreground grid place-items-center shrink-0">
+                    <ActivityIcon className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm truncate">
+                      {a.description || `${a.activity_type || "Updated"} ${a.entity_type || ""}`.trim()}
                     </div>
-                  </li>
-                );
-              })}
+                    <div className="text-[11px] text-muted-foreground">{relativeTime(a.created_at)}</div>
+                  </div>
+                </li>
+              ))}
             </ul>
           )}
         </Card>
