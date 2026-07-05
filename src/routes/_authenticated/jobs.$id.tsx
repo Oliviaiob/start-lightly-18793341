@@ -447,8 +447,26 @@ function StageColumn({ stage, label, color, entries, onCandidateClick, onMoveSta
   onCandidateClick: (id: string) => void;
   onMoveStage: (entryId: string, newStage: string) => void;
 }) {
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragOver(true); };
+  const handleDragLeave = () => setIsDragOver(false);
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const entryId = e.dataTransfer.getData("entryId");
+    const fromStage = e.dataTransfer.getData("fromStage");
+    if (entryId && fromStage !== stage) onMoveStage(entryId, stage);
+  };
+
   return (
-    <div className="bg-card rounded-xl p-3 min-w-[180px] flex-1 border border-border" style={{ borderTop: `3px solid ${color}` }}>
+    <div
+      className={`rounded-xl p-3 min-w-[180px] flex-1 border transition-colors ${isDragOver ? "border-teal/60 bg-teal/5" : "bg-card border-border"}`}
+      style={{ borderTop: `3px solid ${color}` }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</span>
         <span className="text-[10px] font-bold bg-muted rounded-full h-5 w-5 flex items-center justify-center">{entries.length}</span>
@@ -459,7 +477,12 @@ function StageColumn({ stage, label, color, entries, onCandidateClick, onMoveSta
           const name = c ? `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() : "Unknown";
           const initials = c ? `${c.first_name?.[0] ?? ""}${c.last_name?.[0] ?? ""}`.toUpperCase() : "?";
           return (
-            <div key={e.id} className="bg-card rounded-lg p-2.5 shadow-sm group">
+            <div
+              key={e.id}
+              draggable
+              onDragStart={(ev) => { ev.dataTransfer.setData("entryId", e.id); ev.dataTransfer.setData("fromStage", stage); ev.dataTransfer.effectAllowed = "move"; }}
+              className="bg-card rounded-lg p-2.5 shadow-sm cursor-grab active:cursor-grabbing active:opacity-60 transition-opacity"
+            >
               <div className="flex items-center gap-2 cursor-pointer" onClick={() => c && onCandidateClick(c.id)}>
                 <div className="h-7 w-7 rounded-full bg-navy flex items-center justify-center flex-shrink-0">
                   <span className="text-[9px] font-bold text-white">{initials}</span>
@@ -478,9 +501,64 @@ function StageColumn({ stage, label, color, entries, onCandidateClick, onMoveSta
           );
         })}
         {entries.length === 0 && (
-          <div className="text-center py-4 text-[11px] text-muted-foreground/60">Empty</div>
+          <div className="text-center py-4 text-[11px] text-muted-foreground/60">Drop here</div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Rejected Drop Zone ────────────────────────────────────────────────────────
+
+function RejectedZone({ pipeline, onMoveStage, onCandidateClick }: {
+  pipeline: PipelineEntry[];
+  onMoveStage: (entryId: string, newStage: string) => void;
+  onCandidateClick: (id: string) => void;
+}) {
+  const [isDragOver, setIsDragOver] = useState(false);
+  const rejected = pipeline.filter((e) => e.stage === "rejected");
+
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragOver(true); };
+  const handleDragLeave = () => setIsDragOver(false);
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const entryId = e.dataTransfer.getData("entryId");
+    const fromStage = e.dataTransfer.getData("fromStage");
+    if (entryId && fromStage !== "rejected") onMoveStage(entryId, "rejected");
+  };
+
+  return (
+    <div
+      className={`rounded-xl p-3 border transition-colors ${isDragOver ? "border-red-300 bg-red-50/10" : "bg-muted/20 border-transparent"}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold text-muted-foreground">Rejected</span>
+        <span className="text-[10px] font-bold bg-muted rounded-full h-5 w-5 flex items-center justify-center">{rejected.length}</span>
+      </div>
+      {rejected.length === 0 ? (
+        <div className="text-center py-3 text-xs text-muted-foreground/60">Drag candidates here to mark as rejected.</div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {rejected.map((e) => {
+            const c = e.candidate;
+            return (
+              <div
+                key={e.id}
+                draggable
+                onDragStart={(ev) => { ev.dataTransfer.setData("entryId", e.id); ev.dataTransfer.setData("fromStage", "rejected"); ev.dataTransfer.effectAllowed = "move"; }}
+                className="text-xs bg-card rounded-lg px-3 py-1.5 cursor-grab active:cursor-grabbing hover:bg-muted/50"
+                onClick={() => c && onCandidateClick(c.id)}
+              >
+                {c?.first_name} {c?.last_name}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -778,29 +856,7 @@ function Page() {
           {/* Rejected */}
           <div>
             <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-3">Rejected</div>
-            <div className="bg-muted/20 rounded-xl p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-muted-foreground">Rejected</span>
-                <span className="text-[10px] font-bold bg-muted rounded-full h-5 w-5 flex items-center justify-center">
-                  {pipeline.filter((e) => e.stage === "rejected").length}
-                </span>
-              </div>
-              {pipeline.filter((e) => e.stage === "rejected").length === 0 ? (
-                <div className="text-center py-3 text-xs text-muted-foreground/60">Drag candidates here to mark as rejected.</div>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {pipeline.filter((e) => e.stage === "rejected").map((e) => {
-                    const c = e.candidate;
-                    return (
-                      <div key={e.id} className="text-xs bg-card rounded-lg px-3 py-1.5 cursor-pointer hover:bg-muted/50"
-                        onClick={() => c && navigate({ to: "/candidates/$id", params: { id: c.id } })}>
-                        {c?.first_name} {c?.last_name}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            <RejectedZone pipeline={pipeline} onMoveStage={moveStage} onCandidateClick={(cId) => navigate({ to: "/candidates/$id", params: { id: cId } })} />
           </div>
         </div>
       )}
