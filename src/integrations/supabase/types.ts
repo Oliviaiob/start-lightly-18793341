@@ -1501,51 +1501,102 @@ export type Database = {
           },
         ]
       }
+      shift_notifications: {
+        Row: {
+          candidate_id: string | null
+          created_at: string | null
+          id: string
+          notified: boolean | null
+          shift_offer_id: string | null
+        }
+        Insert: {
+          candidate_id?: string | null
+          created_at?: string | null
+          id?: string
+          notified?: boolean | null
+          shift_offer_id?: string | null
+        }
+        Update: {
+          candidate_id?: string | null
+          created_at?: string | null
+          id?: string
+          notified?: boolean | null
+          shift_offer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shift_notifications_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shift_notifications_shift_offer_id_fkey"
+            columns: ["shift_offer_id"]
+            isOneToOne: false
+            referencedRelation: "shift_offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shift_offers: {
         Row: {
+          booking_group_id: string | null
           branch_id: string | null
           candidate_id: string | null
           client_id: string | null
+          confirmed_at: string | null
           created_at: string | null
           end_time: string | null
           hours: number | null
           id: string
+          is_multi_day: boolean | null
           notes: string | null
           pay_rate: number | null
           role: string | null
           shift_date: string | null
           start_time: string | null
           status: string | null
+          visibility_expires_at: string | null
         }
         Insert: {
+          booking_group_id?: string | null
           branch_id?: string | null
           candidate_id?: string | null
           client_id?: string | null
+          confirmed_at?: string | null
           created_at?: string | null
           end_time?: string | null
           hours?: number | null
           id?: string
+          is_multi_day?: boolean | null
           notes?: string | null
           pay_rate?: number | null
           role?: string | null
           shift_date?: string | null
           start_time?: string | null
           status?: string | null
+          visibility_expires_at?: string | null
         }
         Update: {
+          booking_group_id?: string | null
           branch_id?: string | null
           candidate_id?: string | null
           client_id?: string | null
+          confirmed_at?: string | null
           created_at?: string | null
           end_time?: string | null
           hours?: number | null
           id?: string
+          is_multi_day?: boolean | null
           notes?: string | null
           pay_rate?: number | null
           role?: string | null
           shift_date?: string | null
           start_time?: string | null
           status?: string | null
+          visibility_expires_at?: string | null
         }
         Relationships: [
           {
