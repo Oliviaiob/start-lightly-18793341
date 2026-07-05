@@ -246,9 +246,9 @@ function AddPermModal({ open, onClose, onCreated }: {
           </div>
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">Job (optional)</label>
-            <Select value={form.job_id} onValueChange={(v) => set("job_id", v)}>
+            <Select value={form.job_id} onValueChange={(v) => set("job_id", v === "__none__" ? "" : v)}>
               <SelectTrigger className="h-10"><SelectValue placeholder="Select job…" /></SelectTrigger>
-              <SelectContent><SelectItem value="">None</SelectItem>{jobs.map((j) => <SelectItem key={j.id} value={j.id}>{j.title}</SelectItem>)}</SelectContent>
+              <SelectContent><SelectItem value="__none__">None</SelectItem>{jobs.map((j) => <SelectItem key={j.id} value={j.id}>{j.title}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div className="space-y-1">

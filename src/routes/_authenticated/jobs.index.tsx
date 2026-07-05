@@ -219,10 +219,10 @@ function AddJobModal({
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Client</label>
-                <Select value={form.client_id} onValueChange={(v) => set("client_id", v)}>
+                <Select value={form.client_id} onValueChange={(v) => set("client_id", v === "__none__" ? "" : v)}>
                   <SelectTrigger className="h-10"><SelectValue placeholder="Select client…" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No client</SelectItem>
+                    <SelectItem value="__none__">No client</SelectItem>
                     {clients.map((c) => (
                       <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
                     ))}
