@@ -864,10 +864,7 @@ function Page() {
       {/* ── Smart Match Tab ── */}
       {tab === "smart_match" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              Score = qualification match (0–40). Click a candidate name to view their profile.
-            </p>
+          <div className="flex items-center justify-end">
             <button onClick={findMatches} disabled={matching}
               className="h-9 px-4 rounded-full bg-navy text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5">
               <Star className="h-3.5 w-3.5" /> {matching ? "Matching…" : "Find Matching Candidates"}
