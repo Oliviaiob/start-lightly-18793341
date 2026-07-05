@@ -22,13 +22,13 @@ import { Route as AuthenticatedClientsRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedCandidatesRouteImport } from './routes/_authenticated/candidates'
 import { Route as AuthenticatedBookingsRouteImport } from './routes/_authenticated/bookings'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
+import { Route as AuthenticatedJobsIndexRouteImport } from './routes/_authenticated/jobs.index'
+import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
 import { Route as AuthenticatedCandidatesIndexRouteImport } from './routes/_authenticated/candidates.index'
+import { Route as AuthenticatedJobsIdRouteImport } from './routes/_authenticated/jobs.$id'
+import { Route as AuthenticatedClientsIdRouteImport } from './routes/_authenticated/clients.$id'
 import { Route as AuthenticatedCandidatesNewRouteImport } from './routes/_authenticated/candidates.new'
 import { Route as AuthenticatedCandidatesIdRouteImport } from './routes/_authenticated/candidates.$id'
-import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
-import { Route as AuthenticatedClientsIdRouteImport } from './routes/_authenticated/clients.$id'
-import { Route as AuthenticatedJobsIndexRouteImport } from './routes/_authenticated/jobs.index'
-import { Route as AuthenticatedJobsIdRouteImport } from './routes/_authenticated/jobs.$id'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -94,12 +94,33 @@ const AuthenticatedAccountRoute = AuthenticatedAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedJobsIndexRoute = AuthenticatedJobsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedJobsRoute,
+} as any)
+const AuthenticatedClientsIndexRoute =
+  AuthenticatedClientsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedClientsRoute,
+  } as any)
 const AuthenticatedCandidatesIndexRoute =
   AuthenticatedCandidatesIndexRouteImport.update({
     id: '/',
     path: '/',
     getParentRoute: () => AuthenticatedCandidatesRoute,
   } as any)
+const AuthenticatedJobsIdRoute = AuthenticatedJobsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AuthenticatedJobsRoute,
+} as any)
+const AuthenticatedClientsIdRoute = AuthenticatedClientsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AuthenticatedClientsRoute,
+} as any)
 const AuthenticatedCandidatesNewRoute =
   AuthenticatedCandidatesNewRouteImport.update({
     id: '/new',
@@ -111,30 +132,6 @@ const AuthenticatedCandidatesIdRoute =
     id: '/$id',
     path: '/$id',
     getParentRoute: () => AuthenticatedCandidatesRoute,
-  } as any)
-const AuthenticatedClientsIndexRoute =
-  AuthenticatedClientsIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => AuthenticatedClientsRoute,
-  } as any)
-const AuthenticatedClientsIdRoute =
-  AuthenticatedClientsIdRouteImport.update({
-    id: '/$id',
-    path: '/$id',
-    getParentRoute: () => AuthenticatedClientsRoute,
-  } as any)
-const AuthenticatedJobsIndexRoute =
-  AuthenticatedJobsIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => AuthenticatedJobsRoute,
-  } as any)
-const AuthenticatedJobsIdRoute =
-  AuthenticatedJobsIdRouteImport.update({
-    id: '/$id',
-    path: '/$id',
-    getParentRoute: () => AuthenticatedJobsRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -152,10 +149,10 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/candidates/$id': typeof AuthenticatedCandidatesIdRoute
   '/candidates/new': typeof AuthenticatedCandidatesNewRoute
-  '/candidates/': typeof AuthenticatedCandidatesIndexRoute
   '/clients/$id': typeof AuthenticatedClientsIdRoute
-  '/clients/': typeof AuthenticatedClientsIndexRoute
   '/jobs/$id': typeof AuthenticatedJobsIdRoute
+  '/candidates/': typeof AuthenticatedCandidatesIndexRoute
+  '/clients/': typeof AuthenticatedClientsIndexRoute
   '/jobs/': typeof AuthenticatedJobsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -170,10 +167,10 @@ export interface FileRoutesByTo {
   '/': typeof AuthenticatedIndexRoute
   '/candidates/$id': typeof AuthenticatedCandidatesIdRoute
   '/candidates/new': typeof AuthenticatedCandidatesNewRoute
-  '/candidates': typeof AuthenticatedCandidatesIndexRoute
   '/clients/$id': typeof AuthenticatedClientsIdRoute
-  '/clients': typeof AuthenticatedClientsIndexRoute
   '/jobs/$id': typeof AuthenticatedJobsIdRoute
+  '/candidates': typeof AuthenticatedCandidatesIndexRoute
+  '/clients': typeof AuthenticatedClientsIndexRoute
   '/jobs': typeof AuthenticatedJobsIndexRoute
 }
 export interface FileRoutesById {
@@ -193,10 +190,10 @@ export interface FileRoutesById {
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/candidates/$id': typeof AuthenticatedCandidatesIdRoute
   '/_authenticated/candidates/new': typeof AuthenticatedCandidatesNewRoute
-  '/_authenticated/candidates/': typeof AuthenticatedCandidatesIndexRoute
   '/_authenticated/clients/$id': typeof AuthenticatedClientsIdRoute
-  '/_authenticated/clients/': typeof AuthenticatedClientsIndexRoute
   '/_authenticated/jobs/$id': typeof AuthenticatedJobsIdRoute
+  '/_authenticated/candidates/': typeof AuthenticatedCandidatesIndexRoute
+  '/_authenticated/clients/': typeof AuthenticatedClientsIndexRoute
   '/_authenticated/jobs/': typeof AuthenticatedJobsIndexRoute
 }
 export interface FileRouteTypes {
@@ -216,10 +213,10 @@ export interface FileRouteTypes {
     | '/settings'
     | '/candidates/$id'
     | '/candidates/new'
-    | '/candidates/'
     | '/clients/$id'
-    | '/clients/'
     | '/jobs/$id'
+    | '/candidates/'
+    | '/clients/'
     | '/jobs/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -234,10 +231,10 @@ export interface FileRouteTypes {
     | '/'
     | '/candidates/$id'
     | '/candidates/new'
-    | '/candidates'
     | '/clients/$id'
-    | '/clients'
     | '/jobs/$id'
+    | '/candidates'
+    | '/clients'
     | '/jobs'
   id:
     | '__root__'
@@ -256,10 +253,10 @@ export interface FileRouteTypes {
     | '/_authenticated/'
     | '/_authenticated/candidates/$id'
     | '/_authenticated/candidates/new'
-    | '/_authenticated/candidates/'
     | '/_authenticated/clients/$id'
-    | '/_authenticated/clients/'
     | '/_authenticated/jobs/$id'
+    | '/_authenticated/candidates/'
+    | '/_authenticated/clients/'
     | '/_authenticated/jobs/'
   fileRoutesById: FileRoutesById
 }
@@ -361,12 +358,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAccountRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/jobs/': {
+      id: '/_authenticated/jobs/'
+      path: '/'
+      fullPath: '/jobs/'
+      preLoaderRoute: typeof AuthenticatedJobsIndexRouteImport
+      parentRoute: typeof AuthenticatedJobsRoute
+    }
+    '/_authenticated/clients/': {
+      id: '/_authenticated/clients/'
+      path: '/'
+      fullPath: '/clients/'
+      preLoaderRoute: typeof AuthenticatedClientsIndexRouteImport
+      parentRoute: typeof AuthenticatedClientsRoute
+    }
     '/_authenticated/candidates/': {
       id: '/_authenticated/candidates/'
       path: '/'
       fullPath: '/candidates/'
       preLoaderRoute: typeof AuthenticatedCandidatesIndexRouteImport
       parentRoute: typeof AuthenticatedCandidatesRoute
+    }
+    '/_authenticated/jobs/$id': {
+      id: '/_authenticated/jobs/$id'
+      path: '/$id'
+      fullPath: '/jobs/$id'
+      preLoaderRoute: typeof AuthenticatedJobsIdRouteImport
+      parentRoute: typeof AuthenticatedJobsRoute
+    }
+    '/_authenticated/clients/$id': {
+      id: '/_authenticated/clients/$id'
+      path: '/$id'
+      fullPath: '/clients/$id'
+      preLoaderRoute: typeof AuthenticatedClientsIdRouteImport
+      parentRoute: typeof AuthenticatedClientsRoute
     }
     '/_authenticated/candidates/new': {
       id: '/_authenticated/candidates/new'
@@ -381,34 +406,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/candidates/$id'
       preLoaderRoute: typeof AuthenticatedCandidatesIdRouteImport
       parentRoute: typeof AuthenticatedCandidatesRoute
-    }
-    '/_authenticated/clients/': {
-      id: '/_authenticated/clients/'
-      path: '/'
-      fullPath: '/clients/'
-      preLoaderRoute: typeof AuthenticatedClientsIndexRouteImport
-      parentRoute: typeof AuthenticatedClientsRoute
-    }
-    '/_authenticated/clients/$id': {
-      id: '/_authenticated/clients/$id'
-      path: '/$id'
-      fullPath: '/clients/$id'
-      preLoaderRoute: typeof AuthenticatedClientsIdRouteImport
-      parentRoute: typeof AuthenticatedClientsRoute
-    }
-    '/_authenticated/jobs/': {
-      id: '/_authenticated/jobs/'
-      path: '/'
-      fullPath: '/jobs/'
-      preLoaderRoute: typeof AuthenticatedJobsIndexRouteImport
-      parentRoute: typeof AuthenticatedJobsRoute
-    }
-    '/_authenticated/jobs/$id': {
-      id: '/_authenticated/jobs/$id'
-      path: '/$id'
-      fullPath: '/jobs/$id'
-      preLoaderRoute: typeof AuthenticatedJobsIdRouteImport
-      parentRoute: typeof AuthenticatedJobsRoute
     }
   }
 }
