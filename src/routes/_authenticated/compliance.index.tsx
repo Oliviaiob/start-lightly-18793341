@@ -265,7 +265,23 @@ function AddCandidateModal({ open, onClose, onCreated }: {
                     </div>
                   )}
                   {uploadSearch.trim().length >= 2 && uploadCandidates.length === 0 && (
-                    <p className="text-xs text-muted-foreground mt-1.5 px-1">No candidates found — use "Enter Manually" to create a new one.</p>
+                    <div className="mt-1.5 px-1 flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">No candidates found.</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const parts = uploadSearch.trim().split(" ");
+                          const firstName = parts[0] ?? "";
+                          const lastName = parts.slice(1).join(" ");
+                          set("first_name", firstName);
+                          set("last_name", lastName);
+                          setTab("manual");
+                        }}
+                        className="text-xs font-medium text-teal hover:underline"
+                      >
+                        + Create "{uploadSearch.trim()}" as new candidate
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
