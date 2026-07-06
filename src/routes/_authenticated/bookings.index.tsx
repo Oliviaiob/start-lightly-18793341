@@ -330,6 +330,7 @@ function Page() {
   const [statusFilter, setStatusFilter] = useState(ALL);
   const [showNew, setShowNew] = useState(false);
   const [view, setView] = useState<"list" | "calendar">("list");
+  const [completedOpen, setCompletedOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -437,43 +438,122 @@ function Page() {
           No bookings found.{" "}
           <button onClick={() => setShowNew(true)} className="text-teal underline">Create one</button>
         </Card>
-      ) : (
-        <div className="space-y-3">
-          {filtered.map((b) => {
-            const style = bookingStyle(b.confirmed_count, b.shift_count, b.status);
-            return (
-              <div key={b.id}
-                onClick={() => navigate({ to: "/bookings/$id", params: { id: b.id } })}
-                className={`bg-card rounded-2xl shadow-[var(--shadow-card)] border-l-4 ${style.border} px-5 py-4 cursor-pointer hover:shadow-md transition-shadow flex items-center gap-4`}>
-                <div className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${style.dot}`} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-sm">{b.client_name ?? "Unknown client"}</span>
-                    {b.branch_name && <span className="text-xs text-muted-foreground">— {b.branch_name}</span>}
-                    {b.qualification_required && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-navy/10 text-navy font-medium">{qualLabel(b.qualification_required)}</span>
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-3">
-                    {b.shift_count > 0
-                      ? <span>{fmtDate(b.date_from)}{b.date_to !== b.date_from ? ` → ${fmtDate(b.date_to)}` : ""}</span>
-                      : <span>No shifts added yet</span>}
-                    {b.notes && <span className="truncate max-w-[300px] italic">{b.notes}</span>}
-                  </div>
+      ) : (() => {
+        const today = new Date().toISOString().slice(0, 10);
+
+        // A booking is "completed" when its last shift date is in the past
+        const isCompleted = (b: Booking) =>
+          b.status !== "cancelled" && !!b.date_to && b.date_to < today;
+        const isConfirmed = (b: Booking) =>
+          !isCompleted(b) && b.status !== "cancelled" &&
+          b.shift_count > 0 && b.confirmed_count === b.shift_count;
+        const isUnfilled = (b: Booking) =>
+          !isCompleted(b) && !isConfirmed(b) && b.status !== "cancelled";
+
+        const unfilledGroup  = filtered.filter(isUnfilled);
+        const confirmedGroup = filtered.filter(isConfirmed);
+        const completedGroup = filtered.filter(isCompleted);
+        const cancelledGroup = filtered.filter((b) => b.status === "cancelled");
+
+        const BookingCard = ({ b }: { b: Booking }) => {
+          const style = bookingStyle(b.confirmed_count, b.shift_count, b.status);
+          return (
+            <div
+              onClick={() => navigate({ to: "/bookings/$id", params: { id: b.id } })}
+              className={`bg-card rounded-2xl shadow-[var(--shadow-card)] border-l-4 ${style.border} px-5 py-4 cursor-pointer hover:shadow-md transition-shadow flex items-center gap-4`}>
+              <div className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${style.dot}`} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold text-sm">{b.client_name ?? "Unknown client"}</span>
+                  {b.branch_name && <span className="text-xs text-muted-foreground">— {b.branch_name}</span>}
+                  {b.qualification_required && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-navy/10 text-navy font-medium">{qualLabel(b.qualification_required)}</span>
+                  )}
                 </div>
-                <div className="flex items-center gap-4 flex-shrink-0">
-                  <div className="text-right">
-                    <div className="text-sm font-semibold">{b.shift_count} shift{b.shift_count !== 1 ? "s" : ""}</div>
-                    <div className={`text-xs ${b.confirmed_count === b.shift_count && b.shift_count > 0 ? "text-green-600" : "text-muted-foreground"}`}>{style.label}</div>
-                  </div>
-                  {b.confirmed_count === b.shift_count && b.shift_count > 0 && <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />}
-                  <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-3">
+                  {b.shift_count > 0
+                    ? <span>{fmtDate(b.date_from)}{b.date_to !== b.date_from ? ` → ${fmtDate(b.date_to)}` : ""}</span>
+                    : <span>No shifts added yet</span>}
+                  {b.notes && <span className="truncate max-w-[300px] italic">{b.notes}</span>}
                 </div>
               </div>
-            );
-          })}
-        </div>
-      )}
+              <div className="flex items-center gap-4 flex-shrink-0">
+                <div className="text-right">
+                  <div className="text-sm font-semibold">{b.shift_count} shift{b.shift_count !== 1 ? "s" : ""}</div>
+                  <div className={`text-xs ${b.confirmed_count === b.shift_count && b.shift_count > 0 ? "text-green-600" : "text-muted-foreground"}`}>{style.label}</div>
+                </div>
+                {b.confirmed_count === b.shift_count && b.shift_count > 0 && <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />}
+                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              </div>
+            </div>
+          );
+        };
+
+        return (
+          <div className="space-y-6">
+            {/* Unfilled */}
+            {unfilledGroup.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 px-1">
+                  <span className="h-2 w-2 rounded-full bg-amber-400 flex-shrink-0" />
+                  <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                    Unfilled <span className="text-muted-foreground/60 normal-case tracking-normal font-normal">({unfilledGroup.length})</span>
+                  </span>
+                </div>
+                {unfilledGroup.map((b) => <BookingCard key={b.id} b={b} />)}
+              </div>
+            )}
+
+            {/* Confirmed */}
+            {confirmedGroup.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 px-1">
+                  <span className="h-2 w-2 rounded-full bg-green-500 flex-shrink-0" />
+                  <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                    Confirmed <span className="text-muted-foreground/60 normal-case tracking-normal font-normal">({confirmedGroup.length})</span>
+                  </span>
+                </div>
+                {confirmedGroup.map((b) => <BookingCard key={b.id} b={b} />)}
+              </div>
+            )}
+
+            {/* Cancelled (only shown when status filter is active/all) */}
+            {cancelledGroup.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 px-1">
+                  <span className="h-2 w-2 rounded-full bg-muted-foreground/40 flex-shrink-0" />
+                  <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                    Cancelled <span className="text-muted-foreground/60 normal-case tracking-normal font-normal">({cancelledGroup.length})</span>
+                  </span>
+                </div>
+                {cancelledGroup.map((b) => <BookingCard key={b.id} b={b} />)}
+              </div>
+            )}
+
+            {/* Completed — collapsible, closed by default */}
+            {completedGroup.length > 0 && (
+              <div className="space-y-3">
+                <button
+                  onClick={() => setCompletedOpen((o) => !o)}
+                  className="flex items-center gap-2 px-1 w-full group">
+                  <span className="h-2 w-2 rounded-full bg-navy/30 flex-shrink-0" />
+                  <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground group-hover:text-foreground transition-colors">
+                    Completed <span className="text-muted-foreground/60 normal-case tracking-normal font-normal">({completedGroup.length})</span>
+                  </span>
+                  <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground ml-auto transition-transform duration-200 ${completedOpen ? "rotate-90" : ""}`} />
+                </button>
+                {completedOpen && completedGroup.map((b) => <BookingCard key={b.id} b={b} />)}
+              </div>
+            )}
+
+            {unfilledGroup.length === 0 && confirmedGroup.length === 0 && cancelledGroup.length === 0 && completedGroup.length === 0 && (
+              <Card className="p-16 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card text-center text-muted-foreground">
+                No bookings found.
+              </Card>
+            )}
+          </div>
+        );
+      })()}
 
       <NewBookingModal open={showNew} onClose={() => setShowNew(false)}
         onCreated={(id) => { setShowNew(false); navigate({ to: "/bookings/$id", params: { id } }); }} />
