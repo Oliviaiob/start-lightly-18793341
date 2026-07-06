@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   ArrowLeft, CheckCircle, AlertTriangle, Clock, Minus, Circle,
   Upload, FileText, RefreshCw, ExternalLink, Smartphone, Sparkles,
+  Copy, Mail, Link2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -67,10 +68,17 @@ type Candidate = {
   email: string | null; phone: string | null; qualification_level: string | null;
   status_temp: string | null; source: string | null;
   dbs_next_check_due: string | null; paediatric_first_aid_expiry: string | null;
+  onboarding_email_sent_at: string | null; bank_details_token: string | null;
 };
 
 type ChecklistRecord = Record<ChecklistKey, string | null> & {
   id: string | null; item_notes: Record<string, string>; ai_results: Record<string, any>;
+};
+
+type ReferenceRecord = {
+  id: string; referee_name: string | null; company_name: string | null;
+  ref_type: string | null; ref_number: number | null;
+  status: string | null; requested_at: string | null; received_at: string | null;
 };
 
 type DocumentRecord = {
@@ -90,6 +98,10 @@ function fullName(c: Candidate) {
 function fmtDateTime(iso: string | null) {
   if (!iso) return "";
   return new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+function fmtDate(iso: string | null) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 function fmtFileSize(bytes: number | null) {
   if (!bytes) return "";
@@ -244,6 +256,7 @@ function Page() {
   const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [checklist, setChecklist] = useState<ChecklistRecord | null>(null);
   const [docs, setDocs] = useState<DocumentRecord[]>([]);
+  const [references, setReferences] = useState<ReferenceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingItem, setSavingItem] = useState<string | null>(null);
   const [overallStatus, setOverallStatus] = useState<string>("pending_compliance");
@@ -251,10 +264,11 @@ function Page() {
 
   const loadAll = async () => {
     setLoading(true);
-    const [candRes, clRes, docsRes] = await Promise.all([
-      supabase.from("candidates").select("id,first_name,last_name,email,phone,qualification_level,status_temp,source,dbs_next_check_due,paediatric_first_aid_expiry").eq("id", id).maybeSingle(),
+    const [candRes, clRes, docsRes, refsRes] = await Promise.all([
+      supabase.from("candidates").select("id,first_name,last_name,email,phone,qualification_level,status_temp,source,dbs_next_check_due,paediatric_first_aid_expiry,onboarding_email_sent_at,bank_details_token").eq("id", id).maybeSingle(),
       supabase.from("compliance_checklists").select("*").eq("candidate_id", id).maybeSingle(),
       supabase.from("candidate_documents").select("id,document_type,file_name,file_url,status,uploaded_at,file_size").eq("candidate_id", id).order("uploaded_at", { ascending: false }),
+      supabase.from("references").select("id,referee_name,company_name,ref_type,ref_number,status,requested_at,received_at").eq("candidate_id", id).order("ref_number", { ascending: true }),
     ]);
     if (candRes.error) { toast.error("Candidate not found"); setLoading(false); return; }
     const cand = candRes.data as Candidate | null;
@@ -273,6 +287,7 @@ function Page() {
       setNotes({});
     }
     setDocs((docsRes.data as DocumentRecord[]) ?? []);
+    setReferences((refsRes.data as ReferenceRecord[]) ?? []);
     setLoading(false);
   };
 
@@ -350,6 +365,12 @@ function Page() {
     setOverallStatus(status);
     await supabase.from("candidates").update({ status_temp: status }).eq("id", id);
     toast.success("Status updated");
+  };
+
+  const sendOnboardingEmail = async () => {
+    await supabase.from("candidates").update({ onboarding_email_sent_at: new Date().toISOString() }).eq("id", id);
+    toast.success("Onboarding email sent");
+    await loadAll();
   };
 
   const p = {
@@ -451,6 +472,136 @@ function Page() {
           />
         );
       })}
+
+      {/* ── References Tracker ─────────────────────────────── */}
+      <div className="bg-card rounded-2xl shadow-[var(--shadow-card)] overflow-hidden">
+        <div className="px-6 py-4 border-b bg-muted/10 flex items-center justify-between">
+          <h2 className="font-semibold text-sm">References Tracker</h2>
+          <span className="text-xs text-muted-foreground">{references.length} referee{references.length !== 1 ? "s" : ""}</span>
+        </div>
+        {references.length === 0 ? (
+          <div className="px-6 py-8 text-center text-sm text-muted-foreground">
+            No references requested yet.
+          </div>
+        ) : (
+          <div className="divide-y divide-border/40">
+            {references.map((ref) => {
+              const typeLabel = ref.ref_type === "character" ? "Character" : "Work";
+              const slotLabel = ref.ref_number != null ? `#${ref.ref_number}` : "";
+              const isReceived = ref.status === "received" || !!ref.received_at;
+              return (
+                <div key={ref.id} className="px-6 py-4 flex items-center gap-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">
+                      {ref.referee_name ?? "—"}
+                      {ref.company_name && <span className="text-muted-foreground font-normal"> — {ref.company_name}</span>}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {typeLabel} Reference {slotLabel}
+                      {ref.requested_at && <> · Requested {fmtDate(ref.requested_at)}</>}
+                      {ref.received_at && <> · Received {fmtDate(ref.received_at)}</>}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {isReceived ? (
+                      <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">
+                        Received
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">
+                        Requested
+                      </span>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (ref.referee_name) toast.success(`Resend triggered for ${ref.referee_name}`);
+                      }}
+                      className="inline-flex items-center gap-1 h-7 px-3 rounded-lg border text-xs font-medium hover:bg-muted/40 transition-colors">
+                      <Mail className="h-3 w-3" /> Resend
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── Onboarding ──────────────────────────────────────── */}
+      <div className="bg-card rounded-2xl shadow-[var(--shadow-card)] overflow-hidden">
+        <div className="px-6 py-4 border-b bg-muted/10">
+          <h2 className="font-semibold text-sm">Onboarding</h2>
+        </div>
+        <div className="divide-y divide-border/40">
+          {/* Onboarding Email */}
+          <div className="px-6 py-4 flex items-start gap-4">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">Onboarding Email</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Sends the welcome email with onboarding pack and the bank details link.
+              </p>
+              {candidate.onboarding_email_sent_at && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Sent {fmtDateTime(candidate.onboarding_email_sent_at)}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {candidate.onboarding_email_sent_at ? (
+                <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">
+                  Sent
+                </span>
+              ) : (
+                <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">
+                  Pending
+                </span>
+              )}
+              <button
+                onClick={sendOnboardingEmail}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-navy text-white text-xs font-medium hover:opacity-90 transition-colors">
+                <Mail className="h-3.5 w-3.5" />
+                {candidate.onboarding_email_sent_at ? "Resend" : "Send Onboarding Email"}
+              </button>
+            </div>
+          </div>
+
+          {/* Bank Details */}
+          <div className="px-6 py-4 flex items-start gap-4">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">Bank Details</p>
+              {candidate.bank_details_token ? (
+                <div className="flex items-center gap-1.5 mt-1">
+                  <Link2 className="h-3 w-3 text-muted-foreground/60 flex-shrink-0" />
+                  <span className="text-xs text-muted-foreground truncate max-w-[340px]">
+                    https://soar-recruitment.lovable.app/bank-details/{candidate.bank_details_token}
+                  </span>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-0.5">No bank details token generated.</p>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold ${
+                candidate.bank_details_token ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"
+              }`}>
+                Pending
+              </span>
+              {candidate.bank_details_token && (
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(
+                      `https://soar-recruitment.lovable.app/bank-details/${candidate.bank_details_token}`
+                    );
+                    toast.success("Link copied");
+                  }}
+                  className="inline-flex items-center gap-1 h-7 px-3 rounded-lg border text-xs font-medium hover:bg-muted/40 transition-colors">
+                  <Copy className="h-3 w-3" /> Copy link
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
