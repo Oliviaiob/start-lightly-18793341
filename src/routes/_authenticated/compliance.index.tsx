@@ -233,7 +233,7 @@ function AddCandidateModal({ open, onClose, onCreated }: {
       preferred_fields: full.preferred_fields.length ? full.preferred_fields : null,
       available_days: full.available_days.length ? full.available_days : null,
       shift_types_available: full.shift_types_available.length ? full.shift_types_available : null,
-      candidate_type: "temp", status_temp: "pending_compliance", source: "manual",
+      candidate_type: "temp", status_temp: "pending_compliance",
     }).select("id").single();
     if (error) { toast.error("Failed: " + error.message); setSaving(false); return; }
     await createChecklist(cand.id);
@@ -257,7 +257,7 @@ function AddCandidateModal({ open, onClose, onCreated }: {
       ni_number: form.ni_number || null,
       qualification_level: form.qualification_level === "__none__" ? null : form.qualification_level,
       address_line1: form.address_line_1 || null, city: form.city || null, postcode: form.postcode || null,
-      candidate_type: "temp", status_temp: "pending_compliance", source: "manual",
+      candidate_type: "temp", status_temp: "pending_compliance",
     }).select("id").single();
     if (error) { toast.error("Failed: " + error.message); setSaving(false); return; }
     await createChecklist(data.id);
