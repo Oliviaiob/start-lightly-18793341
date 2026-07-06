@@ -763,6 +763,9 @@ function Page() {
   const [soarDesc, setSoarDesc] = useState<string>("");
   const [soarDescLoading, setSoarDescLoading] = useState(false);
   const [soarDescCopied, setSoarDescCopied] = useState(false);
+  const [soarDescEditing, setSoarDescEditing] = useState(false);
+  const [regenPromptOpen, setRegenPromptOpen] = useState(false);
+  const [regenInstruction, setRegenInstruction] = useState("");
 
   const loadAll = async () => {
     const [jRes, pRes, aRes] = await Promise.all([
@@ -809,8 +812,10 @@ function Page() {
     setJob((prev) => prev ? { ...prev, ...draft } : prev);
   };
 
-  const generateSoarDesc = async () => {
+  const generateSoarDesc = async (instruction?: string) => {
     if (!job) return;
+    setRegenPromptOpen(false);
+    setRegenInstruction("");
     setSoarDescLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("generate-job-description", {
@@ -824,6 +829,7 @@ function Page() {
           room: job.room,
           description: job.description,
           client_name: (job as any).clients?.company_name ?? null,
+          ...(instruction && soarDesc ? { existing_description: soarDesc, instruction } : {}),
         },
       });
       if (error) throw new Error(error.message);
@@ -1261,13 +1267,14 @@ function Page() {
           {/* LEFT — SOAR Job Description */}
           <div className="lg:col-span-3 space-y-4">
             <div className="rounded-2xl border bg-card shadow-[var(--shadow-card)] p-5 space-y-3">
+              {/* Header row */}
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-semibold">SOAR Job Description</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">Branded copy ready to post on job boards</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {soarDesc && (
+                  {soarDesc && !soarDescEditing && (
                     <button
                       onClick={() => { navigator.clipboard.writeText(soarDesc); setSoarDescCopied(true); setTimeout(() => setSoarDescCopied(false), 2000); }}
                       className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-medium hover:bg-muted transition-colors"
@@ -1275,34 +1282,95 @@ function Page() {
                       {soarDescCopied ? <><Check className="h-3.5 w-3.5 text-teal" />Copied</> : <><Copy className="h-3.5 w-3.5" />Copy</>}
                     </button>
                   )}
-                  <button
-                    onClick={generateSoarDesc}
-                    disabled={soarDescLoading}
-                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-teal text-teal-foreground text-xs font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    {soarDescLoading ? "Generating…" : soarDesc ? "Regenerate" : "Generate"}
-                  </button>
+                  {soarDesc && !soarDescEditing && (
+                    <button
+                      onClick={() => setSoarDescEditing(true)}
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-medium hover:bg-muted transition-colors"
+                    >
+                      Edit
+                    </button>
+                  )}
+                  {soarDescEditing ? (
+                    <>
+                      <button
+                        onClick={() => setSoarDescEditing(false)}
+                        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-medium hover:bg-muted transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => { saveSoarDesc(); setSoarDescEditing(false); }}
+                        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-navy text-white text-xs font-medium hover:opacity-90"
+                      >
+                        Save
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => soarDesc ? setRegenPromptOpen(true) : generateSoarDesc()}
+                      disabled={soarDescLoading}
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-teal text-teal-foreground text-xs font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      {soarDescLoading ? "Generating…" : soarDesc ? "Regenerate" : "Generate"}
+                    </button>
+                  )}
                 </div>
               </div>
 
+              {/* Regenerate popup */}
+              {regenPromptOpen && (
+                <div className="rounded-xl border bg-muted/40 p-4 space-y-3">
+                  <p className="text-xs font-medium">What would you like to change?</p>
+                  <textarea
+                    value={regenInstruction}
+                    onChange={e => setRegenInstruction(e.target.value)}
+                    placeholder="e.g. Add more detail about the nursery setting, include flexible hours as a benefit…"
+                    rows={3}
+                    className="w-full text-sm bg-background rounded-xl p-3 border border-border focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none"
+                    autoFocus
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => { setRegenPromptOpen(false); setRegenInstruction(""); }}
+                      className="h-8 px-4 rounded-full border text-xs font-medium hover:bg-muted transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => generateSoarDesc(regenInstruction || undefined)}
+                      disabled={soarDescLoading}
+                      className="inline-flex items-center gap-1.5 h-8 px-4 rounded-full bg-teal text-teal-foreground text-xs font-medium hover:opacity-90 disabled:opacity-50"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      OK
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Content area */}
               {soarDescLoading ? (
                 <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
                   <div className="h-4 w-4 border-2 border-teal border-t-transparent rounded-full animate-spin" />
                   Writing your job description…
                 </div>
-              ) : (
+              ) : soarDescEditing ? (
                 <textarea
                   value={soarDesc}
                   onChange={e => setSoarDesc(e.target.value)}
-                  placeholder="Click Generate to create a SOAR-branded job description, or type one manually…"
                   rows={22}
                   className="w-full text-sm bg-muted/30 rounded-xl p-4 border border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none leading-relaxed"
+                  autoFocus
                 />
-              )}
-              {soarDesc && !soarDescLoading && (
-                <div className="flex justify-end">
-                  <button onClick={saveSoarDesc} className="h-8 px-4 rounded-full bg-navy text-white text-xs font-medium hover:opacity-90">Save</button>
+              ) : soarDesc ? (
+                <div className="text-sm leading-relaxed whitespace-pre-wrap bg-muted/30 rounded-xl p-4 min-h-[200px]">
+                  {soarDesc}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-sm text-muted-foreground gap-2">
+                  <Sparkles className="h-6 w-6 text-teal/50" />
+                  <p>Click <span className="font-medium text-teal">Generate</span> to create a SOAR-branded job description</p>
                 </div>
               )}
             </div>

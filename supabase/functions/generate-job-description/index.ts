@@ -8,7 +8,7 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
-    const { title, qualification_required, location, salary_min, salary_max, hours, room, description, client_name } = await req.json();
+    const { title, qualification_required, location, salary_min, salary_max, hours, room, description, client_name, existing_description, instruction } = await req.json();
     const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
     if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY not set");
 
