@@ -165,7 +165,12 @@ type Reference = {
   received_at: string | null;
 };
 
-const STATUS_OPTIONS = ["Not Contacted", "Active", "Placed", "Inactive"];
+const STATUS_OPTIONS = [
+  { value: "not_contacted", label: "Not Contacted" },
+  { value: "active",        label: "Active"        },
+  { value: "placed",        label: "Placed"        },
+  { value: "inactive",      label: "Inactive"      },
+];
 
 function initials(f?: string | null, l?: string | null) {
   return `${f?.[0] || ""}${l?.[0] || ""}`.toUpperCase() || "?";
@@ -335,7 +340,7 @@ function Page() {
   const type = (c?.candidate_type || "").toLowerCase();
   const isPerm = type.includes("perm") || type.includes("both");
   const isTemp = type.includes("temp") || type.includes("both");
-  const displayStatus = (isPerm ? c?.status_perm : c?.status_temp) || "Not Contacted";
+  const displayStatus = (isPerm ? c?.status_perm : c?.status_temp) || "not_contacted";
 
   const setStatus = (s: string) => {
     if (isPerm) patch({ status_perm: s });
@@ -489,9 +494,7 @@ function Page() {
                   </SelectTrigger>
                   <SelectContent>
                     {STATUS_OPTIONS.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s}
-                      </SelectItem>
+                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1248,7 +1251,7 @@ p { font-size:13px; line-height:1.7; color:#444; }
               <CvSection title="Profile Summary">
                 <textarea value={summary} onChange={(e) => setSummary(e.target.value)} rows={5}
                   placeholder="Profile summary will be generated automatically…"
-                  className="w-full text-sm text-foreground bg-background rounded-xl border px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none leading-relaxed" />
+                  className="w-full text-sm rounded-xl border px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none leading-relaxed" style={{color:"#1a1a1a",background:"#fff"}} />
                 <div className="mt-2">
                   <label className="text-xs font-medium text-[#0E9E8E] block mb-1">Availability &amp; Preferences</label>
                   <input value={availability} onChange={(e) => setAvailability(e.target.value)}
@@ -1264,15 +1267,15 @@ p { font-size:13px; line-height:1.7; color:#444; }
                     <div key={i} className="rounded-xl border p-4 space-y-3 bg-muted/20">
                       <div className="grid grid-cols-3 gap-2">
                         <input value={e.role} onChange={(ev) => setEmp(i, "role", ev.target.value)} placeholder="Job title"
-                          className="text-sm text-foreground bg-background rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" />
+                          className="text-sm rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" style={{color:"#1a1a1a",background:"#fff"}} />
                         <input value={e.company} onChange={(ev) => setEmp(i, "company", ev.target.value)} placeholder="Employer"
-                          className="text-sm text-foreground bg-background rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" />
+                          className="text-sm rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" style={{color:"#1a1a1a",background:"#fff"}} />
                         <input value={e.dateTo} onChange={(ev) => setEmp(i, "dateTo", ev.target.value)} placeholder="End date / Present"
-                          className="text-sm text-foreground bg-background rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" />
+                          className="text-sm rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" style={{color:"#1a1a1a",background:"#fff"}} />
                       </div>
                       <textarea value={e.description} onChange={(ev) => setEmp(i, "description", ev.target.value)} rows={3}
                         placeholder="Describe responsibilities and achievements…"
-                        className="w-full text-sm text-foreground bg-background rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" />
+                        className="w-full text-sm rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" style={{color:"#1a1a1a",background:"#fff"}} />
                       <button onClick={() => removeEmp(i)} className="text-xs text-rose-500 hover:text-rose-600">Remove</button>
                     </div>
                   ))}
@@ -1288,7 +1291,7 @@ p { font-size:13px; line-height:1.7; color:#444; }
                   {qualifications.map((q, i) => (
                     <div key={i} className="flex gap-2">
                       <input value={q} onChange={(e) => setQual(i, e.target.value)} placeholder="e.g. Level 3 Early Years Educator"
-                        className="flex-1 text-sm text-foreground bg-background rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" />
+                        className="flex-1 text-sm rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" style={{color:"#1a1a1a",background:"#fff"}} />
                       <button onClick={() => removeQual(i)} className="text-xs text-rose-500 px-2 hover:text-rose-600">✕</button>
                     </div>
                   ))}
@@ -1304,7 +1307,7 @@ p { font-size:13px; line-height:1.7; color:#444; }
                   {skills.map((s, i) => (
                     <div key={i} className="flex gap-2">
                       <input value={s} onChange={(e) => setSkill(i, e.target.value)} placeholder="e.g. EYFS Framework"
-                        className="flex-1 text-sm text-foreground bg-background rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" />
+                        className="flex-1 text-sm rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" style={{color:"#1a1a1a",background:"#fff"}} />
                       <button onClick={() => removeSkill(i)} className="text-xs text-rose-500 px-1 hover:text-rose-600">✕</button>
                     </div>
                   ))}
