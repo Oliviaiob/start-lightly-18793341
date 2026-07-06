@@ -662,7 +662,7 @@ function Page() {
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-5 pt-2">
-      <PageHeader eyebrow="Operations" title="Compliance"
+      <PageHeader eyebrow="TEMPORARY" title="Compliance"
         description="Track DBS, references and safeguarding documents across temp candidates."
         icon={ShieldCheck}
         actions={
