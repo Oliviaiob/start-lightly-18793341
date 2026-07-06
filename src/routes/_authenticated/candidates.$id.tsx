@@ -927,12 +927,185 @@ function Page() {
           </TabsContent>
 
           {isTemp && (
-            <TabsContent value="availability" className="mt-5 text-sm">
-              <div className="text-muted-foreground">Availability grid coming soon.</div>
+            <TabsContent value="availability" className="mt-5">
+              <AvailabilityTab candidateId={c.id} />
             </TabsContent>
           )}
         </Tabs>
       </Card>
+    </div>
+  );
+}
+
+// ── AvailabilityTab ───────────────────────────────────────────────────────────
+const DAYS = [
+  { label: "Monday",    iso: 1 },
+  { label: "Tuesday",   iso: 2 },
+  { label: "Wednesday", iso: 3 },
+  { label: "Thursday",  iso: 4 },
+  { label: "Friday",    iso: 5 },
+  { label: "Saturday",  iso: 6 },
+  { label: "Sunday",    iso: 7 },
+];
+
+function getMonday(d = new Date()): Date {
+  const day = d.getDay(); // 0=Sun
+  const diff = day === 0 ? -6 : 1 - day;
+  const m = new Date(d);
+  m.setDate(d.getDate() + diff);
+  m.setHours(0, 0, 0, 0);
+  return m;
+}
+
+function fmtDateShort(iso: string) {
+  return new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+function daysBetween(a: string, b: string) {
+  const ms = new Date(b + "T00:00:00").getTime() - new Date(a + "T00:00:00").getTime();
+  return Math.round(ms / 86_400_000) + 1;
+}
+
+const CATEGORY_ICON: Record<string, string> = {
+  holiday: "🏖️",
+  sick:    "🤒",
+  personal:"👤",
+  other:   "📅",
+};
+
+function AvailabilityTab({ candidateId }: { candidateId: string }) {
+  const [weeklyAvail, setWeeklyAvail] = useState<WeeklyAvail[]>([]);
+  const [submission,  setSubmission]  = useState<AvailSubmission | null>(null);
+  const [timeOff,     setTimeOff]     = useState<TimeOffRow[]>([]);
+  const [loading,     setLoading]     = useState(true);
+
+  useEffect(() => {
+    const monday    = getMonday();
+    const weekStart = monday.toISOString().slice(0, 10);
+    setLoading(true);
+    Promise.all([
+      (supabase as any).from("candidate_weekly_availability")
+        .select("day_of_week,is_available,all_day,start_time,end_time")
+        .eq("candidate_id", candidateId),
+      (supabase as any).from("candidate_availability_submissions")
+        .select("week_starting,submitted_at,has_changes")
+        .eq("candidate_id", candidateId)
+        .eq("week_starting", weekStart)
+        .maybeSingle(),
+      (supabase as any).from("candidate_time_off")
+        .select("id,title,category,start_date,end_date,notes")
+        .eq("candidate_id", candidateId)
+        .order("start_date", { ascending: false }),
+    ]).then(([wa, sub, to]) => {
+      setWeeklyAvail((wa.data ?? []) as unknown as WeeklyAvail[]);
+      setSubmission(sub.data as unknown as AvailSubmission | null);
+      setTimeOff((to.data ?? []) as unknown as TimeOffRow[]);
+      setLoading(false);
+    });
+  }, [candidateId]);
+
+  if (loading) return <div className="py-8 text-center text-sm text-muted-foreground">Loading availability…</div>;
+
+  const monday    = getMonday();
+  const sunday    = new Date(monday); sunday.setDate(monday.getDate() + 6);
+  const weekLabel = `${monday.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} – ${sunday.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`;
+
+  const availMap = new Map(weeklyAvail.map((r) => [r.day_of_week, r]));
+
+  return (
+    <div className="space-y-6">
+      {/* Weekly schedule */}
+      <div>
+        <div className="flex items-baseline justify-between mb-3">
+          <h3 className="font-semibold text-sm">Weekly Availability</h3>
+          <span className="text-xs text-muted-foreground">{weekLabel}</span>
+        </div>
+        <div className="rounded-2xl border overflow-hidden">
+          {DAYS.map((day, i) => {
+            const row = availMap.get(day.iso);
+            return (
+              <div key={day.iso}
+                className={`flex items-center justify-between px-4 py-3 text-sm ${i < DAYS.length - 1 ? "border-b" : ""} ${i % 2 === 0 ? "bg-background" : "bg-muted/20"}`}>
+                <span className="font-medium w-28 text-foreground">{day.label}</span>
+                {!row ? (
+                  <span className="text-xs text-muted-foreground">Not set</span>
+                ) : !row.is_available ? (
+                  <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-destructive/15 text-destructive text-xs font-medium">Unavailable</span>
+                ) : row.all_day ? (
+                  <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-medium">All day</span>
+                ) : (
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {row.start_time?.slice(0, 5) ?? "–"} – {row.end_time?.slice(0, 5) ?? "–"}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Submission status */}
+        <div className="mt-3 flex items-center gap-2">
+          {submission ? (
+            <>
+              <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-semibold">
+                ✓ Submitted {new Date(submission.submitted_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} at {new Date(submission.submitted_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+              {submission.has_changes && (
+                <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-amber-100 text-amber-700 text-[11px] font-semibold">
+                  Updated availability submitted
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-amber-100 text-amber-700 text-[11px] font-semibold">
+              ⚠ Not yet submitted this week
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Time off */}
+      <div>
+        <h3 className="font-semibold text-sm mb-3">Time Off &amp; Unavailable Dates</h3>
+        {timeOff.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-4">No time off added.</div>
+        ) : (
+          <div className="rounded-2xl border overflow-hidden">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-muted/30 text-[11px] uppercase tracking-wider text-muted-foreground">
+                  <th className="text-left px-4 py-2.5 font-semibold">Type</th>
+                  <th className="text-left px-3 py-2.5 font-semibold">Title</th>
+                  <th className="text-left px-3 py-2.5 font-semibold">Dates</th>
+                  <th className="text-left px-3 py-2.5 font-semibold">Duration</th>
+                  <th className="text-left px-3 py-2.5 font-semibold">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {timeOff.map((t, i) => {
+                  const today = new Date().toISOString().slice(0, 10);
+                  const isActive = t.start_date <= today && t.end_date >= today;
+                  const isUpcoming = t.start_date > today;
+                  return (
+                    <tr key={t.id} className={`border-t ${isActive ? "bg-red-50/50" : isUpcoming ? "bg-amber-50/30" : ""}`}>
+                      <td className="px-4 py-3">
+                        <span className="text-base">{CATEGORY_ICON[t.category ?? ""] ?? "📅"}</span>
+                        <span className="ml-1.5 capitalize text-muted-foreground">{t.category ?? "other"}</span>
+                      </td>
+                      <td className="px-3 py-3 font-medium text-foreground">{t.title}</td>
+                      <td className="px-3 py-3 tabular-nums text-muted-foreground whitespace-nowrap">
+                        {fmtDateShort(t.start_date)} – {fmtDateShort(t.end_date)}
+                      </td>
+                      <td className="px-3 py-3 text-muted-foreground">{daysBetween(t.start_date, t.end_date)}d</td>
+                      <td className="px-3 py-3 text-muted-foreground max-w-[180px] truncate">{t.notes || "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1050,6 +1223,28 @@ function ActivityIcon({ type }: { type: string | null }) {
 }
 
 // ── SOAR CV Generator Modal ──────────────────────────────────────────────────
+
+// ── Availability types ────────────────────────────────────────────────────────
+type WeeklyAvail = {
+  day_of_week: number;
+  is_available: boolean;
+  all_day: boolean;
+  start_time: string | null;
+  end_time: string | null;
+};
+type AvailSubmission = {
+  week_starting: string;
+  submitted_at: string;
+  has_changes: boolean;
+};
+type TimeOffRow = {
+  id: string;
+  title: string;
+  category: string | null;
+  start_date: string;
+  end_date: string;
+  notes: string | null;
+};
 
 type CvEmployment = { role: string; company: string; dateTo: string; description: string };
 

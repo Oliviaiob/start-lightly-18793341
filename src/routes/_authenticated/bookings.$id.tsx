@@ -146,15 +146,33 @@ type PastShift = {
   client_name: string | null;
 };
 
+// Drawer availability types
+type DrawerWeeklyAvail = { day_of_week: number; is_available: boolean; all_day: boolean; start_time: string | null; end_time: string | null; };
+type DrawerTimeOff = { id: string; title: string; category: string | null; start_date: string; end_date: string; };
+const DRAWER_DAYS = [
+  { label: "Mon", iso: 1 }, { label: "Tue", iso: 2 }, { label: "Wed", iso: 3 },
+  { label: "Thu", iso: 4 }, { label: "Fri", iso: 5 }, { label: "Sat", iso: 6 }, { label: "Sun", iso: 7 },
+];
+
 function CandidateDrawer({ candidateId, onClose }: { candidateId: string | null; onClose: () => void }) {
   const [candidate, setCandidate] = useState<CandidateFull | null>(null);
   const [pastShifts, setPastShifts] = useState<PastShift[]>([]);
+  const [weeklyAvail, setWeeklyAvail] = useState<DrawerWeeklyAvail[]>([]);
+  const [submission, setSubmission] = useState<{ submitted_at: string; has_changes: boolean } | null>(null);
+  const [timeOff, setTimeOff] = useState<DrawerTimeOff[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!candidateId) { setCandidate(null); setPastShifts([]); return; }
+    if (!candidateId) { setCandidate(null); setPastShifts([]); setWeeklyAvail([]); setSubmission(null); setTimeOff([]); return; }
     setLoading(true);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date();
+    const dow = today.getDay();
+    const diff = dow === 0 ? -6 : 1 - dow;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + diff);
+    const weekStart = monday.toISOString().slice(0, 10);
+    const todayStr = today.toISOString().slice(0, 10);
+
     Promise.all([
       supabase.from("candidates")
         .select("id,first_name,last_name,email,phone,qualification_level,candidate_type,status_perm,status_temp,postcode,city,source,has_dbs,available_days")
@@ -163,16 +181,32 @@ function CandidateDrawer({ candidateId, onClose }: { candidateId: string | null;
         .select("id,shift_date,shift_type,start_time,end_time,total_hours,booking:bookings!booking_id(client:clients(company_name))")
         .eq("candidate_id", candidateId)
         .eq("shift_status", "confirmed")
-        .lt("shift_date", today)
+        .lt("shift_date", todayStr)
         .order("shift_date", { ascending: false })
         .limit(20),
-    ]).then(([candRes, shiftsRes]) => {
+      (supabase as any).from("candidate_weekly_availability")
+        .select("day_of_week,is_available,all_day,start_time,end_time")
+        .eq("candidate_id", candidateId),
+      (supabase as any).from("candidate_availability_submissions")
+        .select("submitted_at,has_changes")
+        .eq("candidate_id", candidateId)
+        .eq("week_starting", weekStart)
+        .maybeSingle(),
+      (supabase as any).from("candidate_time_off")
+        .select("id,title,category,start_date,end_date")
+        .eq("candidate_id", candidateId)
+        .gte("end_date", todayStr)
+        .order("start_date"),
+    ]).then(([candRes, shiftsRes, waRes, subRes, toRes]) => {
       setCandidate(candRes.data as CandidateFull ?? null);
       setPastShifts(((shiftsRes.data ?? []) as any[]).map((s) => ({
         id: s.id, shift_date: s.shift_date, shift_type: s.shift_type,
         start_time: s.start_time, end_time: s.end_time, total_hours: s.total_hours,
         client_name: s.booking?.client?.company_name ?? null,
       })));
+      setWeeklyAvail((waRes.data ?? []) as unknown as DrawerWeeklyAvail[]);
+      setSubmission(subRes.data as { submitted_at: string; has_changes: boolean } | null);
+      setTimeOff((toRes.data ?? []) as unknown as DrawerTimeOff[]);
       setLoading(false);
     });
   }, [candidateId]);
@@ -220,13 +254,61 @@ function CandidateDrawer({ candidateId, onClose }: { candidateId: string | null;
               {isTemp && <Row label="Temp status" value={candidate.status_temp ?? "—"} />}
               <Row label="DBS" value={candidate.has_dbs ? "✓ Valid DBS" : "No DBS"} />
             </div>
-            {candidate.available_days && candidate.available_days.length > 0 && (
+            {isTemp && (
               <div className="rounded-xl bg-muted/30 p-4">
-                <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-2">Availability</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {candidate.available_days.map((d) => (
-                    <span key={d} className="text-xs px-2 py-0.5 rounded-full bg-navy/10 text-navy font-medium capitalize">{d}</span>
-                  ))}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground">Weekly Availability</div>
+                  {submission ? (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">✓ Submitted</span>
+                  ) : (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">Not submitted</span>
+                  )}
+                </div>
+                {weeklyAvail.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">No recurring availability set.</p>
+                ) : (
+                  <div className="grid grid-cols-7 gap-1 mt-1">
+                    {DRAWER_DAYS.map((d) => {
+                      const row = weeklyAvail.find((r) => r.day_of_week === d.iso);
+                      const unavail = row && !row.is_available;
+                      const allDay  = row?.all_day;
+                      return (
+                        <div key={d.iso} className={`rounded-lg p-1.5 text-center text-[10px] font-medium ${
+                          !row ? "bg-muted/40 text-muted-foreground/50"
+                          : unavail ? "bg-red-100 text-red-600"
+                          : allDay ? "bg-emerald-100 text-emerald-700"
+                          : "bg-navy/10 text-navy"
+                        }`}>
+                          <div>{d.label}</div>
+                          {row && !unavail && !allDay && (
+                            <div className="text-[9px] mt-0.5 opacity-80 tabular-nums">
+                              {row.start_time?.slice(0,5)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+            {isTemp && timeOff.length > 0 && (
+              <div className="rounded-xl bg-muted/30 p-4">
+                <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-2">Upcoming Time Off</div>
+                <div className="space-y-2">
+                  {timeOff.map((t) => {
+                    const today = new Date().toISOString().slice(0, 10);
+                    const isActive = t.start_date <= today && t.end_date >= today;
+                    return (
+                      <div key={t.id} className={`flex items-center justify-between text-xs rounded-lg px-3 py-2 ${isActive ? "bg-red-100/70 text-red-700" : "bg-amber-50 text-amber-800"}`}>
+                        <span className="font-medium truncate">{t.title}</span>
+                        <span className="text-[10px] whitespace-nowrap ml-2 opacity-80">
+                          {new Date(t.start_date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                          {t.start_date !== t.end_date && ` – ${new Date(t.end_date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -274,8 +356,32 @@ function CandidateDrawer({ candidateId, onClose }: { candidateId: string | null;
 
 // ── App Candidate Card ────────────────────────────────────────────────────────
 
-function AppCandidateCard({ candidate, shifts, onCandidateClick }: {
+function AvailDot({ candidateId, availSubmitted, candTimeOff, shiftDate }: {
+  candidateId: string;
+  availSubmitted: Set<string>;
+  candTimeOff: Map<string, { title: string; start_date: string; end_date: string }[]>;
+  shiftDate?: string; // if provided, check time-off clash for that specific date
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const checkDate = shiftDate ?? today;
+  const timeOffs = candTimeOff.get(candidateId) ?? [];
+  const clash = timeOffs.find((t) => t.start_date <= checkDate && t.end_date >= checkDate);
+  if (clash) {
+    return (
+      <span title={`Time off: ${clash.title}`} className="cursor-default">
+        <span className="h-2 w-2 rounded-full bg-red-500 inline-block" />
+      </span>
+    );
+  }
+  if (availSubmitted.has(candidateId)) {
+    return <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" title="Availability submitted this week" />;
+  }
+  return <span className="h-2 w-2 rounded-full bg-amber-400 inline-block" title="No availability submitted this week" />;
+}
+
+function AppCandidateCard({ candidate, shifts, onCandidateClick, availSubmitted, candTimeOff }: {
   candidate: PoolCandidate; shifts: Shift[]; onCandidateClick: (id: string) => void;
+  availSubmitted: Set<string>; candTimeOff: Map<string, { title: string; start_date: string; end_date: string }[]>;
 }) {
   const appliedCount = candidate.entries.filter((e) => e.status !== "declined").length;
   const totalShifts = shifts.length;
@@ -297,9 +403,12 @@ function AppCandidateCard({ candidate, shifts, onCandidateClick }: {
           </div>
         </div>
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
-          <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-semibold bg-teal/10 text-teal-foreground">
-            <Smartphone className="h-2.5 w-2.5" /> App
-          </span>
+          <div className="flex items-center gap-1.5">
+            <AvailDot candidateId={candidate.candidate_id} availSubmitted={availSubmitted} candTimeOff={candTimeOff} />
+            <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-semibold bg-teal/10 text-teal-foreground">
+              <Smartphone className="h-2.5 w-2.5" /> App
+            </span>
+          </div>
           <span className="text-[10px] text-muted-foreground font-medium">
             {appliedCount}/{totalShifts} shifts
           </span>
@@ -330,8 +439,9 @@ function AppCandidateCard({ candidate, shifts, onCandidateClick }: {
 
 // ── Manual Candidate Card ─────────────────────────────────────────────────────
 
-function ManualCandidateCard({ candidate, shifts, onCandidateClick }: {
+function ManualCandidateCard({ candidate, shifts, onCandidateClick, availSubmitted, candTimeOff }: {
   candidate: PoolCandidate; shifts: Shift[]; onCandidateClick: (id: string) => void;
+  availSubmitted: Set<string>; candTimeOff: Map<string, { title: string; start_date: string; end_date: string }[]>;
 }) {
   const shortlistedFor = candidate.entries.filter((e) => e.status !== "declined").length;
 
@@ -352,9 +462,12 @@ function ManualCandidateCard({ candidate, shifts, onCandidateClick }: {
         </div>
       </div>
       <div className="flex flex-col items-end gap-1 flex-shrink-0">
-        <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-navy/10 text-navy">
-          Manual
-        </span>
+        <div className="flex items-center gap-1.5">
+          <AvailDot candidateId={candidate.candidate_id} availSubmitted={availSubmitted} candTimeOff={candTimeOff} />
+          <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-navy/10 text-navy">
+            Manual
+          </span>
+        </div>
         {shortlistedFor > 0 && (
           <span className="text-[10px] text-muted-foreground">{shortlistedFor}/{shifts.length} shifts</span>
         )}
@@ -365,10 +478,11 @@ function ManualCandidateCard({ candidate, shifts, onCandidateClick }: {
 
 // ── Inline Assign Dropdown ────────────────────────────────────────────────────
 
-function InlineAssign({ shift, pool, onAssign }: {
+function InlineAssign({ shift, pool, onAssign, candTimeOff }: {
   shift: Shift;
   pool: PoolCandidate[];
   onAssign: (shiftId: string, candidateId: string) => void;
+  candTimeOff: Map<string, { title: string; start_date: string; end_date: string }[]>;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -452,6 +566,16 @@ function InlineAssign({ shift, pool, onAssign }: {
                       <div className="min-w-0 flex-1">
                         <div className="text-xs font-medium truncate">{c.name}</div>
                         <div className="text-[10px] text-muted-foreground">{qualLabel(c.qual)}{c.has_dbs ? " · ✓ DBS" : ""}</div>
+                        {(() => {
+                          const clash = (candTimeOff.get(c.candidate_id) ?? []).find(
+                            (t) => t.start_date <= shift.shift_date && t.end_date >= shift.shift_date
+                          );
+                          return clash ? (
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <span className="text-[9px] text-red-500 font-medium">⚠ Time off: {clash.title}</span>
+                            </div>
+                          ) : null;
+                        })()}
                       </div>
                       <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
                         {c.source === "app"
@@ -655,6 +779,9 @@ function Page() {
   const [drawerCandidateId, setDrawerCandidateId] = useState<string | null>(null);
   const [editNotes, setEditNotes] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
+  // Availability: submittedThisWeek set + time-off map (candidate_id -> array of time-off periods)
+  const [availSubmitted, setAvailSubmitted] = useState<Set<string>>(new Set());
+  const [candTimeOff, setCandTimeOff] = useState<Map<string, { title: string; start_date: string; end_date: string }[]>>(new Map());
 
   const loadAll = async () => {
     const [bRes, sRes, slRes] = await Promise.all([
@@ -708,6 +835,46 @@ function Page() {
 
     setLoading(false);
   };
+
+  // Fetch availability data for pool candidates whenever pool changes
+  const poolIdsRef = { current: "" as string };
+  useEffect(() => {
+    const poolCandidateIds = (() => {
+      // Re-derive from shortlist+candMeta since pool isn't ready yet
+      const ids = Array.from(new Set(shortlist.map((e) => e.candidate_id)));
+      return ids;
+    })();
+    if (poolCandidateIds.length === 0) return;
+    const key = poolCandidateIds.sort().join(",");
+    if (key === poolIdsRef.current) return;
+    poolIdsRef.current = key;
+
+    const today = new Date();
+    const dow = today.getDay();
+    const diff = dow === 0 ? -6 : 1 - dow;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + diff);
+    const weekStart = monday.toISOString().slice(0, 10);
+
+    Promise.all([
+      (supabase as any).from("candidate_availability_submissions")
+        .select("candidate_id")
+        .in("candidate_id", poolCandidateIds)
+        .eq("week_starting", weekStart),
+      (supabase as any).from("candidate_time_off")
+        .select("candidate_id,title,start_date,end_date")
+        .in("candidate_id", poolCandidateIds),
+    ]).then(([subRes, toRes]) => {
+      setAvailSubmitted(new Set((subRes.data ?? []).map((r: any) => r.candidate_id)));
+      const m = new Map<string, { title: string; start_date: string; end_date: string }[]>();
+      (toRes.data ?? []).forEach((r: any) => {
+        const arr = m.get(r.candidate_id) ?? [];
+        arr.push({ title: r.title, start_date: r.start_date, end_date: r.end_date });
+        m.set(r.candidate_id, arr);
+      });
+      setCandTimeOff(m);
+    });
+  }, [shortlist]);
 
   useEffect(() => { loadAll(); }, [id]);
 
@@ -865,7 +1032,7 @@ function Page() {
               </div>
             ) : (
               appPool.map((c) => (
-                <AppCandidateCard key={c.candidate_id} candidate={c} shifts={shifts} onCandidateClick={setDrawerCandidateId} />
+                <AppCandidateCard key={c.candidate_id} candidate={c} shifts={shifts} onCandidateClick={setDrawerCandidateId} availSubmitted={availSubmitted} candTimeOff={candTimeOff} />
               ))
             )}
           </div>
@@ -884,7 +1051,7 @@ function Page() {
               </div>
             ) : (
               manualPool.map((c) => (
-                <ManualCandidateCard key={c.candidate_id} candidate={c} shifts={shifts} onCandidateClick={setDrawerCandidateId} />
+                <ManualCandidateCard key={c.candidate_id} candidate={c} shifts={shifts} onCandidateClick={setDrawerCandidateId} availSubmitted={availSubmitted} candTimeOff={candTimeOff} />
               ))
             )}
           </div>
@@ -951,7 +1118,7 @@ function Page() {
                             </button>
                           </div>
                         ) : (
-                          <InlineAssign shift={s} pool={pool} onAssign={assignCandidate} />
+                          <InlineAssign shift={s} pool={pool} onAssign={assignCandidate} candTimeOff={candTimeOff} />
                         )}
                       </td>
                       <td className="py-3 px-3 text-xs text-muted-foreground whitespace-nowrap">

@@ -104,6 +104,9 @@ function Page() {
 
   const [rows, setRows] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
+  // availability: submittedThisWeek = Set of candidate_ids; timeOffToday = Map<id, title>
+  const [submittedIds, setSubmittedIds]   = useState<Set<string>>(new Set());
+  const [timeOffToday, setTimeOffToday]   = useState<Map<string, string>>(new Map());
   const [q, setQ] = useState("");
   const [starredOnly, setStarredOnly] = useState(false);
   const [type, setType] = useState<string>(ALL);
@@ -129,8 +132,40 @@ function Page() {
       if (error) {
         toast.error("Failed to load candidates");
       }
-      setRows((data as Candidate[]) || []);
+      const candidates = (data as Candidate[]) || [];
+      setRows(candidates);
       setLoading(false);
+
+      // Batch-fetch availability status for temp candidates
+      const tempIds = candidates
+        .filter((c) => {
+          const t = (c.candidate_type || "").toLowerCase();
+          return t.includes("temp") || t.includes("both");
+        })
+        .map((c) => c.id);
+      if (tempIds.length > 0) {
+        const today = new Date();
+        const dow = today.getDay();
+        const diff = dow === 0 ? -6 : 1 - dow;
+        const monday = new Date(today);
+        monday.setDate(today.getDate() + diff);
+        const weekStart = monday.toISOString().slice(0, 10);
+        const todayStr = today.toISOString().slice(0, 10);
+
+        const [subRes, toRes] = await Promise.all([
+          (supabase as any).from("candidate_availability_submissions")
+            .select("candidate_id")
+            .in("candidate_id", tempIds)
+            .eq("week_starting", weekStart),
+          (supabase as any).from("candidate_time_off")
+            .select("candidate_id,title")
+            .in("candidate_id", tempIds)
+            .lte("start_date", todayStr)
+            .gte("end_date", todayStr),
+        ]);
+        setSubmittedIds(new Set((subRes.data ?? []).map((r: any) => r.candidate_id)));
+        setTimeOffToday(new Map((toRes.data ?? []).map((r: any) => [r.candidate_id, r.title])));
+      }
     })();
   }, [userId, scope]);
 
@@ -321,18 +356,19 @@ function Page() {
                 <th className="text-left font-semibold py-3 px-3">Compliant</th>
                 <th className="text-left font-semibold py-3 px-3">Current Position</th>
                 <th className="text-right font-semibold py-3 px-4">Last Activity</th>
+                <th className="text-center font-semibold py-3 px-3">Avail</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="py-16 text-center text-muted-foreground">
+                  <td colSpan={10} className="py-16 text-center text-muted-foreground">
                     Loading candidates…
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-16 text-center text-muted-foreground">
+                  <td colSpan={10} className="py-16 text-center text-muted-foreground">
                     {rows.length === 0 ? "No candidates yet." : "No candidates match your filters."}
                   </td>
                 </tr>
@@ -437,6 +473,21 @@ function Page() {
                       </td>
                       <td className="py-3 px-4 text-right text-xs text-muted-foreground whitespace-nowrap">
                         {relTime(r.updated_at || r.created_at)}
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        {(() => {
+                          const t = (r.candidate_type || "").toLowerCase();
+                          const isTemp = t.includes("temp") || t.includes("both");
+                          if (!isTemp) return <span className="text-muted-foreground/30">—</span>;
+                          const timeOff = timeOffToday.get(r.id);
+                          if (timeOff) return (
+                            <span title={`Time off: ${timeOff}`} className="inline-flex items-center gap-1 cursor-default">
+                              <span className="h-2.5 w-2.5 rounded-full bg-red-500 inline-block flex-shrink-0" />
+                            </span>
+                          );
+                          if (submittedIds.has(r.id)) return <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 inline-block" title="Availability submitted this week" />;
+                          return <span className="h-2.5 w-2.5 rounded-full bg-amber-400 inline-block" title="No availability submitted this week" />;
+                        })()}
                       </td>
                     </tr>
                   );
