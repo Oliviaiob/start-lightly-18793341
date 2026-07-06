@@ -209,6 +209,7 @@ function Page() {
   const { id } = Route.useParams();
   const [c, setC] = useState<Candidate | null>(null);
   const [cvOpen, setCvOpen] = useState(false);
+  const [wpOpen, setWpOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [me, setMe] = useState<string | null>(null);
   const [creatorName, setCreatorName] = useState<string>("");
@@ -511,12 +512,20 @@ function Page() {
               Send Email
             </HeaderBtn>
             <HeaderBtn icon={Plus}>Add to Shortlist</HeaderBtn>
-            <button onClick={() => setCvOpen(true)} className="h-9 px-3.5 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5" />
-              {isPerm ? "Generate SOAR CV" : "Generate Worker Profile"}
-            </button>
-            {cvOpen && c && (
+            {isPerm ? (
+              <button onClick={() => setCvOpen(true)} className="h-9 px-3.5 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5" /> Generate SOAR CV
+              </button>
+            ) : (
+              <button onClick={() => setWpOpen(true)} className="h-9 px-3.5 rounded-full bg-[#1B2B4B] text-white text-sm font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5" /> Generate Worker Profile
+              </button>
+            )}
+            {cvOpen && c && isPerm && (
               <GenerateCVModal open={cvOpen} onClose={() => setCvOpen(false)} candidate={c} />
+            )}
+            {wpOpen && c && isTemp && (
+              <GenerateWorkerProfileModal open={wpOpen} onClose={() => setWpOpen(false)} candidate={c} />
             )}
           </div>
         </div>
@@ -1247,6 +1256,302 @@ type TimeOffRow = {
 };
 
 type CvEmployment = { role: string; company: string; dateTo: string; description: string };
+
+// ── GenerateWorkerProfileModal ───────────────────────────────────────────────
+type ComplianceItem = {
+  key: string;
+  label: string;
+  fields: { key: string; label: string; type: "text" | "date" }[];
+};
+
+const WP_COMPLIANCE_ITEMS: ComplianceItem[] = [
+  {
+    key: "dbs",
+    label: "DBS",
+    fields: [
+      { key: "dbsNumber",    label: "DBS number",  type: "text" },
+      { key: "dbsIssueDate", label: "Issue date",  type: "date" },
+    ],
+  },
+  {
+    key: "pfa",
+    label: "Paediatric First Aid",
+    fields: [
+      { key: "pfaStatus", label: "Status",      type: "text" },
+      { key: "pfaExpiry", label: "Expiry date", type: "date" },
+    ],
+  },
+  {
+    key: "safeguarding",
+    label: "Safeguarding",
+    fields: [
+      { key: "sgLevel",  label: "Level",       type: "text" },
+      { key: "sgExpiry", label: "Expiry date", type: "date" },
+    ],
+  },
+  {
+    key: "firstAid",
+    label: "First Aid",
+    fields: [
+      { key: "faExpiry", label: "Expiry date", type: "date" },
+    ],
+  },
+];
+
+function GenerateWorkerProfileModal({
+  open, onClose, candidate,
+}: {
+  open: boolean;
+  onClose: () => void;
+  candidate: {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    phone: string | null;
+    town: string | null;
+    qualification_level: string | null;
+    qualifications_text: string | null;
+    current_position: string | null;
+    current_employer: string | null;
+  };
+}) {
+  const name = `${candidate.first_name ?? ""} ${candidate.last_name ?? ""}`.trim();
+
+  const [enabled, setEnabled] = useState<Record<string, boolean>>({});
+  const [fieldVals, setFieldVals] = useState<Record<string, string>>({});
+  const [experience, setExperience] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [saving,     setSaving]     = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setEnabled({});
+    setFieldVals({});
+    setExperience("");
+    runGenerate();
+  }, [open]);
+
+  const runGenerate = async () => {
+    setGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-cv-summary", {
+        body: {
+          first_name:          candidate.first_name,
+          last_name:           candidate.last_name,
+          qualification_level: candidate.qualification_level,
+          current_position:    candidate.current_position,
+          current_employer:    candidate.current_employer,
+          qualifications_text: candidate.qualifications_text,
+        },
+      });
+      if (error) throw error;
+      const d = typeof data === "string" ? JSON.parse(data) : data;
+      setExperience(d.profile_summary ?? "");
+    } catch {
+      setExperience("Click Regenerate to generate an AI experience summary.");
+    }
+    setGenerating(false);
+  };
+
+  const setFV = (k: string, v: string) => setFieldVals((p) => ({ ...p, [k]: v }));
+
+  const saveToDocuments = async () => {
+    setSaving(true);
+    try {
+      await (supabase as any).from("candidate_documents").insert({
+        candidate_id: candidate.id,
+        document_type: "worker_profile",
+        file_name: `Worker_Profile_${name.replace(/\s+/g, "_")}.pdf`,
+        status: "pending",
+      });
+      toast.success("Worker profile saved to documents");
+    } catch (e: any) {
+      toast.error("Save failed: " + e.message);
+    }
+    setSaving(false);
+  };
+
+  const downloadPDF = () => {
+    const enabledItems = WP_COMPLIANCE_ITEMS.filter((item) => enabled[item.key]);
+    let complianceHtml = "";
+    if (enabledItems.length === 0) {
+      complianceHtml = `<p style="color:#6b7280;font-style:italic;font-size:13px;margin:0">Compliance details available on request.</p>`;
+    } else {
+      complianceHtml = enabledItems.map((item) => {
+        const fieldRows = item.fields.map((f) => {
+          const val = fieldVals[f.key] || "—";
+          return `<tr><td style="color:#6b7280;font-size:12px;padding:3px 16px 3px 0;white-space:nowrap">${f.label}</td><td style="font-size:12px;font-weight:600;color:#1B2B4B">${val}</td></tr>`;
+        }).join("");
+        return `<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#1B2B4B;margin-bottom:4px">${item.label}</div><table style="border-collapse:collapse">${fieldRows}</table></div>`;
+      }).join("");
+    }
+
+    const expHtml = (experience || "").split("\n").map((l) => `<p style="margin:0 0 8px 0">${l || "&nbsp;"}</p>`).join("");
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Worker Profile — ${name}</title>
+<style>
+  @page{size:A4;margin:0}*{box-sizing:border-box}body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif}
+  .hdr{background:#1B2B4B;padding:36px 50px 28px}
+  .logo{display:flex;align-items:center;gap:6px;margin-bottom:18px}
+  .logo-t{color:#fff;font-size:26px;font-weight:700}
+  .logo-s{color:#2DD4BF;font-size:20px}
+  .doc-title{color:#fff;font-size:17px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+  .body{padding:36px 50px}
+  .info-row{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:24px;margin-bottom:24px;border-bottom:1px solid #e5e7eb}
+  .cname{font-size:26px;font-weight:700;color:#1B2B4B;margin:0 0 4px 0}
+  .cloc{color:#6b7280;font-size:13px;margin:0 0 14px 0}
+  .dtbl{border-collapse:collapse}
+  .dtbl td{padding:3px 0;font-size:13px}
+  .dlbl{color:#6b7280;padding-right:20px;white-space:nowrap}
+  .dval{font-weight:700;color:#1B2B4B}
+  .photo{width:110px;height:130px;border:1.5px solid #d1d5db;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .ptxt{color:#9ca3af;font-style:italic;font-size:12px;text-align:center}
+  .sec{margin-bottom:28px;padding-bottom:28px;border-bottom:1px solid #e5e7eb}
+  .sec:last-of-type{border-bottom:none}
+  .sec-h{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#1B2B4B;border-bottom:2px solid #1B2B4B;padding-bottom:3px;display:inline-block;margin-bottom:12px}
+  .exp-p{font-size:13px;color:#374151;line-height:1.65;margin:0}
+  .ftr{position:fixed;bottom:28px;left:50px;right:50px;font-size:11px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:8px}
+</style></head><body>
+<div class="hdr">
+  <div class="logo"><span class="logo-t">Soar</span><span class="logo-s">✱</span></div>
+  <div class="doc-title">Worker Profile — Temporary Staff</div>
+</div>
+<div class="body">
+  <div class="info-row">
+    <div>
+      <p class="cname">${name}</p>
+      <p class="cloc">${candidate.town ?? ""}</p>
+      <table class="dtbl">
+        ${candidate.phone ? `<tr><td class="dlbl">Contact number</td><td class="dval">${candidate.phone}</td></tr>` : ""}
+        ${candidate.qualification_level ? `<tr><td class="dlbl">Qualification</td><td class="dval">${candidate.qualification_level}</td></tr>` : ""}
+      </table>
+    </div>
+    <div class="photo"><span class="ptxt">Photo<br>pending</span></div>
+  </div>
+  <div class="sec"><span class="sec-h">Compliance</span><br>${complianceHtml}</div>
+  <div class="sec"><span class="sec-h">Experience</span><div class="exp-p">${expHtml}</div></div>
+</div>
+<div class="ftr">
+  <div>For any issues please call the Temp Team on 020 3100 1770, option 2</div>
+  <div>Presented by SOAR Staffing Group</div>
+</div>
+</body></html>`;
+
+    const win = window.open("", "_blank");
+    if (win) { win.document.write(html); win.document.close(); setTimeout(() => win.print(), 600); }
+    saveToDocuments();
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-background rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
+          <h2 className="font-semibold text-base">Worker Profile Preview</h2>
+          <div className="flex items-center gap-2">
+            <button onClick={runGenerate} disabled={generating}
+              className="h-9 px-4 rounded-full border border-gray-300 bg-white text-gray-700 text-xs font-medium inline-flex items-center gap-1.5 hover:bg-gray-50 disabled:opacity-50 shadow-sm">
+              <Sparkles className="h-3.5 w-3.5" />
+              {generating ? "Generating…" : "Regenerate"}
+            </button>
+            <button onClick={saveToDocuments} disabled={saving || generating}
+              className="h-9 px-4 rounded-full border border-gray-300 bg-white text-gray-700 text-xs font-medium inline-flex items-center gap-1.5 hover:bg-gray-50 disabled:opacity-50 shadow-sm">
+              <Save className="h-3.5 w-3.5" />
+              {saving ? "Saving…" : "Save to Documents"}
+            </button>
+            <button onClick={downloadPDF} disabled={generating}
+              className="h-9 px-4 rounded-full bg-[#1B2B4B] text-white text-xs font-medium inline-flex items-center gap-1.5 hover:opacity-90 disabled:opacity-50 shadow-sm">
+              <FileText className="h-3.5 w-3.5" /> Download PDF
+            </button>
+            <button onClick={onClose}
+              className="h-9 px-4 rounded-full border border-gray-300 bg-white text-gray-700 text-xs font-medium hover:bg-gray-50 shadow-sm">
+              Close
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="overflow-y-auto flex-1 p-6 space-y-6">
+          {/* Document preview strip */}
+          <div className="rounded-xl overflow-hidden border">
+            <div className="bg-[#1B2B4B] px-6 py-5">
+              <div className="flex items-center gap-1.5 mb-3">
+                <span className="text-white font-bold text-xl">Soar</span>
+                <span className="text-teal-400 text-lg">✱</span>
+              </div>
+              <div className="text-white font-bold text-sm tracking-wider uppercase">Worker Profile — Temporary Staff</div>
+            </div>
+            <div className="bg-white px-6 py-4 flex justify-between items-start border-b">
+              <div>
+                <div className="text-lg font-bold" style={{color:"#1B2B4B"}}>{name}</div>
+                <div className="text-sm" style={{color:"#6b7280"}}>{candidate.town}</div>
+                {candidate.phone && (
+                  <div className="text-xs mt-1" style={{color:"#6b7280"}}>Contact: <span style={{fontWeight:600,color:"#1B2B4B"}}>{candidate.phone}</span></div>
+                )}
+                {candidate.qualification_level && (
+                  <div className="text-xs" style={{color:"#6b7280"}}>Qualification: <span style={{fontWeight:600,color:"#1B2B4B"}}>{candidate.qualification_level}</span></div>
+                )}
+              </div>
+              <div className="h-[72px] w-[60px] border border-gray-200 flex items-center justify-center flex-shrink-0">
+                <span className="text-[10px] text-gray-400 italic text-center">Photo<br/>pending</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Compliance */}
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-bold text-xs uppercase tracking-widest border-b-2 border-[#1B2B4B] pb-0.5" style={{color:"#1B2B4B"}}>Compliance</span>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">Only items toggled on will appear in the final PDF.</p>
+            <div className="space-y-2">
+              {WP_COMPLIANCE_ITEMS.map((item) => (
+                <div key={item.key} className="rounded-xl border overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 bg-muted/30">
+                    <span className="text-sm font-medium" style={{color:"#1a1a1a"}}>{item.label}</span>
+                    <Switch checked={!!enabled[item.key]} onCheckedChange={(v) => setEnabled((p) => ({ ...p, [item.key]: v }))} />
+                  </div>
+                  {enabled[item.key] && (
+                    <div className="px-4 py-3 grid grid-cols-2 gap-3 border-t">
+                      {item.fields.map((f) => (
+                        <div key={f.key}>
+                          <label className="text-xs text-muted-foreground block mb-1">{f.label}</label>
+                          <Input type={f.type} value={fieldVals[f.key] ?? ""} onChange={(e) => setFV(f.key, e.target.value)}
+                            className="h-9 text-sm" style={{color:"#1a1a1a",background:"#fff"}} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Experience */}
+          <div>
+            <span className="font-bold text-xs uppercase tracking-widest border-b-2 border-[#1B2B4B] pb-0.5 inline-block mb-3" style={{color:"#1B2B4B"}}>Experience</span>
+            {generating ? (
+              <div className="h-28 rounded-xl bg-muted/40 flex items-center justify-center text-sm text-muted-foreground animate-pulse">
+                Generating experience summary…
+              </div>
+            ) : (
+              <Textarea value={experience} onChange={(e) => setExperience(e.target.value)}
+                rows={5} className="text-sm resize-none" style={{color:"#1a1a1a",background:"#fff"}} />
+            )}
+          </div>
+
+          {/* Footer preview */}
+          <div className="border-t pt-3 text-xs text-muted-foreground">
+            <div>For any issues please call the Temp Team on 020 3100 1770, option 2</div>
+            <div>Presented by SOAR Staffing Group</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function GenerateCVModal({ open, onClose, candidate }: {
   open: boolean; onClose: () => void; candidate: {
