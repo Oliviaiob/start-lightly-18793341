@@ -464,6 +464,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBookingsIdRouteImport
       parentRoute: typeof AuthenticatedBookingsRoute
     }
+    '/_authenticated/compliance/': {
+      id: '/_authenticated/compliance/'
+      path: '/'
+      fullPath: '/compliance/'
+      preLoaderRoute: typeof AuthenticatedComplianceIndexRouteImport
+      parentRoute: typeof AuthenticatedComplianceRoute
+    }
+    '/_authenticated/compliance/$id': {
+      id: '/_authenticated/compliance/$id'
+      path: '/$id'
+      fullPath: '/compliance/$id'
+      preLoaderRoute: typeof AuthenticatedComplianceIdRouteImport
+      parentRoute: typeof AuthenticatedComplianceRoute
+    }
   }
 }
 

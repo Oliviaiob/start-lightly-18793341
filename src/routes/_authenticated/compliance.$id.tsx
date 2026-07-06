@@ -291,7 +291,7 @@ function Page() {
     setSavingItem(key);
     try {
       const cl = await getOrCreateChecklist();
-      await supabase.from("compliance_checklists").update({ [key]: value }).eq("id", cl.id!);
+      await supabase.from("compliance_checklists").update({ [key]: value } as any).eq("id", cl.id!);
       setChecklist((prev) => prev ? { ...prev, [key]: value } : null);
     } catch (e: any) { toast.error("Save failed: " + e.message); }
     setSavingItem(null);
@@ -301,7 +301,7 @@ function Page() {
     try {
       const cl = await getOrCreateChecklist();
       const merged = { ...(checklist?.item_notes ?? {}), [key]: notes[key] ?? "" };
-      await supabase.from("compliance_checklists").update({ item_notes: merged }).eq("id", cl.id!);
+      await supabase.from("compliance_checklists").update({ item_notes: merged as any }).eq("id", cl.id!);
       setChecklist((prev) => prev ? { ...prev, item_notes: merged } : null);
     } catch (e: any) { toast.error("Note save failed"); }
   };
@@ -338,8 +338,8 @@ function Page() {
     };
     try {
       const cl = await getOrCreateChecklist();
-      const merged = { ...(checklist?.ai_results ?? {}), [key]: fakeResult };
-      await supabase.from("compliance_checklists").update({ ai_results: merged }).eq("id", cl.id!);
+      const merged: Record<string, unknown> = { ...(checklist?.ai_results ?? {}), [key]: fakeResult };
+      await supabase.from("compliance_checklists").update({ ai_results: merged as any }).eq("id", cl.id!);
       setChecklist((prev) => prev ? { ...prev, ai_results: merged } : null);
       toast.success("AI check initiated");
     } catch (e: any) { toast.error("Failed"); }
