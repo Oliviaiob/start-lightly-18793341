@@ -556,12 +556,12 @@ function AddPermCandidateModal({ open, onClose, onCreated }: {
   const [form, setForm] = useState({
     first_name: "", last_name: "", email: "", phone: "",
     town: "", postcode: "", current_position: "", current_employer: "",
-    qualification_level: "__none__", qualifications_text: "",
+    qualification_level: "__none__", qualifications_text: "", expected_salary: "",
   });
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
 
   useEffect(() => {
-    if (!open) { setStep("choose"); setExtractError(null); setForm({ first_name:"",last_name:"",email:"",phone:"",town:"",postcode:"",current_position:"",current_employer:"",qualification_level:"__none__",qualifications_text:"" }); }
+    if (!open) { setStep("choose"); setExtractError(null); setForm({ first_name:"",last_name:"",email:"",phone:"",town:"",postcode:"",current_position:"",current_employer:"",qualification_level:"__none__",qualifications_text:"",expected_salary:"" }); }
   }, [open]);
 
   const handleFile = async (file: File) => {
@@ -603,6 +603,7 @@ function AddPermCandidateModal({ open, onClose, onCreated }: {
       current_employer: form.current_employer || null,
       qualification_level: form.qualification_level === "__none__" ? null : form.qualification_level,
       qualifications_text: form.qualifications_text || null,
+      expected_salary: form.expected_salary ? Number(form.expected_salary) : null,
       candidate_type: "perm", status_perm: "not_contacted",
     }).select("id").single();
     setSaving(false);
@@ -690,6 +691,12 @@ function AddPermCandidateModal({ open, onClose, onCreated }: {
                 <button onClick={() => setStep("choose")} className="h-10 px-4 rounded-full border text-sm font-medium hover:bg-muted">← Back</button>
                 <div className="flex gap-2">
                   <button onClick={onClose} className="h-10 px-4 rounded-full border text-sm font-medium hover:bg-muted">Cancel</button>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Expected salary (£)</label>
+                  <input type="number" value={(form as any).expected_salary} onChange={e => set("expected_salary", e.target.value)}
+                    placeholder="e.g. 28000"
+                    className="w-full h-9 px-3 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-teal/40" />
+                </div>
                   <button onClick={save} disabled={saving} className="h-10 px-5 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50">{saving ? "Creating…" : "Create candidate"}</button>
                 </div>
               </div>
