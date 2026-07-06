@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   ArrowLeft, Plus, ChevronDown, ChevronUp, CheckCircle, XCircle,
-  Clock, Smartphone, UserPlus, Banknote,
+  Clock, Smartphone, UserPlus, Banknote, X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -63,6 +63,16 @@ type ShortlistEntry = {
 };
 
 type CandidateOption = { id: string; first_name: string | null; last_name: string | null; qualification_level: string | null; phone: string | null; has_dbs: boolean | null };
+
+type CandidateFull = {
+  id: string; first_name: string | null; last_name: string | null;
+  email: string | null; phone: string | null;
+  qualification_level: string | null; candidate_type: string | null;
+  status_perm: string | null; status_temp: string | null;
+  postcode: string | null; city: string | null;
+  source: string | null; has_dbs: boolean | null;
+  available_days: string[] | null;
+};
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -118,6 +128,110 @@ function shiftStatusBadge(s: Shift) {
   if (status === "confirmed") return <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-semibold bg-green-100 text-green-700"><CheckCircle className="h-3 w-3" />Confirmed</span>;
   if (status === "cancelled") return <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-semibold bg-muted text-muted-foreground"><XCircle className="h-3 w-3" />Cancelled</span>;
   return <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700"><Clock className="h-3 w-3" />Unfilled</span>;
+}
+
+
+// ── Row helper ────────────────────────────────────────────────────────────────
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium text-right max-w-[220px] truncate">{value}</span>
+    </div>
+  );
+}
+
+// ── Candidate Drawer ──────────────────────────────────────────────────────────
+
+function CandidateDrawer({ candidateId, onClose }: { candidateId: string | null; onClose: () => void }) {
+  const [candidate, setCandidate] = useState<CandidateFull | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!candidateId) { setCandidate(null); return; }
+    setLoading(true);
+    supabase.from("candidates")
+      .select("id,first_name,last_name,email,phone,qualification_level,candidate_type,status_perm,status_temp,postcode,city,source,has_dbs,available_days")
+      .eq("id", candidateId).maybeSingle()
+      .then(({ data }) => { setCandidate(data as CandidateFull ?? null); setLoading(false); });
+  }, [candidateId]);
+
+  if (!candidateId) return null;
+
+  const name = candidate ? `${candidate.first_name ?? ""} ${candidate.last_name ?? ""}`.trim() : "";
+  const initials = candidate
+    ? `${candidate.first_name?.[0] ?? ""}${candidate.last_name?.[0] ?? ""}`.toUpperCase()
+    : "…";
+
+  const typeLabel = (t: string | null) => {
+    if (t === "perm") return "Permanent";
+    if (t === "temp") return "Temp";
+    if (t === "both") return "Perm & Temp";
+    return t ?? "—";
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/20" onClick={onClose} />
+      <div className="fixed inset-y-0 right-0 z-50 w-[400px] bg-card shadow-2xl overflow-y-auto flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b bg-navy">
+          <span className="text-white font-semibold text-sm">Candidate Profile</span>
+          <button onClick={onClose} className="h-7 w-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+            <X className="h-4 w-4 text-white" />
+          </button>
+        </div>
+        {loading && <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">Loading…</div>}
+        {!loading && candidate && (
+          <div className="flex-1 p-6 space-y-5">
+            <div className="flex items-center gap-4">
+              <div className="h-14 w-14 rounded-full bg-navy flex items-center justify-center flex-shrink-0">
+                <span className="text-lg font-bold text-white">{initials}</span>
+              </div>
+              <div>
+                <div className="text-lg font-bold">{name}</div>
+                <div className="text-sm text-muted-foreground">{qualLabel(candidate.qualification_level)}</div>
+              </div>
+            </div>
+            <div className="rounded-xl bg-muted/30 p-4 space-y-2">
+              <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-1">Contact</div>
+              <Row label="Email" value={candidate.email ?? "—"} />
+              <Row label="Phone" value={candidate.phone ?? "—"} />
+            </div>
+            <div className="rounded-xl bg-muted/30 p-4 space-y-2">
+              <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-1">Location</div>
+              <Row label="City" value={candidate.city ?? "—"} />
+              <Row label="Postcode" value={candidate.postcode ?? "—"} />
+            </div>
+            <div className="rounded-xl bg-muted/30 p-4 space-y-2">
+              <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-1">Status</div>
+              <Row label="Type" value={typeLabel(candidate.candidate_type)} />
+              {(candidate.candidate_type === "temp" || candidate.candidate_type === "both") && (
+                <Row label="Temp status" value={candidate.status_temp ?? "—"} />
+              )}
+              <Row label="DBS" value={candidate.has_dbs ? "✓ Valid DBS" : "No DBS"} />
+            </div>
+            {candidate.available_days && candidate.available_days.length > 0 && (
+              <div className="rounded-xl bg-muted/30 p-4">
+                <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-2">Availability</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {candidate.available_days.map((d) => (
+                    <span key={d} className="text-xs px-2 py-0.5 rounded-full bg-navy/10 text-navy font-medium capitalize">{d}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {candidate.source && (
+              <div className="rounded-xl bg-muted/30 p-4 space-y-2">
+                <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-1">Source</div>
+                <Row label="Referred via" value={candidate.source} />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  );
 }
 
 // ── Add Shift Date Modal ──────────────────────────────────────────────────────
@@ -323,13 +437,14 @@ function AddCandidateModal({ shiftId, bookingId, open, onClose, onAdded }: {
 
 // ── Shift Row (expandable) ────────────────────────────────────────────────────
 
-function ShiftRow({ shift, shortlist, onConfirm, onDecline, onAddCandidate, onCancelShift }: {
+function ShiftRow({ shift, shortlist, onConfirm, onDecline, onAddCandidate, onCancelShift, onCandidateClick }: {
   shift: Shift;
   shortlist: ShortlistEntry[];
   onConfirm: (shiftId: string, shortlistId: string, candidateId: string) => void;
   onDecline: (shortlistId: string) => void;
   onAddCandidate: (shiftId: string) => void;
   onCancelShift: (shiftId: string) => void;
+  onCandidateClick: (candidateId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const hours = shift.total_hours ?? calcHours(shift.start_time, shift.end_time);
@@ -418,7 +533,7 @@ function ShiftRow({ shift, shortlist, onConfirm, onDecline, onAddCandidate, onCa
                           </span>
                         </div>
                         <div>
-                          <div className="text-sm font-medium">{e.name}</div>
+                          <button onClick={() => onCandidateClick(e.candidate_id)} className="text-sm font-medium hover:text-teal transition-colors text-left">{e.name}</button>
                           <div className="text-xs text-muted-foreground flex items-center gap-2">
                             {qualLabel(e.qual)}
                             {e.phone && <span>· {e.phone}</span>}
@@ -495,12 +610,13 @@ function Page() {
   const [addCandidateShiftId, setAddCandidateShiftId] = useState<string | null>(null);
   const [editNotes, setEditNotes] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
+  const [drawerCandidateId, setDrawerCandidateId] = useState<string | null>(null);
 
   const loadAll = async () => {
     const [bRes, sRes, slRes] = await Promise.all([
       supabase.from("bookings").select(`id,client_id,branch_id,qualification_required,notes,status,clients(company_name),client_branches(branch_name),profiles!created_by(first_name,last_name)`).eq("id", id).maybeSingle(),
       supabase.from("temp_shifts").select(`id,shift_date,shift_type,start_time,end_time,qualification_required,status,shift_status,candidate_id,rate_per_hour,charge_rate,total_hours,notes,candidates(first_name,last_name,phone)`).eq("booking_id", id).order("shift_date"),
-      supabase.from("shift_shortlist").select(`id,shift_id,candidate_id,status,booking_id,candidates(first_name,last_name,phone,qualification_level,has_dbs)`).eq("booking_id", id),
+      supabase.from("shift_shortlist").select(`id,shift_id,candidate_id,status,source,booking_id,candidates(first_name,last_name,phone,qualification_level,has_dbs)`).eq("booking_id", id),
     ]);
 
     if (bRes.error) { toast.error("Failed to load booking"); setLoading(false); return; }
@@ -530,7 +646,7 @@ function Page() {
 
     setShortlist(((slRes.data ?? []) as any[]).map((e) => ({
       id: e.id, shift_id: e.shift_id, candidate_id: e.candidate_id, status: e.status,
-      source: "manual", // future: e.source ?? "manual"
+      source: (e as any).source ?? "manual",
       name: e.candidates ? `${e.candidates.first_name ?? ""} ${e.candidates.last_name ?? ""}`.trim() : "Unknown",
       phone: e.candidates?.phone ?? null,
       qual: e.candidates?.qualification_level ?? null,
@@ -681,6 +797,7 @@ function Page() {
                     onDecline={declineCandidate}
                     onAddCandidate={(shiftId) => setAddCandidateShiftId(shiftId)}
                     onCancelShift={cancelShift}
+                    onCandidateClick={(cId) => setDrawerCandidateId(cId)}
                   />
                 ))}
               </tbody>
@@ -737,6 +854,8 @@ function Page() {
           onClose={() => setAddCandidateShiftId(null)}
           onAdded={() => { setAddCandidateShiftId(null); loadAll(); }} />
       )}
+
+      <CandidateDrawer candidateId={drawerCandidateId} onClose={() => setDrawerCandidateId(null)} />
     </div>
   );
 }
