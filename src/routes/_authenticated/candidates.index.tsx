@@ -17,6 +17,7 @@ import { useNavigate as useNav } from "@tanstack/react-router";
 import { AddTempCandidateModal } from "@/components/add-temp-candidate-modal";
 import { useEffectiveScope, useScope } from "@/contexts/scope-context";
 import { toast } from "sonner";
+import { fmtQual } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/candidates/")({
   component: Page,
@@ -437,7 +438,7 @@ function Page() {
                         </div>
                       </td>
                       <td className="py-3 px-3 text-xs">
-                        {r.qualification_level || <span className="text-muted-foreground">—</span>}
+                        {fmtQual(r.qualification_level)}
                       </td>
                       <td className="py-3 px-3">
                         <div className="text-xs">

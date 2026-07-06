@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { fmtQual } from "@/lib/utils";
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/page-header";
@@ -15,6 +16,15 @@ import {
   LayoutList, Calendar, ChevronLeft,
 } from "lucide-react";
 import { toast } from "sonner";
+
+const QUAL_OPTIONS = [
+  { value: "level_2", label: "Level 2" },
+  { value: "level_3", label: "Level 3" },
+  { value: "room_leader", label: "Room Leader" },
+  { value: "deputy_manager", label: "Deputy Manager" },
+  { value: "manager", label: "Manager" },
+  { value: "unqualified", label: "Unqualified" },
+];
 
 export const Route = createFileRoute("/_authenticated/bookings/")({
   component: Page,
@@ -40,19 +50,6 @@ type ClientOption = { id: string; name: string };
 type BranchOption = { id: string; branch_name: string };
 
 const ALL = "__all__";
-
-const QUAL_OPTIONS = [
-  { value: "unqualified", label: "Unqualified" },
-  { value: "level_2", label: "Level 2" },
-  { value: "level_3", label: "Level 3" },
-  { value: "room_leader", label: "Room Leader" },
-  { value: "deputy_manager", label: "Deputy Manager" },
-  { value: "manager", label: "Manager" },
-];
-
-function qualLabel(q: string | null) {
-  return QUAL_OPTIONS.find((o) => o.value === q)?.label ?? q ?? "—";
-}
 
 function fmtDate(iso: string | null) {
   if (!iso) return "—";
@@ -467,7 +464,7 @@ function Page() {
                   <span className="font-semibold text-sm">{b.client_name ?? "Unknown client"}</span>
                   {b.branch_name && <span className="text-xs text-muted-foreground">— {b.branch_name}</span>}
                   {b.qualification_required && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-navy/10 text-navy font-medium">{qualLabel(b.qualification_required)}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-navy/10 text-navy font-medium">{fmtQual(b.qualification_required)}</span>
                   )}
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-3">

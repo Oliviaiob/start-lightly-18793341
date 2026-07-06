@@ -86,7 +86,7 @@ const SHIFT_TYPES = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function qualLabel(q: string | null) {
+function fmtQual(q: string | null) {
   return QUAL_OPTIONS.find((o) => o.value === q)?.label ?? q ?? "—";
 }
 
@@ -235,7 +235,7 @@ function CandidateDrawer({ candidateId, onClose }: { candidateId: string | null;
               </div>
               <div>
                 <div className="text-lg font-bold">{name}</div>
-                <div className="text-sm text-muted-foreground">{qualLabel(candidate.qualification_level)}</div>
+                <div className="text-sm text-muted-foreground">{fmtQual(candidate.qualification_level)}</div>
               </div>
             </div>
             <div className="rounded-xl bg-muted/30 p-4 space-y-2">
@@ -398,7 +398,7 @@ function AppCandidateCard({ candidate, shifts, onCandidateClick, availSubmitted,
             {candidate.name}
           </button>
           <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-            {qualLabel(candidate.qual)}
+            {fmtQual(candidate.qual)}
             {candidate.has_dbs && <span className="text-green-600 font-medium">· ✓ DBS</span>}
           </div>
         </div>
@@ -456,7 +456,7 @@ function ManualCandidateCard({ candidate, shifts, onCandidateClick, availSubmitt
           {candidate.name}
         </button>
         <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-          {qualLabel(candidate.qual)}
+          {fmtQual(candidate.qual)}
           {candidate.phone && <span>· {candidate.phone}</span>}
           {candidate.has_dbs && <span className="text-green-600 font-medium">· ✓ DBS</span>}
         </div>
@@ -565,7 +565,7 @@ function InlineAssign({ shift, pool, onAssign, candTimeOff }: {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="text-xs font-medium truncate">{c.name}</div>
-                        <div className="text-[10px] text-muted-foreground">{qualLabel(c.qual)}{c.has_dbs ? " · ✓ DBS" : ""}</div>
+                        <div className="text-[10px] text-muted-foreground">{fmtQual(c.qual)}{c.has_dbs ? " · ✓ DBS" : ""}</div>
                         {(() => {
                           const clash = (candTimeOff.get(c.candidate_id) ?? []).find(
                             (t) => t.start_date <= shift.shift_date && t.end_date >= shift.shift_date
@@ -743,7 +743,7 @@ function AddCandidateModal({ bookingId, existingIds, open, onClose, onAdded }: {
                       </div>
                       <div>
                         <div className="font-medium">{c.first_name} {c.last_name}</div>
-                        <div className="text-[11px] text-muted-foreground">{qualLabel(c.qualification_level)}{c.has_dbs ? " · ✓ DBS" : ""}</div>
+                        <div className="text-[11px] text-muted-foreground">{fmtQual(c.qualification_level)}{c.has_dbs ? " · ✓ DBS" : ""}</div>
                       </div>
                     </button>
                   ))}
@@ -980,7 +980,7 @@ function Page() {
               <h1 className="text-xl font-bold">{booking.client_name ?? "Unknown client"}</h1>
               <div className="flex items-center gap-2 text-sm text-muted-foreground mt-0.5 flex-wrap">
                 {booking.branch_name && <span>{booking.branch_name}</span>}
-                {booking.qualification_required && <><span>·</span><span>{qualLabel(booking.qualification_required)}</span></>}
+                {booking.qualification_required && <><span>·</span><span>{fmtQual(booking.qualification_required)}</span></>}
                 {booking.created_by_name && <><span>·</span><span>Created by {booking.created_by_name}</span></>}
               </div>
             </div>

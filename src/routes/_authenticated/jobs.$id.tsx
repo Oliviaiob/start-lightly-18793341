@@ -132,7 +132,7 @@ const STAGE_COLORS: Record<string, string> = {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function qualLabel(q: string | null) {
+function fmtQual(q: string | null) {
   return QUAL_OPTIONS.find((o) => o.value === q)?.label ?? q ?? "—";
 }
 
@@ -374,7 +374,7 @@ function CandidateDrawer({ candidateId, onClose }: { candidateId: string | null;
               </div>
               <div>
                 <div className="text-lg font-bold">{name}</div>
-                <div className="text-sm text-muted-foreground">{qualLabel(candidate.qualification_level)}</div>
+                <div className="text-sm text-muted-foreground">{fmtQual(candidate.qualification_level)}</div>
               </div>
             </div>
 
@@ -489,7 +489,7 @@ function StageColumn({ stage, label, color, entries, onCandidateClick, onMoveSta
                 </div>
                 <div className="min-w-0">
                   <div className="text-xs font-medium truncate hover:text-teal transition-colors">{name}</div>
-                  <div className="text-[10px] text-muted-foreground">{qualLabel(c?.qualification_level ?? null)}</div>
+                  <div className="text-[10px] text-muted-foreground">{fmtQual(c?.qualification_level ?? null)}</div>
                   {(c?.postcode || c?.phone) && (
                     <div className="text-[10px] text-muted-foreground/70 mt-0.5">
                       {[c?.postcode, c?.phone].filter(Boolean).join(" · ")}
@@ -900,7 +900,7 @@ function Page() {
                           {r.name}
                         </button>
                       </td>
-                      <td className="py-3 px-3 text-xs text-muted-foreground">{qualLabel(r.qual)}</td>
+                      <td className="py-3 px-3 text-xs text-muted-foreground">{fmtQual(r.qual)}</td>
                       <td className="py-3 px-3 text-xs text-muted-foreground">
                         {[r.city, r.postcode].filter(Boolean).join(", ") || "—"}
                       </td>

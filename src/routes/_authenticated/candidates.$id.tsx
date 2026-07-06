@@ -44,6 +44,7 @@ import {
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
+import { fmtQual } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/candidates/$id")({
   component: Page,
@@ -619,7 +620,7 @@ function Page() {
           <ContactChip icon={MapPin} label="Location" value={c.town} />
           <ContactChip icon={Home} label="Postcode" value={c.postcode} />
           <ContactChip icon={Building2} label="Current Employer" value={c.current_employer} />
-          <ContactChip icon={GraduationCap} label="Qualification" value={c.qualification_level} />
+          <ContactChip icon={GraduationCap} label="Qualification" value={fmtQual(c.qualification_level)} />
         </div>
         <div className="mt-3 pt-3 border-t border-border/60 flex items-start gap-2 min-h-[28px]">
           <Sparkles className="h-3.5 w-3.5 text-teal mt-0.5 flex-shrink-0" />
@@ -1573,7 +1574,7 @@ function GenerateWorkerProfileModal({
       <p class="cloc">${candidate.town ?? ""}</p>
       <table class="dtbl">
         ${candidate.phone ? `<tr><td class="dlbl">Contact number</td><td class="dval">${candidate.phone}</td></tr>` : ""}
-        ${candidate.qualification_level ? `<tr><td class="dlbl">Qualification</td><td class="dval">${candidate.qualification_level}</td></tr>` : ""}
+        ${candidate.qualification_level ? `<tr><td class="dlbl">Qualification</td><td class="dval">${candidate.qualification_level.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase())}</td></tr>` : ""}
       </table>
     </div>
     <div class="photo"><span class="ptxt">Photo<br>pending</span></div>
@@ -1641,7 +1642,7 @@ function GenerateWorkerProfileModal({
                   <div className="text-xs mt-1" style={{color:"#6b7280"}}>Contact: <span style={{fontWeight:600,color:"#1B2B4B"}}>{candidate.phone}</span></div>
                 )}
                 {candidate.qualification_level && (
-                  <div className="text-xs" style={{color:"#6b7280"}}>Qualification: <span style={{fontWeight:600,color:"#1B2B4B"}}>{candidate.qualification_level}</span></div>
+                  <div className="text-xs" style={{color:"#6b7280"}}>Qualification: <span style={{fontWeight:600,color:"#1B2B4B"}}>{fmtQual(candidate.qualification_level)}</span></div>
                 )}
               </div>
               <div className="h-[72px] w-[60px] border border-gray-200 flex items-center justify-center flex-shrink-0">
