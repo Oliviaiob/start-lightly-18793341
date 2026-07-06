@@ -9,7 +9,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { pdf_base64 } = await req.json();
+    const { pdf_base64, text_content } = await req.json();
     const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
     if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY not set");
 
@@ -25,7 +25,7 @@ serve(async (req) => {
         max_tokens: 1024,
         messages: [{
           role: "user",
-          content: [
+          content: pdf_base64 ? [
             {
               type: "document",
               source: { type: "base64", media_type: "application/pdf", data: pdf_base64 },
@@ -46,7 +46,22 @@ serve(async (req) => {
 }
 Return only the JSON object, no other text.`,
             },
-          ],
+          ] : `Extract job details from this job specification text. Return ONLY valid JSON with these fields:
+{
+  "title": "job title",
+  "client_name": "company/employer name if mentioned",
+  "location_postcode": "postcode if mentioned",
+  "qualification_required": "one of: unqualified, level_2, level_3, room_leader, deputy_manager, manager — pick the closest match or empty string",
+  "salary_min": number or null,
+  "salary_max": number or null,
+  "hours": "hours description if mentioned",
+  "room": "room or setting e.g. Toddler Room, Baby Room",
+  "description": "full role description, responsibilities, requirements"
+}
+Return only the JSON object, no other text.
+
+Document text:
+${text_content}`,
         }],
       }),
     });

@@ -21,6 +21,7 @@ import {
 import { Briefcase, Search, Plus, X, Users, Link, Upload, Pencil, ChevronDown, Check, Sparkles } from "lucide-react";
 import { useEffectiveScope, useScope } from "@/contexts/scope-context";
 import { toast } from "sonner";
+import * as mammoth from "mammoth";
 
 export const Route = createFileRoute("/_authenticated/jobs/")({
   component: Page,
@@ -181,15 +182,24 @@ function AddJobModal({
   };
 
   const handleFileUpload = async (file: File) => {
-    if (!file.name.match(/\.(pdf)$/i)) { setUploadError("Please upload a PDF file."); return; }
+    const isPdf = file.name.match(/\.pdf$/i);
+    const isDoc = file.name.match(/\.docx?$/i);
+    if (!isPdf && !isDoc) { setUploadError("Please upload a PDF or Word document."); return; }
     setStep("uploading"); setUploadError(null);
     try {
-      const arrayBuf = await file.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuf);
-      let binary = "";
-      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-      const b64 = btoa(binary);
-      const { data, error } = await supabase.functions.invoke("extract-job-spec", { body: { pdf_base64: b64 } });
+      let body: Record<string, string>;
+      if (isPdf) {
+        const arrayBuf = await file.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuf);
+        let binary = "";
+        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+        body = { pdf_base64: btoa(binary) };
+      } else {
+        const arrayBuf = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer: arrayBuf });
+        body = { text_content: result.value };
+      }
+      const { data, error } = await supabase.functions.invoke("extract-job-spec", { body });
       if (error) throw new Error(error.message);
       const d = data?.data ?? {};
       setForm(prev => ({
@@ -261,11 +271,11 @@ function AddJobModal({
               </div>
             </button>
             <label className="w-full flex items-start gap-4 p-4 rounded-xl border-2 border-transparent hover:border-navy/20 hover:bg-muted/40 transition-all text-left cursor-pointer">
-              <input type="file" accept=".pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ""; }} />
+              <input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ""; }} />
               <Upload className="h-5 w-5 mt-0.5 text-muted-foreground flex-shrink-0" />
               <div>
                 <div className="font-medium text-sm">Upload Job Spec</div>
-                <div className="text-xs text-muted-foreground mt-0.5">Upload a PDF — we'll extract the details with AI.</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Upload a PDF or Word document — we'll extract the details with AI.</div>
               </div>
             </label>
             <button
