@@ -437,7 +437,7 @@ function AddCandidateModal({ shiftId, bookingId, open, onClose, onAdded }: {
 
 // ── Shift Row (expandable) ────────────────────────────────────────────────────
 
-function ShiftRow({ shift, shortlist, onConfirm, onDecline, onAddCandidate, onCancelShift, onCandidateClick }: {
+function ShiftRow({ shift, shortlist, onConfirm, onDecline, onAddCandidate, onCancelShift, onCandidateClick, onUnassign }: {
   shift: Shift;
   shortlist: ShortlistEntry[];
   onConfirm: (shiftId: string, shortlistId: string, candidateId: string) => void;
@@ -445,6 +445,7 @@ function ShiftRow({ shift, shortlist, onConfirm, onDecline, onAddCandidate, onCa
   onAddCandidate: (shiftId: string) => void;
   onCancelShift: (shiftId: string) => void;
   onCandidateClick: (candidateId: string) => void;
+  onUnassign: (shiftId: string, shortlistId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const hours = shift.total_hours ?? calcHours(shift.start_time, shift.end_time);
@@ -490,12 +491,10 @@ function ShiftRow({ shift, shortlist, onConfirm, onDecline, onAddCandidate, onCa
         {/* Actions */}
         <td className="py-3 px-4 text-right">
           <div className="flex items-center justify-end gap-1">
-            {!isConfirmed && (
-              <button onClick={() => onCancelShift(shift.id)}
-                className="text-[10px] text-muted-foreground hover:text-destructive px-2 py-1 rounded transition-colors">
-                Cancel
-              </button>
-            )}
+            <button onClick={() => onCancelShift(shift.id)}
+              className="text-[10px] text-muted-foreground hover:text-destructive px-2 py-1 rounded transition-colors">
+              Cancel date
+            </button>
             <button onClick={() => setExpanded((e) => !e)}
               className="h-7 w-7 rounded-full bg-muted/60 hover:bg-muted flex items-center justify-center transition-colors">
               {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
@@ -554,9 +553,15 @@ function ShiftRow({ shift, shortlist, onConfirm, onDecline, onAddCandidate, onCa
                         )}
 
                         {e.status === "confirmed" && (
-                          <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">
-                            <CheckCircle className="h-3 w-3" /> Confirmed
-                          </span>
+                          <>
+                            <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">
+                              <CheckCircle className="h-3 w-3" /> Confirmed
+                            </span>
+                            <button onClick={() => onUnassign(shift.id, e.id)}
+                              className="h-6 px-2 rounded-full border border-destructive/40 text-destructive text-[10px] font-medium hover:bg-destructive/5 transition-colors">
+                              Unassign
+                            </button>
+                          </>
                         )}
                         {e.status === "declined" && (
                           <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] font-semibold bg-muted text-muted-foreground">
@@ -677,7 +682,21 @@ function Page() {
 
   const cancelShift = async (shiftId: string) => {
     await supabase.from("temp_shifts").update({ status: "cancelled", shift_status: "cancelled" }).eq("id", shiftId);
-    toast.success("Shift cancelled");
+    toast.success("Shift date cancelled");
+    loadAll();
+  };
+
+  // Reset confirmed → unfilled (also triggered when candidate cancels via app)
+  const unassignCandidate = async (shiftId: string, shortlistId: string) => {
+    // Reset shift to unfilled
+    await supabase.from("temp_shifts")
+      .update({ shift_status: "unfilled", status: "unfilled", candidate_id: null })
+      .eq("id", shiftId);
+    // Return candidate to shortlisted so they can be re-confirmed
+    await supabase.from("shift_shortlist")
+      .update({ status: "shortlisted" })
+      .eq("id", shortlistId);
+    toast.success("Assignment removed — shift is back to unfilled");
     loadAll();
   };
 
@@ -798,6 +817,7 @@ function Page() {
                     onAddCandidate={(shiftId) => setAddCandidateShiftId(shiftId)}
                     onCancelShift={cancelShift}
                     onCandidateClick={(cId) => setDrawerCandidateId(cId)}
+                    onUnassign={unassignCandidate}
                   />
                 ))}
               </tbody>
