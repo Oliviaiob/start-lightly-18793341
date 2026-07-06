@@ -40,7 +40,8 @@ type Job = {
   pipeline_count?: number;
 };
 
-type ClientOption = { id: string; company_name: string };
+type ClientOption = { id: string; company_name: string; postcode: string | null };
+type BranchOption = { id: string; branch_name: string; postcode: string | null };
 
 const ALL = "__all__";
 
@@ -54,6 +55,7 @@ const EMPTY_JOB = {
   location_postcode: "",
   description: "",
   notes: "",
+  branch_id: "",
 };
 
 function relTime(iso?: string | null) {
@@ -134,11 +136,14 @@ function AddJobModal({
   const [savingClient, setSavingClient] = useState(false);
   const clientRef = useRef<HTMLDivElement>(null);
 
+  // branch state
+  const [branches, setBranches] = useState<BranchOption[]>([]);
+
   // upload state
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   const loadClients = () =>
-    supabase.from("clients").select("id,company_name").order("company_name").then(({ data }) => {
+    supabase.from("clients").select("id,company_name,postcode").order("company_name").then(({ data }) => {
       setClients((data as ClientOption[]) ?? []);
     });
 
@@ -147,6 +152,7 @@ function AddJobModal({
       setStep("pick"); setForm({ ...EMPTY_JOB }); setClientSearch("");
       setClientDropOpen(false); setAddingClient(false); setNewClientName("");
       setUploadError(null);
+      setBranches([]);
       return;
     }
     loadClients();
@@ -237,6 +243,7 @@ function AddJobModal({
       location_postcode: form.location_postcode.trim() || null,
       description: form.description.trim() || null,
       notes: form.notes.trim() || null,
+      branch_id: form.branch_id || null,
       posted_at: new Date().toISOString(),
     }).select("id").single();
     setSaving(false);
@@ -340,11 +347,21 @@ function AddJobModal({
                       </div>
                       <div className="max-h-44 overflow-y-auto py-1">
                         <button
-                          onClick={() => { set("client_id", ""); setClientSearch(""); setClientDropOpen(false); }}
+                          onClick={() => { set("client_id", ""); set("branch_id", ""); setClientSearch(""); setClientDropOpen(false); setBranches([]); }}
                           className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 text-muted-foreground"
                         >No client</button>
                         {filteredClients.map(c => (
-                          <button key={c.id} onClick={() => { set("client_id", c.id); setClientSearch(c.company_name); setClientDropOpen(false); }}
+                          <button key={c.id} onClick={async () => {
+                              set("client_id", c.id);
+                              setClientSearch(c.company_name);
+                              setClientDropOpen(false);
+                              // auto-fill postcode
+                              if (c.postcode && !form.location_postcode) set("location_postcode", c.postcode);
+                              // load branches
+                              set("branch_id", "");
+                              const { data: bData } = await supabase.from("client_branches").select("id,branch_name,postcode").eq("client_id", c.id).order("branch_name");
+                              setBranches((bData as BranchOption[]) ?? []);
+                            }}
                             className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 flex items-center justify-between">
                             {c.company_name}
                             {form.client_id === c.id && <Check className="h-3.5 w-3.5 text-teal" />}
@@ -400,6 +417,28 @@ function AddJobModal({
                 </Select>
               </div>
             </div>
+
+            {branches.length > 0 && (
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Branch</label>
+                <Select value={form.branch_id} onValueChange={(v) => {
+                  set("branch_id", v === "__none__" ? "" : v);
+                  // auto-fill postcode from branch if not already set
+                  const b = branches.find(br => br.id === v);
+                  if (b?.postcode) set("location_postcode", b.postcode);
+                }}>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Select branch…" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No specific branch</SelectItem>
+                    {branches.map(b => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.branch_name}{b.postcode ? ` — ${b.postcode}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
