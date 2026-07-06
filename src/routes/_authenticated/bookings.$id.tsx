@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import {
@@ -371,7 +372,25 @@ function InlineAssign({ shift, pool, onAssign }: {
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
   const ref = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const updatePosition = () => {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -395,13 +414,16 @@ function InlineAssign({ shift, pool, onAssign }: {
 
   return (
     <div ref={ref} className="relative">
-      <button onClick={() => setOpen((o) => !o)}
+      <button ref={buttonRef} onClick={() => setOpen((o) => !o)}
         className="h-8 px-3 rounded-lg border text-xs font-medium inline-flex items-center gap-1.5 hover:bg-muted/40 transition-colors text-muted-foreground min-w-[160px] justify-between">
         <span>Assign candidate…</span>
         <ChevronDown className="h-3 w-3" />
       </button>
-      {open && (
-        <div className="absolute left-0 top-9 z-50 w-72 bg-card border rounded-xl shadow-xl">
+      {open && createPortal(
+        <div
+          className="fixed z-[100] w-72 bg-card border rounded-xl shadow-xl"
+          style={{ top: dropdownPos.top, left: dropdownPos.left }}
+        >
           <div className="p-2 border-b">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -440,7 +462,8 @@ function InlineAssign({ shift, pool, onAssign }: {
                   );
                 })}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
