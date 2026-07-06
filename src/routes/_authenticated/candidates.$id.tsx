@@ -1202,15 +1202,15 @@ p { font-size:13px; line-height:1.7; color:#444; }
           <h2 className="font-semibold text-base">SOAR CV Preview</h2>
           <div className="flex items-center gap-2">
             <button onClick={runAI} disabled={generating}
-              className="h-8 px-3 rounded-lg border text-xs font-medium inline-flex items-center gap-1.5 hover:bg-muted/40 disabled:opacity-50">
+              className="h-9 px-4 rounded-full border border-gray-300 bg-white text-gray-700 text-xs font-medium inline-flex items-center gap-1.5 hover:bg-gray-50 disabled:opacity-50 shadow-sm">
               <Sparkles className="h-3.5 w-3.5" />
               {generating ? "Generating…" : "Regenerate"}
             </button>
             <button onClick={downloadPDF} disabled={generating}
-              className="h-8 px-4 rounded-lg bg-navy text-white text-xs font-medium inline-flex items-center gap-1.5 hover:opacity-90 disabled:opacity-50">
+              className="h-9 px-4 rounded-full bg-[#1B2B4B] text-white text-xs font-medium inline-flex items-center gap-1.5 hover:opacity-90 disabled:opacity-50 shadow-sm">
               <FileText className="h-3.5 w-3.5" /> Download PDF
             </button>
-            <button onClick={onClose} className="h-8 px-3 rounded-lg border text-xs font-medium hover:bg-muted/40">Close</button>
+            <button onClick={onClose} className="h-9 px-4 rounded-full border border-gray-300 bg-white text-gray-700 text-xs font-medium hover:bg-gray-50 shadow-sm">Close</button>
           </div>
         </div>
 
