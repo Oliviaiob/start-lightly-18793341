@@ -326,7 +326,7 @@ function Page() {
     // Create document record (without actual storage — file_url would be set by edge function in production)
     const { error } = await supabase.from("candidate_documents").insert({
       candidate_id: id, document_type: key, file_name: file.name,
-      file_size: file.size, status: "uploaded",
+      file_size: file.size, status: "pending",
       uploaded_at: new Date().toISOString(),
     });
     if (error) { toast.error("Upload failed: " + error.message); setSavingItem(null); return; }
