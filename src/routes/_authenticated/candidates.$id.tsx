@@ -39,6 +39,8 @@ import {
   CalendarRange,
   Users,
   Home,
+  GraduationCap,
+  Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -517,7 +519,7 @@ function Page() {
                 <Sparkles className="h-3.5 w-3.5" /> Generate SOAR CV
               </button>
             ) : (
-              <button onClick={() => setWpOpen(true)} className="h-9 px-3.5 rounded-full bg-[#1B2B4B] text-white text-sm font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-1.5">
+              <button onClick={() => setWpOpen(true)} className="h-9 px-3.5 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-1.5">
                 <FileText className="h-3.5 w-3.5" /> Generate Worker Profile
               </button>
             )}
@@ -533,12 +535,13 @@ function Page() {
 
       {/* Contact info bar */}
       <Card className="p-4 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
-          <ContactChip icon={Mail} label="Email" value={c.email} />
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 text-sm">
+          <EmailContactChip value={c.email} />
           <ContactChip icon={Phone} label="Phone" value={c.phone} />
           <ContactChip icon={MapPin} label="Location" value={c.town} />
           <ContactChip icon={Home} label="Postcode" value={c.postcode} />
           <ContactChip icon={Building2} label="Current Employer" value={c.current_employer} />
+          <ContactChip icon={GraduationCap} label="Qualification" value={c.qualification_level} />
         </div>
       </Card>
 
@@ -1136,6 +1139,39 @@ function HeaderBtn({
       <Icon className="h-3.5 w-3.5" />
       {children}
     </button>
+  );
+}
+
+function EmailContactChip({ value }: { value: string | null | undefined }) {
+  const [copied, setCopied] = useState(false);
+  const copy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!value) return;
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return (
+    <div className="flex items-center gap-3 min-w-0">
+      <div className="w-9 h-9 rounded-lg bg-navy/8 text-navy grid place-items-center shrink-0">
+        <Mail className="h-4 w-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.1em]">Email</div>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-sm font-medium truncate">{value || "—"}</span>
+          {value && (
+            <button onClick={copy} title="Copy email"
+              className="shrink-0 h-5 w-5 rounded hover:bg-muted flex items-center justify-center transition-colors">
+              {copied
+                ? <span className="text-[10px] text-emerald-600 font-semibold">✓</span>
+                : <Copy className="h-3 w-3 text-muted-foreground" />}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
