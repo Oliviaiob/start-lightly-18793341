@@ -49,6 +49,7 @@ type Job = {
   branch_id: string | null;
   posted_at: string | null;
   boolean_searches: { broad: string; standard: string; perfect: string } | null;
+  description_soar: string | null;
 };
 
 type PipelineEntry = {
@@ -655,9 +656,14 @@ function Page() {
   const [boolLoading, setBoolLoading] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
+  // soar job description
+  const [soarDesc, setSoarDesc] = useState<string>("");
+  const [soarDescLoading, setSoarDescLoading] = useState(false);
+  const [soarDescCopied, setSoarDescCopied] = useState(false);
+
   const loadAll = async () => {
     const [jRes, pRes, aRes] = await Promise.all([
-      supabase.from("jobs").select("id,title,client_id,status,qualification_required,salary_min,salary_max,location_postcode,description,notes,hours,room,advertising_notes,source_boards,branch_id,posted_at,boolean_searches,clients(company_name)").eq("id", id).maybeSingle(),
+      supabase.from("jobs").select("id,title,client_id,status,qualification_required,salary_min,salary_max,location_postcode,description,notes,hours,room,advertising_notes,source_boards,branch_id,posted_at,boolean_searches,description_soar,clients(company_name)").eq("id", id).maybeSingle(),
       supabase.from("job_pipeline").select("id,stage,stage_changed_at,candidates(id,first_name,last_name,qualification_level,postcode,phone)").eq("job_id", id).order("stage_changed_at", { ascending: false }),
       supabase.from("activity_log").select("id,activity_type,description,created_by,created_at").eq("entity_id", id).eq("entity_type", "job").order("created_at", { ascending: false }).limit(30),
     ]);
@@ -698,6 +704,42 @@ function Page() {
     if (error) { toast.error("Failed: " + error.message); return; }
     toast.success("Changes saved");
     setJob((prev) => prev ? { ...prev, ...draft } : prev);
+  };
+
+  const generateSoarDesc = async () => {
+    if (!job) return;
+    setSoarDescLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-job-description", {
+        body: {
+          title: job.title,
+          qualification_required: job.qualification_required,
+          location: job.location_postcode,
+          salary_min: job.salary_min,
+          salary_max: job.salary_max,
+          hours: job.hours,
+          room: job.room,
+          description: job.description,
+          client_name: (job as any).clients?.company_name ?? null,
+        },
+      });
+      if (error) throw new Error(error.message);
+      const desc = data?.description ?? "";
+      if (desc) {
+        setSoarDesc(desc);
+        await (supabase as any).from("jobs").update({ description_soar: desc }).eq("id", job.id);
+        toast.success("SOAR job description generated");
+      }
+    } catch (e: any) {
+      toast.error("Couldn't generate description: " + e.message);
+    }
+    setSoarDescLoading(false);
+  };
+
+  const saveSoarDesc = async () => {
+    if (!job) return;
+    await (supabase as any).from("jobs").update({ description_soar: soarDesc }).eq("id", job.id);
+    toast.success("Description saved");
   };
 
   const generateBooleanSearches = async () => {
@@ -1040,14 +1082,66 @@ function Page() {
 
       {/* ── Advertised Tab ── */}
       {tab === "advertised" && (
-        <div className="space-y-6 max-w-2xl">
-          {/* Source boards + notes */}
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground">Source boards</label>
-              <div className="flex gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+
+          {/* LEFT — SOAR Job Description */}
+          <div className="lg:col-span-3 space-y-4">
+            <div className="rounded-2xl border bg-card shadow-[var(--shadow-card)] p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold">SOAR Job Description</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">Branded copy ready to post on job boards</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {soarDesc && (
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(soarDesc); setSoarDescCopied(true); setTimeout(() => setSoarDescCopied(false), 2000); }}
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-medium hover:bg-muted transition-colors"
+                    >
+                      {soarDescCopied ? <><Check className="h-3.5 w-3.5 text-teal" />Copied</> : <><Copy className="h-3.5 w-3.5" />Copy</>}
+                    </button>
+                  )}
+                  <button
+                    onClick={generateSoarDesc}
+                    disabled={soarDescLoading}
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-teal text-teal-foreground text-xs font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {soarDescLoading ? "Generating…" : soarDesc ? "Regenerate" : "Generate"}
+                  </button>
+                </div>
+              </div>
+
+              {soarDescLoading ? (
+                <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+                  <div className="h-4 w-4 border-2 border-teal border-t-transparent rounded-full animate-spin" />
+                  Writing your job description…
+                </div>
+              ) : (
+                <textarea
+                  value={soarDesc}
+                  onChange={e => setSoarDesc(e.target.value)}
+                  placeholder="Click Generate to create a SOAR-branded job description, or type one manually…"
+                  rows={22}
+                  className="w-full text-sm bg-muted/30 rounded-xl p-4 border border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none leading-relaxed"
+                />
+              )}
+              {soarDesc && !soarDescLoading && (
+                <div className="flex justify-end">
+                  <button onClick={saveSoarDesc} className="h-8 px-4 rounded-full bg-navy text-white text-xs font-medium hover:opacity-90">Save</button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* RIGHT — Source Boards + Boolean Searches */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* Source boards */}
+            <div className="rounded-2xl border bg-card shadow-[var(--shadow-card)] p-5 space-y-4">
+              <h3 className="text-sm font-semibold">Source Boards</h3>
+              <div className="flex flex-col gap-2">
                 {SOURCE_BOARDS.map((sb) => (
-                  <label key={sb.key} className="flex items-center gap-2 cursor-pointer select-none">
+                  <label key={sb.key} className="flex items-center gap-3 cursor-pointer select-none p-2 rounded-lg hover:bg-muted/40 transition-colors">
                     <input type="checkbox"
                       checked={(draft.source_boards ?? []).includes(sb.key)}
                       onChange={() => toggleSourceBoard(sb.key)}
@@ -1056,85 +1150,74 @@ function Page() {
                   </label>
                 ))}
               </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Advertising notes</label>
-              <textarea value={draft.advertising_notes ?? ""} onChange={(e) => setD("advertising_notes", e.target.value)}
-                placeholder="Ad copy, posting dates, tracking references…" rows={4}
-                className="w-full text-sm bg-muted/40 rounded-xl p-3 border border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" />
-            </div>
-            <div className="flex justify-end">
-              <button onClick={saveAdvertised} disabled={saving}
-                className="h-10 px-6 rounded-full bg-navy text-white text-sm font-medium hover:opacity-90 disabled:opacity-50">
-                {saving ? "Saving…" : "Save changes"}
-              </button>
-            </div>
-          </div>
-
-          {/* Boolean Search */}
-          <div className="border-t pt-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-semibold">Boolean Search Strings</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">AI-generated search strings for LinkedIn, CV-Library and Reed</p>
+              <div className="space-y-1 pt-1 border-t">
+                <label className="text-xs font-medium text-muted-foreground">Advertising notes</label>
+                <textarea value={draft.advertising_notes ?? ""} onChange={(e) => setD("advertising_notes", e.target.value)}
+                  placeholder="Ad copy, posting dates, tracking references…" rows={3}
+                  className="w-full text-sm bg-muted/40 rounded-xl p-3 border border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" />
               </div>
-              <button
-                onClick={generateBooleanSearches}
-                disabled={boolLoading}
-                className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-teal text-teal-foreground text-xs font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-                {boolLoading ? "Generating…" : boolSearches ? "Regenerate" : "Generate"}
-              </button>
+              <div className="flex justify-end">
+                <button onClick={saveAdvertised} disabled={saving}
+                  className="h-9 px-5 rounded-full bg-navy text-white text-sm font-medium hover:opacity-90 disabled:opacity-50">
+                  {saving ? "Saving…" : "Save"}
+                </button>
+              </div>
             </div>
 
-            {boolLoading && (
-              <div className="flex items-center gap-2 py-6 justify-center text-sm text-muted-foreground">
-                <div className="h-4 w-4 border-2 border-teal border-t-transparent rounded-full animate-spin" />
-                Generating boolean searches…
+            {/* Boolean Searches */}
+            <div className="rounded-2xl border bg-card shadow-[var(--shadow-card)] p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold">Boolean Searches</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">For LinkedIn, CV-Library &amp; Reed</p>
+                </div>
+                <button
+                  onClick={generateBooleanSearches}
+                  disabled={boolLoading}
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-teal text-teal-foreground text-xs font-medium hover:opacity-90 disabled:opacity-50"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {boolLoading ? "…" : boolSearches ? "Refresh" : "Generate"}
+                </button>
               </div>
-            )}
 
-            {!boolLoading && boolSearches && (
-              <div className="space-y-3">
-                {([
-                  { key: "broad", label: "Broad", desc: "Wide net — core role keywords", color: "bg-emerald-50 border-emerald-200 text-emerald-800" },
-                  { key: "standard", label: "Standard", desc: "Role + qualification + location", color: "bg-blue-50 border-blue-200 text-blue-800" },
-                  { key: "perfect", label: "Perfect Match", desc: "Highly specific — full criteria", color: "bg-purple-50 border-purple-200 text-purple-800" },
-                ] as const).map(({ key, label, desc, color }) => (
-                  <div key={key} className="rounded-xl border bg-card p-4 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+              {boolLoading && (
+                <div className="flex items-center gap-2 py-4 justify-center text-xs text-muted-foreground">
+                  <div className="h-3.5 w-3.5 border-2 border-teal border-t-transparent rounded-full animate-spin" />
+                  Generating…
+                </div>
+              )}
+
+              {!boolLoading && boolSearches && (
+                <div className="space-y-2">
+                  {([
+                    { key: "broad", label: "Broad", color: "bg-emerald-50 border-emerald-200 text-emerald-800" },
+                    { key: "standard", label: "Standard", color: "bg-blue-50 border-blue-200 text-blue-800" },
+                    { key: "perfect", label: "Perfect Match", color: "bg-purple-50 border-purple-200 text-purple-800" },
+                  ] as const).map(({ key, label, color }) => (
+                    <div key={key} className="rounded-xl border bg-muted/20 p-3 space-y-1.5">
+                      <div className="flex items-center justify-between">
                         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${color}`}>{label}</span>
-                        <span className="text-xs text-muted-foreground">{desc}</span>
+                        <button onClick={() => copySearch(key, boolSearches[key])}
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                          {copiedKey === key ? <><Check className="h-3 w-3 text-teal" /><span className="text-teal">Copied</span></> : <><Copy className="h-3 w-3" />Copy</>}
+                        </button>
                       </div>
-                      <button
-                        onClick={() => copySearch(key, boolSearches[key])}
-                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        {copiedKey === key ? (
-                          <><Check className="h-3.5 w-3.5 text-teal" /><span className="text-teal">Copied</span></>
-                        ) : (
-                          <><Copy className="h-3.5 w-3.5" />Copy</>
-                        )}
-                      </button>
+                      <p className="text-[11px] font-mono leading-relaxed break-all select-all text-muted-foreground">{boolSearches[key]}</p>
                     </div>
-                    <p className="text-xs font-mono bg-muted/50 rounded-lg px-3 py-2 leading-relaxed break-all select-all">{boolSearches[key]}</p>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
 
-            {!boolLoading && !boolSearches && (
-              <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-                Click <span className="font-medium text-foreground">Generate</span> to create boolean search strings based on this job's details
-              </div>
-            )}
+              {!boolLoading && !boolSearches && (
+                <p className="text-xs text-muted-foreground text-center py-3">Click Generate to create search strings</p>
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* ── Activity Log Tab ── */}
+            {/* ── Activity Log Tab ── */}
       {tab === "activity_log" && (
         <div className="space-y-4 max-w-2xl">
           {loggingNote ? (
