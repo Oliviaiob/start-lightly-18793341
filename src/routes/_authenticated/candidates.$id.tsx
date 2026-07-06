@@ -85,6 +85,7 @@ type Candidate = {
   cv_original_url: string | null;
   cv_soar_url: string | null;
   profile_summary: string | null;
+  expected_salary: number | null;
   created_by: string | null;
   created_at: string | null;
 };
@@ -217,6 +218,8 @@ function Page() {
   const [wpOpen, setWpOpen] = useState(false);
   const [cvUploading, setCvUploading] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [personalEditing, setPersonalEditing] = useState(false);
+  const [personalDraft, setPersonalDraft] = useState<Partial<Candidate>>({});
   const [loading, setLoading] = useState(true);
   const [me, setMe] = useState<string | null>(null);
   const [creatorName, setCreatorName] = useState<string>("");
@@ -877,23 +880,119 @@ function Page() {
           </TabsList>
 
           <TabsContent value="personal" className="mt-5">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-sm">
-              <Field label="Email" value={c.email} />
-              <Field label="Phone" value={c.phone} />
-              <Field label="Date of Birth" value={c.date_of_birth} />
-              <Field label="NI Number" value={c.national_insurance_number} />
-              <Field label="Current Position" value={c.current_position} />
-              <Field label="Current Employer" value={c.current_employer} />
-              <Field
-                label="Address"
-                value={[c.address_line1, c.address_line2, c.town, c.county, c.postcode].filter(Boolean).join(", ")}
-              />
-              <Field
-                label="Has Vehicle"
-                value={c.drives === true ? "Yes" : c.drives === false ? "No" : c.vehicle_status}
-              />
-              <Field label="Max Commute" value={c.commute_radius} />
+            {/* Edit / Save header */}
+            <div className="flex justify-end mb-4 gap-2">
+              {personalEditing ? (
+                <>
+                  <button
+                    onClick={() => setPersonalEditing(false)}
+                    className="h-8 px-4 rounded-full border text-xs font-medium hover:bg-muted transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      await (supabase as any).from("candidates").update(personalDraft).eq("id", c.id);
+                      setCandidate((prev: any) => prev ? { ...prev, ...personalDraft } : prev);
+                      setPersonalEditing(false);
+                    }}
+                    className="h-8 px-4 rounded-full bg-navy text-white text-xs font-medium hover:opacity-90"
+                  >
+                    Save
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => {
+                    setPersonalDraft({
+                      email: c.email, phone: c.phone, date_of_birth: c.date_of_birth,
+                      national_insurance_number: c.national_insurance_number,
+                      current_position: c.current_position, current_employer: c.current_employer,
+                      address_line1: c.address_line1, address_line2: c.address_line2,
+                      town: c.town, county: c.county, postcode: c.postcode,
+                      drives: c.drives, commute_radius: c.commute_radius,
+                      expected_salary: (c as any).expected_salary ?? null,
+                    });
+                    setPersonalEditing(true);
+                  }}
+                  className="h-8 px-4 rounded-full border text-xs font-medium hover:bg-muted transition-colors"
+                >
+                  Edit
+                </button>
+              )}
             </div>
+
+            {personalEditing ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-sm">
+                {([
+                  ["Email", "email", "email"],
+                  ["Phone", "phone", "tel"],
+                  ["Date of Birth", "date_of_birth", "date"],
+                  ["NI Number", "national_insurance_number", "text"],
+                  ["Current Position", "current_position", "text"],
+                  ["Current Employer", "current_employer", "text"],
+                  ["Address Line 1", "address_line1", "text"],
+                  ["Address Line 2", "address_line2", "text"],
+                  ["Town", "town", "text"],
+                  ["County", "county", "text"],
+                  ["Postcode", "postcode", "text"],
+                  ["Max Commute", "commute_radius", "text"],
+                ] as [string, keyof Candidate, string][]).map(([label, key, type]) => (
+                  <div key={key} className="space-y-1">
+                    <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</label>
+                    <input
+                      type={type}
+                      value={(personalDraft[key] as string) ?? ""}
+                      onChange={e => setPersonalDraft(d => ({ ...d, [key]: e.target.value || null }))}
+                      className="w-full h-9 px-3 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal/40"
+                    />
+                  </div>
+                ))}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Has Vehicle</label>
+                  <select
+                    value={personalDraft.drives === true ? "yes" : personalDraft.drives === false ? "no" : ""}
+                    onChange={e => setPersonalDraft(d => ({ ...d, drives: e.target.value === "yes" ? true : e.target.value === "no" ? false : null }))}
+                    className="w-full h-9 px-3 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal/40"
+                  >
+                    <option value="">—</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                  </select>
+                </div>
+                {isPerm && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Expected Salary (£)</label>
+                    <input
+                      type="number"
+                      value={(personalDraft as any).expected_salary ?? ""}
+                      onChange={e => setPersonalDraft(d => ({ ...d, expected_salary: e.target.value ? Number(e.target.value) : null } as any))}
+                      placeholder="e.g. 28000"
+                      className="w-full h-9 px-3 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal/40"
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-sm">
+                <Field label="Email" value={c.email} />
+                <Field label="Phone" value={c.phone} />
+                <Field label="Date of Birth" value={c.date_of_birth} />
+                <Field label="NI Number" value={c.national_insurance_number} />
+                <Field label="Current Position" value={c.current_position} />
+                <Field label="Current Employer" value={c.current_employer} />
+                <Field
+                  label="Address"
+                  value={[c.address_line1, c.address_line2, c.town, c.county, c.postcode].filter(Boolean).join(", ")}
+                />
+                <Field
+                  label="Has Vehicle"
+                  value={c.drives === true ? "Yes" : c.drives === false ? "No" : c.vehicle_status}
+                />
+                <Field label="Max Commute" value={c.commute_radius} />
+                {isPerm && <Field label="Expected Salary" value={(c as any).expected_salary ? `£${Number((c as any).expected_salary).toLocaleString()}` : null} />}
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="quals" className="mt-5 text-sm">
