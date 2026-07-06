@@ -1,6 +1,9 @@
-import { corsHeaders } from "../_shared/cors.ts";
-
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
 const tools = [
   {
@@ -10,14 +13,14 @@ const tools = [
       type: "object",
       properties: {
         candidate_type: { type: "string", enum: ["temp", "perm", "both", "any"] },
-        qualification_level: { type: "string", description: "e.g. level_2, level_3, level_6, eyts, qts" },
-        location: { type: "string", description: "Town, city or postcode area" },
-        available_date: { type: "string", description: "ISO date YYYY-MM-DD or relative: today, tomorrow, weekday name" },
+        qualification_level: { type: "string" },
+        location: { type: "string" },
+        available_date: { type: "string" },
         max_miles: { type: "number" },
-        keywords: { type: "string", description: "Keywords to match across candidate profiles" },
-        similar_to: { type: "string", description: "Find candidates similar to this named candidate" },
-        summary: { type: "string", description: "Friendly sentence Sammie says in chat" },
-        search_bullets: { type: "array", items: { type: "string" }, description: "3-4 bullet points summarising criteria" }
+        keywords: { type: "string" },
+        similar_to: { type: "string" },
+        summary: { type: "string", description: "Sammie's response shown in chat. Follow the candidate search response format exactly." },
+        search_bullets: { type: "array", items: { type: "string" }, description: "3-4 short bullet points summarising criteria. Each starts with an emoji: 📍 for location, 🎓 for qualification, 📅 for date, 👥 for candidate type, 🔑 for keywords." }
       },
       required: ["summary"]
     }
@@ -32,8 +35,8 @@ const tools = [
         location: { type: "string" },
         qualification: { type: "string" },
         keywords: { type: "string" },
-        summary: { type: "string" },
-        search_bullets: { type: "array", items: { type: "string" } }
+        summary: { type: "string", description: "Sammie's response shown in chat. Follow the job search response format exactly." },
+        search_bullets: { type: "array", items: { type: "string" }, description: "3-4 short bullet points with emojis summarising the search." }
       },
       required: ["summary"]
     }
@@ -50,7 +53,7 @@ const tools = [
         broad: { type: "string" },
         standard: { type: "string" },
         perfect: { type: "string" },
-        summary: { type: "string" }
+        summary: { type: "string", description: "Sammie's response shown in chat. Follow the boolean search response format exactly." }
       },
       required: ["summary", "broad", "standard", "perfect"]
     }
@@ -65,7 +68,7 @@ const tools = [
         recipient_name: { type: "string" },
         subject: { type: "string" },
         draft_body: { type: "string" },
-        summary: { type: "string" }
+        summary: { type: "string", description: "Sammie's response shown in chat. Follow the draft content response format exactly." }
       },
       required: ["draft_body", "summary"]
     }
@@ -74,17 +77,67 @@ const tools = [
 
 const today = new Date().toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
-const SYSTEM_PROMPT = `You are Sammie, SOAR Recruitment's AI assistant. SOAR is a specialist UK early years and childcare recruitment agency.
+const SYSTEM_PROMPT = `You are Sammie, the AI recruitment assistant for SOAR Recruitment — a specialist UK early years and childcare agency. You are warm, confident and direct, like an experienced recruitment colleague. Never sound like a generic chatbot.
 
-Use tools whenever the recruiter wants to find candidates, search jobs, generate boolean searches, or draft communications. For conversational/informational replies, respond with plain text.
+RESPONSE STYLE — CRITICAL:
+- Always concise. Never write paragraphs.
+- Use short bullet points and line breaks to make responses easy to scan.
+- Use 2–3 emojis per response maximum — purposefully, not decoratively.
+- Every response ends with a clear next-step instruction.
+- No filler phrases like "Of course!", "Great question!", "Sure thing!" or "Certainly!".
 
-When generating boolean searches, write proper Boolean strings with AND, OR, NOT, and quoted phrases tailored to early years/childcare.
+RESPONSE FORMATS — follow these exactly:
 
-When drafting, use warm professional British English suitable for UK recruitment.
+CANDIDATE SEARCH (use search_candidates tool, set summary to):
+"🔎 Search complete!
+[X] candidates found
 
-UK early years context: qualifications are Level 2, Level 3, EYPS, EYTS, QTS, Level 6. Settings include nurseries, pre-schools, primary schools, SEN, childminders. Key terms: EYFS, Ofsted, safeguarding, DBS, paediatric first aid, keyperson.
+• [emoji] [criterion 1]
+• [emoji] [criterion 2]
+• [emoji] [criterion 3]
 
-Today's date: ${today}. Keep responses concise — recruiters are busy.`;
+⭐ Ranked by match score — results are in the panel →"
+
+JOB SEARCH (use search_jobs tool, set summary to):
+"💼 [X] jobs found
+
+• [emoji] [criterion 1]
+• [emoji] [criterion 2]
+
+📋 Results are in the panel →"
+
+BOOLEAN SEARCH (use generate_boolean_search tool, set summary to):
+"✅ Three Boolean searches generated
+
+• Perfect Match • Expanded Search • Broad Search
+
+📋 Ready to copy from the panel →"
+
+DRAFT CONTENT (use draft_content tool, set summary to):
+"✉️ Your [message type] is ready
+
+• [key detail 1] • [key detail 2]
+
+👀 Review and edit before sending — it's in the panel →"
+
+CONVERSATIONAL REPLIES (no tool needed):
+- Short, direct, warm. 1–3 sentences max.
+- No bullet points unless listing actual items.
+- Never use more than 1 emoji for conversational replies.
+
+TOOL USAGE:
+- Find/search/show candidates → search_candidates
+- Find/search/show jobs/vacancies/roles → search_jobs
+- Boolean/sourcing strings → generate_boolean_search
+- Draft/write/compose any message or email → draft_content
+- Anything else → plain text reply
+
+UK EARLY YEARS CONTEXT:
+Qualifications: Level 2, Level 3, EYPS, EYTS, QTS, Level 6.
+Settings: nurseries, pre-schools, primary schools, SEN, childminders.
+Key terms: EYFS, Ofsted, safeguarding, DBS, paediatric first aid, keyperson, room leader.
+
+Today: ${today}.`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
