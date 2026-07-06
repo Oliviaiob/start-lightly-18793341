@@ -72,11 +72,12 @@ type MatchResult = {
   postcode: string | null;
   city: string | null;
   candidate_type: string | null;
-  source: string | null;
   has_dbs: boolean | null;
   available_days: string[] | null;
   current_position: string | null;
   commute_radius: string | null;
+  expected_salary: number | null;
+  owner: string | null;
   ai_score: number | null;
   ai_reason: string | null;
   ai_highlights: string[];
@@ -925,7 +926,7 @@ function Page() {
     if (!job) return;
     setMatching(true);
     const { data } = await supabase.from("candidates").select(
-      "id,first_name,last_name,qualification_level,postcode,town,candidate_type,source,has_dbs,available_days,qualifications_text,current_position,current_employer,notes,availability_notes,commute_radius"
+"id,first_name,last_name,qualification_level,postcode,town,candidate_type,has_dbs,available_days,qualifications_text,current_position,current_employer,notes,availability_notes,commute_radius,expected_salary,created_by,owner:profiles!candidates_created_by_fkey(display_name,first_name,last_name)"
     );
 
     // For perm jobs, exclude temp-only candidates
@@ -947,7 +948,6 @@ function Page() {
         postcode: c.postcode ?? null,
         city: c.town ?? null,
         candidate_type: c.candidate_type ?? null,
-        source: c.source ?? null,
         has_dbs: c.has_dbs ?? null,
         available_days: c.available_days ?? null,
         ai_score: null,
@@ -955,6 +955,8 @@ function Page() {
         ai_highlights: [],
         current_position: c.current_position ?? null,
         commute_radius: c.commute_radius ?? null,
+        expected_salary: c.expected_salary ?? null,
+        owner: c.owner ? (c.owner.display_name || [c.owner.first_name, c.owner.last_name].filter(Boolean).join(" ") || null) : null,
       };
     }).filter((r) => r.score > 0).sort((a, b) => b.score - a.score);
 
@@ -1208,7 +1210,8 @@ function Page() {
                     <th className="text-left font-semibold py-3 px-3">Location</th>
                     <th className="text-left font-semibold py-3 px-3">Type</th>
                     <th className="text-left font-semibold py-3 px-3">DBS</th>
-                    <th className="text-left font-semibold py-3 px-3">Source</th>
+                    <th className="text-left font-semibold py-3 px-3">Exp. Salary</th>
+                    <th className="text-left font-semibold py-3 px-3">Owner</th>
                     <th className="text-center font-semibold py-3 px-3">Score</th>
                     <th className="py-3 px-4" />
                   </tr>
@@ -1238,7 +1241,10 @@ function Page() {
                           ? <span className="px-2 py-0.5 rounded-full bg-success/20 text-[oklch(0.4_0.12_155)] font-medium">✓ DBS</span>
                           : <span className="text-muted-foreground">—</span>}
                       </td>
-                      <td className="py-3 px-3 text-xs text-muted-foreground capitalize">{r.source ?? "—"}</td>
+                      <td className="py-3 px-3 text-xs text-muted-foreground">
+                        {r.expected_salary ? `£${Number(r.expected_salary).toLocaleString()}` : "—"}
+                      </td>
+                      <td className="py-3 px-3 text-xs text-muted-foreground">{r.owner ?? "—"}</td>
                       <td className="py-3 px-3 text-center">
                         <span className={`inline-flex items-center h-6 px-3 rounded-full text-xs font-bold ${r.score >= 80 ? "bg-success/20 text-[oklch(0.4_0.12_155)]" : r.score >= 45 ? "bg-teal/20 text-teal-foreground" : "bg-muted text-muted-foreground"}`} title={r.breakdown.join(" · ")}>
                           {r.score} / 110
