@@ -336,12 +336,13 @@ function Page() {
     const { data, error } = await supabase
       .from("bookings")
       .select(`id,client_id,branch_id,qualification_required,notes,status,created_at,clients(company_name),client_branches(branch_name),temp_shifts(id,shift_date,shift_status)`)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .order("shift_date", { referencedTable: "temp_shifts", ascending: true });
 
     if (error) { toast.error("Failed to load"); setLoading(false); return; }
 
     const mapped: Booking[] = ((data ?? []) as any[]).map((b) => {
-      const rawShifts = (b.temp_shifts ?? []) as any[];
+      const rawShifts = (b.temp_shifts ?? [] as any[]).sort((x: any, y: any) => (x.shift_date || "").localeCompare(y.shift_date || ""));
       const confirmed = rawShifts.filter((s: any) => s.shift_status === "confirmed").length;
       const dates = rawShifts.map((s: any) => s.shift_date).filter(Boolean).sort();
       const shifts: ShiftEvent[] = rawShifts.map((s: any) => ({
