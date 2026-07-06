@@ -10,27 +10,30 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
-import { CalendarRange, Plus, Search, ChevronRight, CheckCircle } from "lucide-react";
+import {
+  CalendarRange, Plus, Search, ChevronRight, CheckCircle,
+  LayoutList, Calendar, ChevronLeft,
+} from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/bookings/")({
   component: Page,
 });
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type ShiftEvent = {
+  id: string; shift_date: string; shift_status: string;
+  booking_id: string; client_name: string | null;
+};
+
 type Booking = {
-  id: string;
-  client_id: string | null;
-  client_name: string | null;
-  branch_id: string | null;
-  branch_name: string | null;
-  qualification_required: string | null;
-  notes: string | null;
-  status: string;
-  created_at: string;
-  shift_count: number;
-  confirmed_count: number;
-  date_from: string | null;
-  date_to: string | null;
+  id: string; client_id: string | null; client_name: string | null;
+  branch_id: string | null; branch_name: string | null;
+  qualification_required: string | null; notes: string | null; status: string;
+  created_at: string; shift_count: number; confirmed_count: number;
+  date_from: string | null; date_to: string | null;
+  shifts: ShiftEvent[];
 };
 
 type ClientOption = { id: string; name: string };
@@ -63,6 +66,137 @@ function bookingStyle(confirmed: number, total: number, bookingStatus: string) {
   if (confirmed > 0) return { dot: "bg-amber-400", border: "border-l-amber-400", label: `${confirmed}/${total} confirmed` };
   return { dot: "bg-muted-foreground/40", border: "border-l-muted-foreground/20", label: "Unfilled" };
 }
+
+// ── Calendar ──────────────────────────────────────────────────────────────────
+
+function CalendarView({ bookings, onNavigate }: {
+  bookings: Booking[];
+  onNavigate: (bookingId: string) => void;
+}) {
+  const [month, setMonth] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+
+  // Collect all shift events from active bookings
+  const events = useMemo(() => {
+    const map = new Map<string, ShiftEvent[]>();
+    bookings.forEach((b) => {
+      if (b.status === "cancelled") return;
+      b.shifts.forEach((s) => {
+        const list = map.get(s.shift_date) ?? [];
+        list.push(s);
+        map.set(s.shift_date, list);
+      });
+    });
+    return map;
+  }, [bookings]);
+
+  const year = month.getFullYear();
+  const monthIdx = month.getMonth();
+
+  // Build grid: Mon-Sun
+  const firstDay = new Date(year, monthIdx, 1);
+  const lastDay = new Date(year, monthIdx + 1, 0);
+  // Day of week: Mon=0 … Sun=6
+  const startOffset = (firstDay.getDay() + 6) % 7;
+  const totalCells = Math.ceil((startOffset + lastDay.getDate()) / 7) * 7;
+  const cells: (Date | null)[] = Array.from({ length: totalCells }, (_, i) => {
+    const dayNum = i - startOffset + 1;
+    if (dayNum < 1 || dayNum > lastDay.getDate()) return null;
+    return new Date(year, monthIdx, dayNum);
+  });
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const monthLabel = month.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+
+  const prev = () => setMonth(new Date(year, monthIdx - 1, 1));
+  const next = () => setMonth(new Date(year, monthIdx + 1, 1));
+
+  function eventChip(s: ShiftEvent) {
+    const confirmed = s.shift_status === "confirmed";
+    const cancelled = s.shift_status === "cancelled";
+    return (
+      <button key={s.id}
+        onClick={(e) => { e.stopPropagation(); onNavigate(s.booking_id); }}
+        className={`w-full text-left text-[10px] font-medium px-1.5 py-0.5 rounded truncate transition-colors ${
+          cancelled
+            ? "bg-muted/60 text-muted-foreground line-through"
+            : confirmed
+            ? "bg-green-100 text-green-700 hover:bg-green-200"
+            : "bg-amber-100 text-amber-700 hover:bg-amber-200"
+        }`}>
+        {s.client_name ?? "Booking"}
+      </button>
+    );
+  }
+
+  return (
+    <Card className="rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card overflow-hidden">
+      {/* Month nav */}
+      <div className="flex items-center justify-between px-5 py-3 border-b">
+        <button onClick={prev}
+          className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center transition-colors">
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <span className="text-sm font-semibold">{monthLabel}</span>
+        <button onClick={next}
+          className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center transition-colors">
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Day headers */}
+      <div className="grid grid-cols-7 border-b">
+        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+          <div key={d} className="py-2 text-center text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Grid */}
+      <div className="grid grid-cols-7">
+        {cells.map((date, i) => {
+          if (!date) return <div key={i} className="border-b border-r min-h-[100px] bg-muted/10" />;
+          const isoDate = date.toISOString().slice(0, 10);
+          const isToday = isoDate === todayStr;
+          const dayEvents = events.get(isoDate) ?? [];
+          const visible = dayEvents.slice(0, 3);
+          const overflow = dayEvents.length - visible.length;
+          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+          const isPast = isoDate < todayStr;
+
+          return (
+            <div key={i}
+              className={`border-b border-r min-h-[100px] p-1.5 flex flex-col gap-0.5 ${
+                isWeekend ? "bg-muted/10" : ""
+              } ${isPast && !isToday ? "opacity-60" : ""}`}>
+              <div className={`text-xs font-semibold mb-1 h-5 w-5 rounded-full flex items-center justify-center self-start ${
+                isToday ? "bg-navy text-white" : "text-muted-foreground"
+              }`}>
+                {date.getDate()}
+              </div>
+              {visible.map((s) => eventChip(s))}
+              {overflow > 0 && (
+                <span className="text-[9px] text-muted-foreground px-1">+{overflow} more</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 px-5 py-3 border-t text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-green-200 inline-block" />Confirmed</span>
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-amber-200 inline-block" />Unfilled</span>
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-muted inline-block" />Cancelled</span>
+      </div>
+    </Card>
+  );
+}
+
+// ── New Booking Modal ─────────────────────────────────────────────────────────
 
 function NewBookingModal({ open, onClose, onCreated }: {
   open: boolean; onClose: () => void; onCreated: (id: string) => void;
@@ -186,6 +320,8 @@ function NewBookingModal({ open, onClose, onCreated }: {
   );
 }
 
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 function Page() {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -193,6 +329,7 @@ function Page() {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState(ALL);
   const [showNew, setShowNew] = useState(false);
+  const [view, setView] = useState<"list" | "calendar">("list");
 
   const load = async () => {
     setLoading(true);
@@ -204,15 +341,20 @@ function Page() {
     if (error) { toast.error("Failed to load"); setLoading(false); return; }
 
     const mapped: Booking[] = ((data ?? []) as any[]).map((b) => {
-      const shifts = (b.temp_shifts ?? []) as any[];
-      const confirmed = shifts.filter((s: any) => s.shift_status === "confirmed").length;
-      const dates = shifts.map((s: any) => s.shift_date).filter(Boolean).sort();
+      const rawShifts = (b.temp_shifts ?? []) as any[];
+      const confirmed = rawShifts.filter((s: any) => s.shift_status === "confirmed").length;
+      const dates = rawShifts.map((s: any) => s.shift_date).filter(Boolean).sort();
+      const shifts: ShiftEvent[] = rawShifts.map((s: any) => ({
+        id: s.id, shift_date: s.shift_date, shift_status: s.shift_status ?? "unfilled",
+        booking_id: b.id, client_name: b.clients?.company_name ?? null,
+      }));
       return {
         id: b.id, client_id: b.client_id, client_name: b.clients?.company_name ?? null,
         branch_id: b.branch_id, branch_name: b.client_branches?.branch_name ?? null,
         qualification_required: b.qualification_required, notes: b.notes, status: b.status ?? "active",
-        created_at: b.created_at, shift_count: shifts.length, confirmed_count: confirmed,
+        created_at: b.created_at, shift_count: rawShifts.length, confirmed_count: confirmed,
         date_from: dates[0] ?? null, date_to: dates[dates.length - 1] ?? null,
+        shifts,
       };
     });
     setBookings(mapped);
@@ -239,35 +381,56 @@ function Page() {
         description={loading ? "Loading…" : `${bookings.length} booking${bookings.length !== 1 ? "s" : ""}`}
         icon={CalendarRange}
         actions={
-          <button onClick={() => setShowNew(true)}
-            className="h-9 px-3.5 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 inline-flex items-center gap-1.5">
-            <Plus className="h-3.5 w-3.5" /> New Booking
-          </button>
+          <div className="flex items-center gap-2">
+            {/* View toggle */}
+            <div className="flex items-center rounded-full border bg-muted/40 p-0.5 h-9">
+              <button onClick={() => setView("list")}
+                className={`h-7 px-3 rounded-full text-xs font-medium transition-colors inline-flex items-center gap-1.5 ${
+                  view === "list" ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}>
+                <LayoutList className="h-3.5 w-3.5" /> List
+              </button>
+              <button onClick={() => setView("calendar")}
+                className={`h-7 px-3 rounded-full text-xs font-medium transition-colors inline-flex items-center gap-1.5 ${
+                  view === "calendar" ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}>
+                <Calendar className="h-3.5 w-3.5" /> Calendar
+              </button>
+            </div>
+            <button onClick={() => setShowNew(true)}
+              className="h-9 px-3.5 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 inline-flex items-center gap-1.5">
+              <Plus className="h-3.5 w-3.5" /> New Booking
+            </button>
+          </div>
         }
       />
 
-      <Card className="p-4 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[240px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search client or qualification…"
-              className="pl-9 h-9 rounded-full bg-muted/50 border-transparent" />
+      {view === "list" && (
+        <Card className="p-4 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[240px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search client or qualification…"
+                className="pl-9 h-9 rounded-full bg-muted/50 border-transparent" />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-9 w-auto min-w-[130px] rounded-full bg-muted/40 border-transparent text-xs font-medium">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All statuses</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-9 w-auto min-w-[130px] rounded-full bg-muted/40 border-transparent text-xs font-medium">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>All statuses</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </Card>
+        </Card>
+      )}
 
       {loading ? (
         <Card className="p-16 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card text-center text-muted-foreground">Loading…</Card>
+      ) : view === "calendar" ? (
+        <CalendarView bookings={filtered} onNavigate={(id) => navigate({ to: "/bookings/$id", params: { id } })} />
       ) : filtered.length === 0 ? (
         <Card className="p-16 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card text-center text-muted-foreground">
           No bookings found.{" "}
