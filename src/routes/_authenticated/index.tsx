@@ -334,7 +334,7 @@ function Dashboard() {
                     <div className="min-w-0 flex-1">
                       <div className="font-medium text-sm truncate">
                         {cand ? `${cand.first_name ?? ""} ${cand.last_name ?? ""}`.trim() || "Candidate" : "Candidate"}
-                        <span className="text-muted-foreground font-normal"> · {job?.client?.company_name || "—"}</span>
+                        <span className="text-muted-foreground font-normal"> · {job?.client?.name || "—"}</span>
                       </div>
                       <div className="text-xs text-muted-foreground truncate">
                         {job?.title || "—"}{i.interview_type ? ` · ${i.interview_type}` : ""}
