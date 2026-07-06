@@ -44,7 +44,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 
-type NavItem = { title: string; url: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; exact?: boolean };
+type NavItem = { title: string; url: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; exact?: boolean; iconColor?: string };
 
 const overview: NavItem[] = [{ title: "Dashboard", url: "/", icon: LayoutDashboard, exact: true }];
 const recruitment: NavItem[] = [
@@ -60,7 +60,7 @@ const operations: NavItem[] = [
 ];
 const workspace: NavItem[] = [
   { title: "Placements", url: "/placements", icon: Trophy },
-  { title: "Sammie", url: "/sammie", icon: Sparkles },
+  { title: "Sammie", url: "/sammie", icon: Sparkles, iconColor: "text-teal" },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
@@ -125,7 +125,7 @@ export function AppSidebar() {
                     {active && !collapsed && (
                       <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-sidebar-primary" />
                     )}
-                    <item.icon className="h-4 w-4" />
+                    <item.icon className={`h-4 w-4 ${item.iconColor ?? ""}`} />
                     <span>{item.title}</span>
                   </Link>
                 </SidebarMenuButton>

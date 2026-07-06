@@ -325,9 +325,7 @@ function SammiePage() {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border/40 bg-card/50 backdrop-blur-sm shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal to-navy grid place-items-center shadow-sm">
-              <Sparkles className="h-4 w-4 text-white" />
-            </div>
+            <img src="/sammie.png" alt="Sammie" className="w-9 h-9 rounded-full object-cover shadow-sm ring-2 ring-teal/20" />
             <div>
               <h1 className="text-sm font-semibold">Sammie</h1>
               <p className="text-xs text-muted-foreground">SOAR AI Recruitment Assistant</p>
@@ -345,11 +343,9 @@ function SammiePage() {
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full gap-6 text-center pb-8">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-teal to-navy grid place-items-center shadow-lg">
-                <Sparkles className="h-8 w-8 text-white" />
-              </div>
+              <img src="/sammie.png" alt="Sammie" className="w-20 h-20 rounded-full object-cover shadow-lg ring-4 ring-teal/30" />
               <div>
-                <h2 className="text-xl font-semibold">Hi, I'm Sammie ✨</h2>
+                <h2 className="text-xl font-semibold">Hey, I'm Sammie ✨</h2>
                 <p className="text-muted-foreground text-sm mt-1 max-w-sm">Your AI recruitment assistant. I can help you find candidates, search vacancies, generate Boolean strings, draft messages and more.</p>
               </div>
               <div className="grid grid-cols-2 gap-2 w-full max-w-sm">
@@ -367,9 +363,7 @@ function SammiePage() {
           {messages.map(msg => (
             <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} gap-3`}>
               {msg.role === "sammie" && (
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-teal to-navy grid place-items-center shrink-0 mt-0.5">
-                  <Sparkles className="h-3.5 w-3.5 text-white" />
-                </div>
+                <img src="/sammie.png" alt="Sammie" className="w-7 h-7 rounded-full object-cover shrink-0 mt-0.5 ring-2 ring-teal/20" />
               )}
               <div className={`max-w-[80%] space-y-2 ${msg.role === "user" ? "items-end" : "items-start"} flex flex-col`}>
                 <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
@@ -406,9 +400,7 @@ function SammiePage() {
 
           {loading && (
             <div className="flex justify-start gap-3">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-teal to-navy grid place-items-center shrink-0">
-                <Sparkles className="h-3.5 w-3.5 text-white" />
-              </div>
+              <img src="/sammie.png" alt="Sammie" className="w-7 h-7 rounded-full object-cover shrink-0 ring-2 ring-teal/20" />
               <div className="bg-card border border-border/50 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
                 <div className="flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-teal animate-bounce" style={{ animationDelay: "0ms" }} />
