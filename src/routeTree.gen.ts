@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as ReferenceTokenRouteImport } from './routes/reference.$token'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
@@ -37,6 +38,11 @@ import { Route as AuthenticatedBookingsIdRouteImport } from './routes/_authentic
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReferenceTokenRoute = ReferenceTokenRouteImport.update({
+  id: '/reference/$token',
+  path: '/reference/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -164,6 +170,7 @@ const AuthenticatedBookingsIdRoute = AuthenticatedBookingsIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
+  '/reference/$token': typeof ReferenceTokenRoute
   '/account': typeof AuthenticatedAccountRoute
   '/bookings': typeof AuthenticatedBookingsRouteWithChildren
   '/candidates': typeof AuthenticatedCandidatesRouteWithChildren
@@ -188,6 +195,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
+  '/reference/$token': typeof ReferenceTokenRoute
   '/account': typeof AuthenticatedAccountRoute
   '/interviews': typeof AuthenticatedInterviewsRoute
   '/map': typeof AuthenticatedMapRoute
@@ -210,6 +218,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/reference/$token': typeof ReferenceTokenRoute
   '/_authenticated/account': typeof AuthenticatedAccountRoute
   '/_authenticated/bookings': typeof AuthenticatedBookingsRouteWithChildren
   '/_authenticated/candidates': typeof AuthenticatedCandidatesRouteWithChildren
@@ -310,6 +319,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ReferenceTokenRoute: typeof ReferenceTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -319,6 +329,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reference/$token': {
+      id: '/reference/$token'
+      path: '/reference/$token'
+      fullPath: '/reference/$token'
+      preLoaderRoute: typeof ReferenceTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -594,6 +611,7 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ReferenceTokenRoute: ReferenceTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

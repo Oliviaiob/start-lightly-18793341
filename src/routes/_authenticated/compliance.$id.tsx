@@ -76,7 +76,7 @@ type ChecklistRecord = Record<ChecklistKey, string | null> & {
 };
 
 type ReferenceRecord = {
-  id: string; referee_name: string | null; company_name: string | null;
+  id: string; referee_name: string | null; referee_email: string | null; company_name: string | null;
   ref_type: string | null; ref_number: number | null;
   status: string | null; requested_at: string | null; received_at: string | null;
 };
@@ -268,7 +268,7 @@ function Page() {
       supabase.from("candidates").select("id,first_name,last_name,email,phone,qualification_level,status_temp,source,dbs_next_check_due,paediatric_first_aid_expiry,onboarding_email_sent_at,bank_details_token").eq("id", id).maybeSingle(),
       supabase.from("compliance_checklists").select("*").eq("candidate_id", id).maybeSingle(),
       supabase.from("candidate_documents").select("id,document_type,file_name,file_url,status,uploaded_at,file_size").eq("candidate_id", id).order("uploaded_at", { ascending: false }),
-      supabase.from("references").select("id,referee_name,company_name,ref_type,ref_number,status,requested_at,received_at").eq("candidate_id", id).order("ref_number", { ascending: true }),
+      supabase.from("references").select("id,referee_name,referee_email,company_name,ref_type,ref_number,status,requested_at,received_at").eq("candidate_id", id).order("ref_number", { ascending: true }),
     ]);
     if (candRes.error) { toast.error("Candidate not found"); setLoading(false); return; }
     const cand = candRes.data as Candidate | null;
@@ -513,11 +513,23 @@ function Page() {
                       </span>
                     )}
                     <button
-                      onClick={() => {
-                        if (ref.referee_name) toast.success(`Resend triggered for ${ref.referee_name}`);
+                      onClick={async () => {
+                        if (!ref.referee_email) {
+                          toast.error("No email address on this reference.");
+                          return;
+                        }
+                        const { error } = await supabase.functions.invoke("send-reference-request", {
+                          body: { reference_id: ref.id },
+                        });
+                        if (error) {
+                          toast.error("Failed to send: " + error.message);
+                        } else {
+                          toast.success(`Reference request sent to ${ref.referee_name ?? ref.referee_email}`);
+                          await loadAll();
+                        }
                       }}
                       className="inline-flex items-center gap-1 h-7 px-3 rounded-lg border text-xs font-medium hover:bg-muted/40 transition-colors">
-                      <Mail className="h-3 w-3" /> Resend
+                      <Mail className="h-3 w-3" /> {ref.status === "requested" || ref.status === "received" ? "Resend" : "Send"}
                     </button>
                   </div>
                 </div>
