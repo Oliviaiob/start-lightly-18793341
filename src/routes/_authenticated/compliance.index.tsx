@@ -129,6 +129,10 @@ function AddCandidateModal({ open, onClose, onCreated }: {
   const [tab, setTab] = useState<"upload" | "manual" | "convert">("upload");
   const [saving, setSaving] = useState(false);
   const [fileLabel, setFileLabel] = useState<string | null>(null);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadSearch, setUploadSearch] = useState("");
+  const [uploadCandidates, setUploadCandidates] = useState<{ id: string; first_name: string | null; last_name: string | null; email: string | null }[]>([]);
+  const [selectedUploadCandidate, setSelectedUploadCandidate] = useState<{ id: string; name: string } | null>(null);
   const [form, setForm] = useState({ first_name: "", last_name: "", email: "", phone: "", date_of_birth: "", ni_number: "", qualification_level: "__none__", address_line_1: "", city: "", postcode: "" });
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
   const [permSearch, setPermSearch] = useState("");
@@ -137,7 +141,7 @@ function AddCandidateModal({ open, onClose, onCreated }: {
   const [selectedPerm, setSelectedPerm] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
-    if (!open) { setTab("upload"); setFileLabel(null); setForm({ first_name: "", last_name: "", email: "", phone: "", date_of_birth: "", ni_number: "", qualification_level: "__none__", address_line_1: "", city: "", postcode: "" }); setSelectedPerm(null); setPermSearch(""); }
+    if (!open) { setTab("upload"); setFileLabel(null); setUploadFile(null); setUploadSearch(""); setUploadCandidates([]); setSelectedUploadCandidate(null); setForm({ first_name: "", last_name: "", email: "", phone: "", date_of_birth: "", ni_number: "", qualification_level: "__none__", address_line_1: "", city: "", postcode: "" }); setSelectedPerm(null); setPermSearch(""); }
   }, [open]);
 
   useEffect(() => {
@@ -145,10 +149,52 @@ function AddCandidateModal({ open, onClose, onCreated }: {
     supabase.from("candidates").select("id,first_name,last_name").in("candidate_type", ["perm"]).order("first_name").then(({ data }) => setPermCandidates((data as any[]) ?? []));
   }, [tab]);
 
+  useEffect(() => {
+    if (uploadSearch.trim().length < 2) { setUploadCandidates([]); return; }
+    const q = uploadSearch.trim().toLowerCase();
+    supabase.from("candidates").select("id,first_name,last_name,email").order("first_name").then(({ data }) => {
+      const filtered = ((data as any[]) ?? []).filter((c: any) =>
+        `${c.first_name ?? ""} ${c.last_name ?? ""}`.toLowerCase().includes(q) || (c.email ?? "").toLowerCase().includes(q)
+      );
+      setUploadCandidates(filtered.slice(0, 6));
+    });
+  }, [uploadSearch]);
+
   const filteredPerm = permCandidates.filter((c) => `${c.first_name ?? ""} ${c.last_name ?? ""}`.toLowerCase().includes(permSearch.toLowerCase()));
 
   const createChecklist = async (candidateId: string) => {
     await supabase.from("compliance_checklists").insert({ candidate_id: candidateId });
+  };
+
+  const saveUpload = async () => {
+    if (!selectedUploadCandidate) { toast.error("Please select the candidate this form belongs to"); return; }
+    setSaving(true);
+    // Ensure compliance checklist exists
+    const { data: existing } = await supabase.from("compliance_checklists").select("id").eq("candidate_id", selectedUploadCandidate.id).maybeSingle();
+    if (!existing) {
+      await supabase.from("compliance_checklists").insert({ candidate_id: selectedUploadCandidate.id });
+    }
+    // Save the uploaded document record
+    if (uploadFile) {
+      await supabase.from("candidate_documents").insert({
+        candidate_id: selectedUploadCandidate.id,
+        document_type: "registration_form",
+        file_name: uploadFile.name,
+        file_size: uploadFile.size,
+        status: "uploaded",
+        uploaded_at: new Date().toISOString(),
+      });
+    }
+    // Ensure candidate is typed as temp/both
+    const { data: cand } = await supabase.from("candidates").select("candidate_type,status_temp").eq("id", selectedUploadCandidate.id).maybeSingle();
+    if (cand && cand.candidate_type === "perm") {
+      await supabase.from("candidates").update({ candidate_type: "both", status_temp: "pending_compliance" }).eq("id", selectedUploadCandidate.id);
+    } else if (cand && !cand.status_temp) {
+      await supabase.from("candidates").update({ status_temp: "pending_compliance" }).eq("id", selectedUploadCandidate.id);
+    }
+    toast.success(`Compliance profile opened for ${selectedUploadCandidate.name}`);
+    setSaving(false);
+    onCreated();
   };
 
   const saveManual = async () => {
@@ -191,16 +237,56 @@ function AddCandidateModal({ open, onClose, onCreated }: {
         </div>
         {tab === "upload" && (
           <div className="space-y-4 mt-1">
-            <p className="text-xs text-muted-foreground">Upload a completed SOAR temp registration form (PDF). Details will be extracted for review.</p>
-            <label className="block border-2 border-dashed rounded-xl p-8 text-center cursor-pointer hover:border-teal/50 hover:bg-teal/5 transition-colors">
-              <input type="file" accept=".pdf" className="hidden" onChange={(e) => setFileLabel(e.target.files?.[0]?.name ?? null)} />
-              {fileLabel ? <div className="flex items-center justify-center gap-2"><FileText className="h-5 w-5 text-teal" /><span className="text-sm font-medium text-teal">{fileLabel}</span></div>
-                : <><Upload className="h-6 w-6 text-muted-foreground mx-auto mb-2" /><span className="text-sm text-muted-foreground">Click to upload PDF</span></>}
-            </label>
+            {/* Step 1: find the candidate */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Which candidate is this form for? *</label>
+              {selectedUploadCandidate ? (
+                <div className="flex items-center justify-between h-10 px-3 rounded-lg border bg-teal/5 border-teal/30">
+                  <span className="text-sm font-medium text-teal">{selectedUploadCandidate.name}</span>
+                  <button onClick={() => { setSelectedUploadCandidate(null); setUploadSearch(""); }} className="text-xs text-muted-foreground hover:text-foreground ml-2">Change</button>
+                </div>
+              ) : (
+                <div className="relative">
+                  <Input
+                    value={uploadSearch}
+                    onChange={(e) => setUploadSearch(e.target.value)}
+                    placeholder="Search by name or email…"
+                    className="h-10"
+                  />
+                  {uploadCandidates.length > 0 && (
+                    <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-card border rounded-xl shadow-lg overflow-hidden">
+                      {uploadCandidates.map((c) => (
+                        <button key={c.id} onClick={() => { setSelectedUploadCandidate({ id: c.id, name: `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() }); setUploadSearch(""); setUploadCandidates([]); }}
+                          className="w-full px-3 py-2.5 text-left hover:bg-muted/50 flex items-center gap-2">
+                          <span className="text-sm font-medium">{c.first_name} {c.last_name}</span>
+                          {c.email && <span className="text-xs text-muted-foreground truncate">{c.email}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {uploadSearch.trim().length >= 2 && uploadCandidates.length === 0 && (
+                    <p className="text-xs text-muted-foreground mt-1.5 px-1">No candidates found — use "Enter Manually" to create a new one.</p>
+                  )}
+                </div>
+              )}
+            </div>
+            {/* Step 2: upload the file */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Registration form (PDF, optional)</label>
+              <label className="block border-2 border-dashed rounded-xl p-6 text-center cursor-pointer hover:border-teal/50 hover:bg-teal/5 transition-colors">
+                <input type="file" accept=".pdf,.doc,.docx" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0] ?? null; setUploadFile(f); setFileLabel(f?.name ?? null); }} />
+                {fileLabel
+                  ? <div className="flex items-center justify-center gap-2"><FileText className="h-5 w-5 text-teal" /><span className="text-sm font-medium text-teal">{fileLabel}</span></div>
+                  : <><Upload className="h-5 w-5 text-muted-foreground mx-auto mb-1.5" /><span className="text-sm text-muted-foreground">Click to attach form</span></>}
+              </label>
+            </div>
             <div className="flex justify-end gap-3">
               <button onClick={onClose} className="h-10 px-5 rounded-full border text-sm font-medium hover:bg-muted">Cancel</button>
-              <button onClick={() => { toast.info("Form uploaded — candidate will be created once reviewed"); onCreated(); }} disabled={!fileLabel}
-                className="h-10 px-5 rounded-full bg-navy text-white text-sm font-medium hover:opacity-90 disabled:opacity-50">Submit for review</button>
+              <button onClick={saveUpload} disabled={!selectedUploadCandidate || saving}
+                className="h-10 px-5 rounded-full bg-navy text-white text-sm font-medium hover:opacity-90 disabled:opacity-50">
+                {saving ? "Opening…" : "Open compliance profile"}
+              </button>
             </div>
           </div>
         )}
