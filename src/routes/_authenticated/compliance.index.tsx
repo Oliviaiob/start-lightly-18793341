@@ -327,11 +327,6 @@ function AddCandidateModal({ open, onClose, onCreated }: {
                   <p className="text-sm font-medium">Click to upload PDF</p>
                   <p className="text-xs text-muted-foreground mt-1">SOAR temp registration form</p>
                 </label>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 h-px bg-border" />
-                  <span className="text-xs text-muted-foreground">or fill in manually</span>
-                  <div className="flex-1 h-px bg-border" />
-                </div>
                 <button onClick={() => setShowFullForm(true)} className="w-full h-10 rounded-xl border text-sm font-medium hover:bg-muted/40 transition-colors">Fill in form manually</button>
               </>
             )}
