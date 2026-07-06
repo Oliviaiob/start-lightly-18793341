@@ -802,9 +802,16 @@ function Page() {
                 <div className="text-muted-foreground">No CV uploaded yet.</div>
               )}
               {c.cv_soar_url && (
-                <a href={c.cv_soar_url} target="_blank" rel="noreferrer" className="ml-2 inline-flex items-center gap-2 p-3 rounded-xl bg-teal/15 hover:bg-teal/25 transition-colors">
-                  <Sparkles className="h-4 w-4 text-teal-foreground" /> View SOAR CV
-                </a>
+                <div className="inline-flex items-center gap-3 p-3 rounded-xl bg-teal/10 border border-teal/20">
+                  <Sparkles className="h-4 w-4 text-teal" />
+                  <div>
+                    <div className="text-sm font-medium text-foreground">SOAR CV</div>
+                    <div className="text-xs text-muted-foreground">
+                      Last generated {c.cv_soar_url.startsWith("generated:") ? new Date(c.cv_soar_url.replace("generated:","")).toLocaleDateString("en-GB") : ""}
+                    </div>
+                  </div>
+                  <button onClick={() => setCvOpen(true)} className="ml-2 text-xs text-teal font-medium hover:opacity-80">Regenerate →</button>
+                </div>
               )}
             </div>
           </TabsContent>
@@ -1054,6 +1061,7 @@ function GenerateCVModal({ open, onClose, candidate }: {
   };
 }) {
   const [generating, setGenerating] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [summary, setSummary] = useState("");
   const [availability, setAvailability] = useState("");
   const [employment, setEmployment] = useState<CvEmployment[]>([]);
@@ -1179,7 +1187,29 @@ p { font-size:13px; line-height:1.7; color:#444; }
     if (win) { win.document.write(html); win.document.close(); setTimeout(() => win.print(), 600); }
   };
 
-  const addEmp = () => setEmployment((p) => [...p, { role: "", company: "", dateTo: "", description: "" }]);
+  const saveCV = async () => {
+    setSaving(true);
+    const fileName = `SOAR_CV_${name.replace(/\s+/g, "_")}.pdf`;
+    try {
+      await supabase.from("candidate_documents").insert({
+        candidate_id: candidate.id,
+        document_type: "soar_cv",
+        file_name: fileName,
+        status: "pending",
+      });
+      await supabase.from("candidates").update({
+        cv_soar_url: `generated:${new Date().toISOString()}`,
+      }).eq("id", candidate.id);
+      toast.success("CV saved to candidate profile");
+    } catch (e: any) {
+      toast.error("Save failed: " + e.message);
+    }
+    setSaving(false);
+  };
+
+  const downloadAndSave = () => { downloadPDF(); saveCV(); };
+
+    const addEmp = () => setEmployment((p) => [...p, { role: "", company: "", dateTo: "", description: "" }]);
   const setEmp = (i: number, k: keyof CvEmployment, v: string) =>
     setEmployment((p) => p.map((e, idx) => idx === i ? { ...e, [k]: v } : e));
   const removeEmp = (i: number) => setEmployment((p) => p.filter((_, idx) => idx !== i));
@@ -1206,7 +1236,12 @@ p { font-size:13px; line-height:1.7; color:#444; }
               <Sparkles className="h-3.5 w-3.5" />
               {generating ? "Generating…" : "Regenerate"}
             </button>
-            <button onClick={downloadPDF} disabled={generating}
+            <button onClick={saveCV} disabled={saving || generating}
+              className="h-9 px-4 rounded-full border border-gray-300 bg-white text-gray-700 text-xs font-medium inline-flex items-center gap-1.5 hover:bg-gray-50 disabled:opacity-50 shadow-sm">
+              <Save className="h-3.5 w-3.5" />
+              {saving ? "Saving…" : "Save"}
+            </button>
+            <button onClick={downloadAndSave} disabled={generating}
               className="h-9 px-4 rounded-full bg-[#1B2B4B] text-white text-xs font-medium inline-flex items-center gap-1.5 hover:opacity-90 disabled:opacity-50 shadow-sm">
               <FileText className="h-3.5 w-3.5" /> Download PDF
             </button>
