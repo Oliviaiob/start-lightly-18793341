@@ -77,7 +77,7 @@ function statusLabel(s: string | null) {
 function StatusBadge({ status }: { status: string | null }) {
   const colours: Record<string, string> = {
     live: "bg-success/20 text-[oklch(0.4_0.12_155)]",
-    interviewing: "bg-teal/20 text-teal-foreground",
+    interviewing: "bg-teal/50 text-teal-foreground",
     filled: "bg-navy/10 text-navy",
     lost: "bg-muted text-muted-foreground",
   };
