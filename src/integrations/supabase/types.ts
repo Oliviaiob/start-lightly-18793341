@@ -1554,6 +1554,7 @@ export type Database = {
           hours: number | null
           id: string
           is_multi_day: boolean | null
+          is_new: boolean | null
           notes: string | null
           pay_rate: number | null
           role: string | null
@@ -1575,6 +1576,7 @@ export type Database = {
           hours?: number | null
           id?: string
           is_multi_day?: boolean | null
+          is_new?: boolean | null
           notes?: string | null
           pay_rate?: number | null
           role?: string | null
@@ -1596,6 +1598,7 @@ export type Database = {
           hours?: number | null
           id?: string
           is_multi_day?: boolean | null
+          is_new?: boolean | null
           notes?: string | null
           pay_rate?: number | null
           role?: string | null
@@ -1621,6 +1624,7 @@ export type Database = {
           candidate_id: string | null
           id: string
           shift_id: string | null
+          source: string | null
           status: string | null
         }
         Insert: {
@@ -1629,6 +1633,7 @@ export type Database = {
           candidate_id?: string | null
           id?: string
           shift_id?: string | null
+          source?: string | null
           status?: string | null
         }
         Update: {
@@ -1637,6 +1642,7 @@ export type Database = {
           candidate_id?: string | null
           id?: string
           shift_id?: string | null
+          source?: string | null
           status?: string | null
         }
         Relationships: [
