@@ -73,6 +73,7 @@ type MatchResult = {
   source: string | null;
   has_dbs: boolean | null;
   available_days: string[] | null;
+  breakdown: string[];
 };
 
 type CandidateFull = {
@@ -90,6 +91,7 @@ type CandidateFull = {
   source: string | null;
   has_dbs: boolean | null;
   available_days: string[] | null;
+  breakdown: string[];
 };
 
 const STAGES = [
@@ -153,6 +155,9 @@ function relTime(iso?: string | null) {
 
 function activityIcon(type: string) {
   if (type === "call_logged") return <PhoneCall className="h-3.5 w-3.5 text-teal-foreground" />;
+  if (type === "stage_change") return <Users className="h-3.5 w-3.5 text-navy" />;
+  if (type === "status_change") return <Briefcase className="h-3.5 w-3.5 text-amber-500" />;
+  if (type === "pipeline_add") return <Plus className="h-3.5 w-3.5 text-teal-foreground" />;
   return <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />;
 }
 
@@ -166,6 +171,52 @@ function scoreQual(jobQual: string | null, candQual: string | null): number {
   if (diff === 1) return 25;
   if (diff === 2) return 10;
   return 0;
+}
+
+function postcodeArea(pc: string | null): string {
+  return (pc ?? "").trim().toUpperCase().replace(/\s.*/, "").replace(/\d+$/, "");
+}
+
+function scoreCandidate(job: Pick<Job, "qualification_required" | "location_postcode" | "title">, c: {
+  qualification_level: string | null;
+  postcode?: string | null;
+  town?: string | null;
+  candidate_type?: string | null;
+  has_dbs?: boolean | null;
+}): { total: number; breakdown: string[] } {
+  const breakdown: string[] = [];
+  let total = 0;
+
+  // Qualification — 40pts
+  const q = scoreQual(job.qualification_required, c.qualification_level);
+  if (q > 0) { total += q; breakdown.push(`Qual: ${q}/40`); }
+  else { breakdown.push("Qual: 0/40"); }
+
+  // Location — 20pts (same postcode district e.g. SW1, CR0)
+  const jobArea = postcodeArea(job.location_postcode ?? null);
+  const candArea = postcodeArea(c.postcode ?? null);
+  if (jobArea && candArea && jobArea === candArea) {
+    total += 20; breakdown.push("Location: 20/20");
+  } else if (jobArea && candArea && jobArea.slice(0, 2) === candArea.slice(0, 2)) {
+    total += 10; breakdown.push("Location: 10/20 (nearby)");
+  } else {
+    breakdown.push("Location: 0/20");
+  }
+
+  // DBS — 10pts
+  if (c.has_dbs) { total += 10; breakdown.push("DBS: 10/10"); }
+  else { breakdown.push("DBS: 0/10"); }
+
+  // Candidate type alignment — 10pts
+  // Perm jobs prefer perm candidates; temp jobs prefer temp candidates
+  const isPerm = !job.title?.toLowerCase().includes("temp");
+  const ct = (c.candidate_type ?? "").toLowerCase();
+  if (ct.includes("both")) { total += 10; breakdown.push("Type: 10/10 (both)"); }
+  else if (isPerm && ct.includes("perm")) { total += 10; breakdown.push("Type: 10/10"); }
+  else if (!isPerm && ct.includes("temp")) { total += 10; breakdown.push("Type: 10/10"); }
+  else { breakdown.push("Type: 0/10"); }
+
+  return { total, breakdown };
 }
 
 // ── Status Dropdown ────────────────────────────────────────────────────────────
@@ -252,6 +303,8 @@ function AddPipelineModal({ open, jobId, onClose, onAdded, prefilledCandidateId,
       setSaving(false);
       if (error) { toast.error("Failed: " + error.message); return; }
     }
+    // log activity
+    await supabase.from("activity_log").insert({ entity_type: "job", entity_id: jobId, activity_type: "pipeline_add", description: `${candidateName} added to pipeline (${STAGES.find(s => s.key === stage)?.label ?? stage})`, created_by: null });
     toast.success("Added to pipeline");
     onAdded();
   };
@@ -708,25 +761,35 @@ function Page() {
   const moveStage = async (entryId: string, newStage: string) => {
     const { error } = await supabase.from("job_pipeline").update({ stage: newStage, stage_changed_at: new Date().toISOString() }).eq("id", entryId);
     if (error) { toast.error("Failed to move"); return; }
+    const entry = pipeline.find(e => e.id === entryId);
+    const candName = entry?.candidate ? `${entry.candidate.first_name ?? ""} ${entry.candidate.last_name ?? ""}`.trim() : "Candidate";
+    const stageLabel = STAGES.find(s => s.key === newStage)?.label ?? newStage;
+    await supabase.from("activity_log").insert({ entity_type: "job", entity_id: id, activity_type: "stage_change", description: `${candName} moved to ${stageLabel}`, created_by: userId ?? "system" });
     setPipeline((prev) => prev.map((e) => e.id === entryId ? { ...e, stage: newStage } : e));
+    setActivities(prev => [{ id: crypto.randomUUID(), activity_type: "stage_change", description: `${candName} moved to ${stageLabel}`, created_by: userId ?? null, created_at: new Date().toISOString() }, ...prev]);
     toast.success("Stage updated");
   };
 
   const findMatches = async () => {
+    if (!job) return;
     setMatching(true);
-    const { data } = await supabase.from("candidates").select("id,first_name,last_name,qualification_level,postcode,city,candidate_type,source,has_dbs,available_days");
-    const results = ((data ?? []) as any[]).map((c) => ({
-      id: c.id,
-      name: `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim(),
-      qual: c.qualification_level,
-      score: scoreQual(job?.qualification_required ?? null, c.qualification_level),
-      postcode: c.postcode ?? null,
-      city: c.city ?? null,
-      candidate_type: c.candidate_type ?? null,
-      source: c.source ?? null,
-      has_dbs: c.has_dbs ?? null,
-      available_days: c.available_days ?? null,
-    })).filter((r) => r.score > 0).sort((a, b) => b.score - a.score);
+    const { data } = await supabase.from("candidates").select("id,first_name,last_name,qualification_level,postcode,town,candidate_type,source,has_dbs,available_days");
+    const results = ((data ?? []) as any[]).map((c) => {
+      const { total, breakdown } = scoreCandidate(job, c);
+      return {
+        id: c.id,
+        name: `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim(),
+        qual: c.qualification_level,
+        score: total,
+        breakdown,
+        postcode: c.postcode ?? null,
+        city: c.town ?? null,
+        candidate_type: c.candidate_type ?? null,
+        source: c.source ?? null,
+        has_dbs: c.has_dbs ?? null,
+        available_days: c.available_days ?? null,
+      };
+    }).filter((r) => r.score > 0).sort((a, b) => b.score - a.score);
     setMatchResults(results);
     setMatching(false);
   };
@@ -955,8 +1018,8 @@ function Page() {
                       </td>
                       <td className="py-3 px-3 text-xs text-muted-foreground capitalize">{r.source ?? "—"}</td>
                       <td className="py-3 px-3 text-center">
-                        <span className={`inline-flex items-center h-6 px-3 rounded-full text-xs font-bold ${r.score >= 40 ? "bg-success/20 text-[oklch(0.4_0.12_155)]" : r.score >= 20 ? "bg-teal/20 text-teal-foreground" : "bg-muted text-muted-foreground"}`}>
-                          {r.score} / 40
+                        <span className={`inline-flex items-center h-6 px-3 rounded-full text-xs font-bold ${r.score >= 60 ? "bg-success/20 text-[oklch(0.4_0.12_155)]" : r.score >= 35 ? "bg-teal/20 text-teal-foreground" : "bg-muted text-muted-foreground"}`} title={r.breakdown.join(" · ")}>
+                          {r.score} / 80
                         </span>
                       </td>
                       <td className="py-3 px-4 text-right">

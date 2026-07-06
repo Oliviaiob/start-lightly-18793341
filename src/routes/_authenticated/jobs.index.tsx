@@ -347,7 +347,7 @@ function AddJobModal({
                       </div>
                       <div className="max-h-44 overflow-y-auto py-1">
                         <button
-                          onClick={() => { set("client_id", ""); set("branch_id", ""); setClientSearch(""); setClientDropOpen(false); setBranches([]); }}
+                          onClick={() => { set("client_id", ""); set("branch_id", ""); set("location_postcode", ""); setClientSearch(""); setClientDropOpen(false); setBranches([]); }}
                           className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 text-muted-foreground"
                         >No client</button>
                         {filteredClients.map(c => (
