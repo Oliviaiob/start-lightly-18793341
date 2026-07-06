@@ -12,7 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Users, Star, Search, Plus, X, Check, HelpCircle } from "lucide-react";
+import { Users, Star, Search, Plus, X, Check, HelpCircle, Upload, FileText } from "lucide-react";
+import { useNavigate as useNav } from "@tanstack/react-router";
+import { AddTempCandidateModal } from "@/components/add-temp-candidate-modal";
 import { useEffectiveScope, useScope } from "@/contexts/scope-context";
 import { toast } from "sonner";
 
@@ -102,6 +104,8 @@ function Page() {
   const scope = useEffectiveScope();
   const { userId } = useScope();
 
+  const [addTempOpen, setAddTempOpen] = useState(false);
+  const [addPermOpen, setAddPermOpen] = useState(false);
   const [rows, setRows] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   // availability: submittedThisWeek = Set of candidate_ids; timeOffToday = Map<id, title>
@@ -266,13 +270,13 @@ function Page() {
         actions={
           <>
             <button
-              onClick={() => navigate({ to: "/candidates/new" })}
+              onClick={() => setAddTempOpen(true)}
               className="h-9 px-3.5 rounded-full bg-white/10 text-navy-foreground text-sm font-medium hover:bg-white/20 transition-colors border border-white/20 inline-flex items-center gap-1.5"
             >
               Add Temporary Candidate
             </button>
             <button
-              onClick={() => navigate({ to: "/candidates/new" })}
+              onClick={() => setAddPermOpen(true)}
               className="h-9 px-3.5 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-1.5"
             >
               <Plus className="h-3.5 w-3.5" /> Add Permanent Candidate
@@ -497,6 +501,18 @@ function Page() {
           </table>
         </div>
       </Card>
+
+      {/* Add candidate modals */}
+      <AddTempCandidateModal
+        open={addTempOpen}
+        onClose={() => setAddTempOpen(false)}
+        onCreated={() => { setAddTempOpen(false); setLoading(true); }}
+      />
+      <AddPermCandidateModal
+        open={addPermOpen}
+        onClose={() => setAddPermOpen(false)}
+        onCreated={(id) => { setAddPermOpen(false); navigate({ to: "/candidates/$id", params: { id } }); }}
+      />
     </div>
   );
 }
@@ -528,3 +544,159 @@ function FilterSelect({
     </Select>
   );
 }
+
+// ── AddPermCandidateModal ─────────────────────────────────────────────────────
+function AddPermCandidateModal({ open, onClose, onCreated }: {
+  open: boolean; onClose: () => void; onCreated: (id: string) => void;
+}) {
+  const [step, setStep] = useState<"choose" | "extracting" | "review">("choose");
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    first_name: "", last_name: "", email: "", phone: "",
+    town: "", postcode: "", current_position: "", current_employer: "",
+    qualification_level: "__none__", qualifications_text: "",
+  });
+  const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
+
+  useEffect(() => {
+    if (!open) { setStep("choose"); setExtractError(null); setForm({ first_name:"",last_name:"",email:"",phone:"",town:"",postcode:"",current_position:"",current_employer:"",qualification_level:"__none__",qualifications_text:"" }); }
+  }, [open]);
+
+  const handleFile = async (file: File) => {
+    if (!file.name.match(/\.(pdf)$/i)) { setExtractError("Please upload a PDF file."); return; }
+    setStep("extracting"); setExtractError(null);
+    try {
+      const arrayBuf = await file.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuf);
+      let binary = "";
+      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+      const b64 = btoa(binary);
+      const { data, error } = await supabase.functions.invoke("extract-cv", { body: { pdf_base64: b64 } });
+      if (error) throw new Error(error.message);
+      const d = data?.data ?? {};
+      setForm({
+        first_name: d.first_name ?? "", last_name: d.last_name ?? "",
+        email: d.email ?? "", phone: d.phone ?? "",
+        town: d.town ?? "", postcode: d.postcode ?? "",
+        current_position: d.current_position ?? "", current_employer: d.current_employer ?? "",
+        qualification_level: d.qualification_level ?? "__none__",
+        qualifications_text: d.qualifications_text ?? "",
+      });
+      toast.success("CV extracted — review the details below");
+      setStep("review");
+    } catch (e: any) {
+      setExtractError("Couldn't extract CV. You can fill in the details manually.");
+      setStep("review");
+    }
+  };
+
+  const save = async () => {
+    if (!form.first_name || !form.last_name || !form.email) { toast.error("First name, last name and email are required"); return; }
+    setSaving(true);
+    const { data, error } = await supabase.from("candidates").insert({
+      first_name: form.first_name, last_name: form.last_name,
+      email: form.email || null, phone: form.phone || null,
+      town: form.town || null, postcode: form.postcode || null,
+      current_position: form.current_position || null,
+      current_employer: form.current_employer || null,
+      qualification_level: form.qualification_level === "__none__" ? null : form.qualification_level,
+      qualifications_text: form.qualifications_text || null,
+      candidate_type: "perm", status_perm: "not_contacted",
+    }).select("id").single();
+    setSaving(false);
+    if (error) { toast.error("Failed: " + error.message); return; }
+    toast.success(`${form.first_name} ${form.last_name} added`);
+    onCreated(data.id);
+  };
+
+  const QUAL_OPTS = [
+    { value: "unqualified", label: "Unqualified" }, { value: "level_2", label: "Level 2" },
+    { value: "level_3", label: "Level 3" }, { value: "room_leader", label: "Room Leader" },
+    { value: "deputy_manager", label: "Deputy Manager" }, { value: "manager", label: "Manager" },
+  ];
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-background rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+        <div className="px-6 py-5 border-b">
+          <h2 className="font-semibold text-base">Add Permanent Candidate</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {step === "choose" ? "Upload a CV — we'll extract the details." : step === "extracting" ? "Extracting CV details…" : "Review and confirm the extracted details."}
+          </p>
+        </div>
+
+        <div className="p-6">
+          {step === "choose" && (
+            <div className="space-y-4">
+              <label className="block border-2 border-dashed rounded-xl p-10 text-center cursor-pointer hover:border-teal/50 hover:bg-teal/5 transition-colors">
+                <input type="file" accept=".pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+                <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm font-medium">Click to choose a CV (.pdf)</p>
+                <p className="text-xs text-muted-foreground mt-1">We'll extract the details automatically</p>
+              </label>
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-border" />
+                <span className="text-xs text-muted-foreground">or</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+              <button onClick={() => setStep("review")} className="w-full h-10 rounded-xl border text-sm font-medium hover:bg-muted transition-colors">
+                Build manually
+              </button>
+              <div className="flex justify-end">
+                <button onClick={onClose} className="h-9 px-4 rounded-full border text-sm font-medium hover:bg-muted">Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {step === "extracting" && (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <div className="h-9 w-9 border-2 border-teal border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm text-muted-foreground">Extracting CV with AI…</p>
+            </div>
+          )}
+
+          {step === "review" && (
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+              {extractError && (
+                <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-700">{extractError}</div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                {[["First name *","first_name","text"],["Last name *","last_name","text"],["Email *","email","email"],["Phone","phone","tel"],["Town","town","text"],["Postcode","postcode","text"],["Current position","current_position","text"],["Current employer","current_employer","text"]].map(([label, key, type]) => (
+                  <div key={key} className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground">{label}</label>
+                    <input type={type} value={(form as any)[key]} onChange={e => set(key, e.target.value)}
+                      className="w-full h-9 px-3 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-teal/40 bg-background" />
+                  </div>
+                ))}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Qualification</label>
+                  <select value={form.qualification_level} onChange={e => set("qualification_level", e.target.value)}
+                    className="w-full h-9 px-3 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-teal/40 bg-background">
+                    <option value="__none__">— Select —</option>
+                    {QUAL_OPTS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Qualifications &amp; certifications</label>
+                <textarea value={form.qualifications_text} onChange={e => set("qualifications_text", e.target.value)}
+                  rows={3} className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-teal/40 bg-background resize-none" />
+              </div>
+              <div className="flex justify-between gap-3 pt-2 border-t">
+                <button onClick={() => setStep("choose")} className="h-10 px-4 rounded-full border text-sm font-medium hover:bg-muted">← Back</button>
+                <div className="flex gap-2">
+                  <button onClick={onClose} className="h-10 px-4 rounded-full border text-sm font-medium hover:bg-muted">Cancel</button>
+                  <button onClick={save} disabled={saving} className="h-10 px-5 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50">{saving ? "Creating…" : "Create candidate"}</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
