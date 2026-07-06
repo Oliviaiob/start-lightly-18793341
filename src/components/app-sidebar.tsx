@@ -16,6 +16,7 @@ import {
   ChevronRight,
   UserCircle2,
   Building,
+  Sparkles,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -59,6 +60,7 @@ const operations: NavItem[] = [
 ];
 const workspace: NavItem[] = [
   { title: "Placements", url: "/placements", icon: Trophy },
+  { title: "Sammie", url: "/sammie", icon: Sparkles },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
