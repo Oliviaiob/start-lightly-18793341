@@ -68,13 +68,18 @@ type MatchResult = {
   name: string;
   qual: string | null;
   score: number;
+  breakdown: string[];
   postcode: string | null;
   city: string | null;
   candidate_type: string | null;
   source: string | null;
   has_dbs: boolean | null;
   available_days: string[] | null;
-  breakdown: string[];
+  current_position: string | null;
+  commute_radius: string | null;
+  ai_score: number | null;
+  ai_reason: string | null;
+  ai_highlights: string[];
 };
 
 type CandidateFull = {
@@ -178,47 +183,144 @@ function postcodeArea(pc: string | null): string {
   return (pc ?? "").trim().toUpperCase().replace(/\s.*/, "").replace(/\d+$/, "");
 }
 
-function scoreCandidate(job: Pick<Job, "qualification_required" | "location_postcode" | "title">, c: {
-  qualification_level: string | null;
+function extractKeywords(text: string | null | undefined): Set<string> {
+  if (!text) return new Set();
+  const stopwords = new Set(["the","a","an","and","or","to","in","of","for","with","is","are","will","on","at","be","this","that","we","you","our","your","their","have","has","as","by","from","it","its","all","any","can","not","but","they","who","what","how"]);
+  return new Set(
+    text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/)
+      .filter(w => w.length > 3 && !stopwords.has(w))
+  );
+}
+
+const CHILDCARE_SYNONYMS: Record<string, string[]> = {
+  nursery: ["nursery","early years","childcare","eyfs","preschool","pre-school","playgroup"],
+  "room leader": ["room leader","senior practitioner","lead practitioner","team leader"],
+  "deputy manager": ["deputy manager","deputy","assistant manager"],
+  manager: ["manager","nursery manager","centre manager","head of"],
+  "level 3": ["level 3","nneb","btec","cache","nvq level 3","foundation degree","ba early childhood"],
+  "level 2": ["level 2","nvq level 2","cache level 2","btec level 2"],
+  baby: ["baby","babies","0-2","under 2","infant"],
+  toddler: ["toddler","1-3","wobbler","walking"],
+  "pre-school": ["pre-school","preschool","3-5","foundation stage"],
+};
+
+function experienceScore(job: Pick<Job,"title"|"description"|"qualification_required">, c: {
+  qualifications_text?: string | null;
+  current_position?: string | null;
+  current_employer?: string | null;
+  notes?: string | null;
+  availability_notes?: string | null;
+}): { score: number; reasons: string[] } {
+  const reasons: string[] = [];
+  let score = 0;
+
+  const candText = [c.qualifications_text, c.current_position, c.current_employer, c.notes, c.availability_notes]
+    .filter(Boolean).join(" ").toLowerCase();
+
+  // Check job title keywords in candidate text
+  const jobWords = extractKeywords((job.title ?? "") + " " + (job.description ?? ""));
+  const candWords = extractKeywords(candText);
+
+  // Direct keyword overlap
+  const overlap = [...jobWords].filter(w => candWords.has(w));
+  const pct = jobWords.size > 0 ? overlap.length / jobWords.size : 0;
+
+  if (pct >= 0.25) { score += 10; reasons.push("Strong keyword match"); }
+  else if (pct >= 0.12) { score += 5; reasons.push("Partial keyword match"); }
+
+  // Synonym/sector matching
+  let sectorHits = 0;
+  for (const [concept, syns] of Object.entries(CHILDCARE_SYNONYMS)) {
+    const inJob = syns.some(s => ((job.title ?? "") + " " + (job.description ?? "") + " " + (job.qualification_required ?? "")).toLowerCase().includes(s));
+    const inCand = syns.some(s => candText.includes(s));
+    if (inJob && inCand) sectorHits++;
+  }
+  if (sectorHits >= 2) { score += 10; reasons.push(`${sectorHits} sector matches`); }
+  else if (sectorHits === 1) { score += 5; reasons.push("Sector experience"); }
+
+  // Current position relevance
+  if (c.current_position) {
+    const cp = c.current_position.toLowerCase();
+    const titleLower = (job.title ?? "").toLowerCase();
+    if (titleLower.split(" ").some(w => w.length > 4 && cp.includes(w))) {
+      score += 5; reasons.push("Current role matches");
+    }
+  }
+
+  return { score: Math.min(score, 20), reasons };
+}
+
+function commuteScore(jobPostcode: string | null | undefined, candPostcode: string | null, commuteRadius: string | null): { score: number; reason: string | null } {
+  // Parse commute radius (e.g. "5 miles", "10 miles", "30 minutes")
+  if (!commuteRadius) return { score: 0, reason: null };
+  const miles = parseInt(commuteRadius.replace(/[^0-9]/g, "") || "0");
+  if (miles >= 20 || commuteRadius.toLowerCase().includes("any") || commuteRadius.toLowerCase().includes("remote")) {
+    return { score: 10, reason: "Flexible commute" };
+  }
+  const jobArea = postcodeArea(jobPostcode ?? null);
+  const candArea = postcodeArea(candPostcode);
+  if (jobArea && candArea && jobArea === candArea && miles >= 5) {
+    return { score: 10, reason: `Within commute radius (${commuteRadius})` };
+  }
+  if (jobArea && candArea && jobArea.slice(0,2) === candArea.slice(0,2) && miles >= 10) {
+    return { score: 5, reason: `Nearby, commute radius ${commuteRadius}` };
+  }
+  return { score: 0, reason: null };
+}
+
+function scoreCandidate(job: Pick<Job, "qualification_required" | "location_postcode" | "title" | "description">, c: {
+  qualification_level?: string | null;
   postcode?: string | null;
-  town?: string | null;
   candidate_type?: string | null;
   has_dbs?: boolean | null;
+  qualifications_text?: string | null;
+  current_position?: string | null;
+  current_employer?: string | null;
+  notes?: string | null;
+  availability_notes?: string | null;
+  commute_radius?: string | null;
 }): { total: number; breakdown: string[] } {
   const breakdown: string[] = [];
   let total = 0;
 
   // Qualification — 40pts
-  const q = scoreQual(job.qualification_required, c.qualification_level);
-  if (q > 0) { total += q; breakdown.push(`Qual: ${q}/40`); }
-  else { breakdown.push("Qual: 0/40"); }
+  const q = scoreQual(job.qualification_required, c.qualification_level ?? null);
+  total += q; breakdown.push(`Qual: ${q}/40`);
 
-  // Location — 20pts (same postcode district e.g. SW1, CR0)
+  // Location — 20pts
   const jobArea = postcodeArea(job.location_postcode ?? null);
   const candArea = postcodeArea(c.postcode ?? null);
   if (jobArea && candArea && jobArea === candArea) {
     total += 20; breakdown.push("Location: 20/20");
-  } else if (jobArea && candArea && jobArea.slice(0, 2) === candArea.slice(0, 2)) {
-    total += 10; breakdown.push("Location: 10/20 (nearby)");
+  } else if (jobArea && candArea && jobArea.slice(0,2) === candArea.slice(0,2)) {
+    total += 10; breakdown.push("Location: 10/20 (nearby area)");
   } else {
     breakdown.push("Location: 0/20");
   }
 
   // DBS — 10pts
   if (c.has_dbs) { total += 10; breakdown.push("DBS: 10/10"); }
-  else { breakdown.push("DBS: 0/10"); }
+  else breakdown.push("DBS: 0/10");
 
   // Candidate type alignment — 10pts
-  // Perm jobs prefer perm candidates; temp jobs prefer temp candidates
-  const isPerm = !job.title?.toLowerCase().includes("temp");
   const ct = (c.candidate_type ?? "").toLowerCase();
   if (ct.includes("both")) { total += 10; breakdown.push("Type: 10/10 (both)"); }
-  else if (isPerm && ct.includes("perm")) { total += 10; breakdown.push("Type: 10/10"); }
-  else if (!isPerm && ct.includes("temp")) { total += 10; breakdown.push("Type: 10/10"); }
-  else { breakdown.push("Type: 0/10"); }
+  else if (ct.includes("perm")) { total += 10; breakdown.push("Type: 10/10 (perm)"); }
+  else { breakdown.push("Type: 0/10 (temp only)"); }
+
+  // Experience & skills — 20pts
+  const { score: expScore, reasons: expReasons } = experienceScore(job, c);
+  total += expScore;
+  breakdown.push(expReasons.length ? `Experience: ${expScore}/20 (${expReasons.join(", ")})` : `Experience: 0/20`);
+
+  // Commute — 10pts
+  const { score: comScore, reason: comReason } = commuteScore(job.location_postcode, c.postcode ?? null, c.commute_radius ?? null);
+  total += comScore;
+  breakdown.push(comReason ? `Commute: ${comScore}/10 (${comReason})` : "Commute: 0/10");
 
   return { total, breakdown };
 }
+
 
 // ── Status Dropdown ────────────────────────────────────────────────────────────
 
@@ -648,6 +750,7 @@ function Page() {
   // smart match
   const [matchResults, setMatchResults] = useState<MatchResult[]>([]);
   const [matching, setMatching] = useState(false);
+  const [aiMatching, setAiMatching] = useState(false);
   const [drawerCandidateId, setDrawerCandidateId] = useState<string | null>(null);
   const [addPipelineCandidate, setAddPipelineCandidate] = useState<{ id: string; name: string } | null>(null);
 
@@ -815,8 +918,19 @@ function Page() {
   const findMatches = async () => {
     if (!job) return;
     setMatching(true);
-    const { data } = await supabase.from("candidates").select("id,first_name,last_name,qualification_level,postcode,town,candidate_type,source,has_dbs,available_days");
-    const results = ((data ?? []) as any[]).map((c) => {
+    const { data } = await supabase.from("candidates").select(
+      "id,first_name,last_name,qualification_level,postcode,town,candidate_type,source,has_dbs,available_days,qualifications_text,current_position,current_employer,notes,availability_notes,commute_radius"
+    );
+
+    // For perm jobs, exclude temp-only candidates
+    const isPerm = !job.title?.toLowerCase().includes("temp");
+    const filtered = ((data ?? []) as any[]).filter(c => {
+      if (!isPerm) return true; // temp jobs include everyone
+      const ct = (c.candidate_type ?? "").toLowerCase();
+      return !ct || ct.includes("perm") || ct.includes("both");
+    });
+
+    const results = filtered.map((c) => {
       const { total, breakdown } = scoreCandidate(job, c);
       return {
         id: c.id,
@@ -830,10 +944,63 @@ function Page() {
         source: c.source ?? null,
         has_dbs: c.has_dbs ?? null,
         available_days: c.available_days ?? null,
+        ai_score: null,
+        ai_reason: null,
+        ai_highlights: [],
+        current_position: c.current_position ?? null,
+        commute_radius: c.commute_radius ?? null,
       };
     }).filter((r) => r.score > 0).sort((a, b) => b.score - a.score);
+
     setMatchResults(results);
     setMatching(false);
+  };
+
+  const runAiDeepMatch = async () => {
+    if (!job || matchResults.length === 0) return;
+    setAiMatching(true);
+    try {
+      const top = matchResults.slice(0, 20); // cap at 20 to keep token count reasonable
+      const { data: fullData } = await supabase.from("candidates").select(
+        "id,qualifications_text,current_position,current_employer,notes,availability_notes,commute_radius"
+      ).in("id", top.map(r => r.id));
+
+      const candPayload = top.map(r => {
+        const full = ((fullData ?? []) as any[]).find((f: any) => f.id === r.id) ?? {};
+        return {
+          id: r.id,
+          name: r.name,
+          current_position: full.current_position ?? r.current_position,
+          current_employer: full.current_employer ?? null,
+          qualifications_text: full.qualifications_text ?? null,
+          notes: full.notes ?? null,
+          availability_notes: full.availability_notes ?? null,
+          commute_radius: full.commute_radius ?? r.commute_radius,
+        };
+      });
+
+      const { data, error } = await supabase.functions.invoke("ai-smart-match", {
+        body: {
+          job: { title: job.title, qualification_required: job.qualification_required, location: job.location_postcode, hours: job.hours, room: job.room, description: job.description },
+          candidates: candPayload,
+        },
+      });
+      if (error) throw new Error(error.message);
+      const scores: { id: string; ai_score: number; reason: string; highlights: string[] }[] = data?.scores ?? [];
+      setMatchResults(prev => prev.map(r => {
+        const s = scores.find(x => x.id === r.id);
+        return s ? { ...r, ai_score: s.ai_score, ai_reason: s.reason, ai_highlights: s.highlights ?? [] } : r;
+      }).sort((a, b) => {
+        // re-sort by combined score when AI scores available
+        const aTotal = (a.score / 110) * 50 + ((a.ai_score ?? 50) / 100) * 50;
+        const bTotal = (b.score / 110) * 50 + ((b.ai_score ?? 50) / 100) * 50;
+        return bTotal - aTotal;
+      }));
+      toast.success("AI deep match complete");
+    } catch (e: any) {
+      toast.error("AI match failed: " + e.message);
+    }
+    setAiMatching(false);
   };
 
   if (loading) return <div className="max-w-[1400px] mx-auto pt-16 text-center text-muted-foreground">Loading…</div>;
@@ -1008,6 +1175,13 @@ function Page() {
       {tab === "smart_match" && (
         <div className="space-y-4">
           <div className="flex items-center justify-end">
+            {matchResults.length > 0 && (
+              <button onClick={runAiDeepMatch} disabled={aiMatching || matching}
+                className="h-9 px-4 rounded-full border border-teal text-teal text-sm font-medium hover:bg-teal/10 disabled:opacity-50 inline-flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5" />
+                {aiMatching ? "Running AI Match…" : "AI Deep Match"}
+              </button>
+            )}
             <button onClick={findMatches} disabled={matching}
               className="h-9 px-4 rounded-full bg-navy text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5">
               <Star className="h-3.5 w-3.5" /> {matching ? "Matching…" : "Find Matching Candidates"}
@@ -1060,8 +1234,8 @@ function Page() {
                       </td>
                       <td className="py-3 px-3 text-xs text-muted-foreground capitalize">{r.source ?? "—"}</td>
                       <td className="py-3 px-3 text-center">
-                        <span className={`inline-flex items-center h-6 px-3 rounded-full text-xs font-bold ${r.score >= 60 ? "bg-success/20 text-[oklch(0.4_0.12_155)]" : r.score >= 35 ? "bg-teal/20 text-teal-foreground" : "bg-muted text-muted-foreground"}`} title={r.breakdown.join(" · ")}>
-                          {r.score} / 80
+                        <span className={`inline-flex items-center h-6 px-3 rounded-full text-xs font-bold ${r.score >= 80 ? "bg-success/20 text-[oklch(0.4_0.12_155)]" : r.score >= 45 ? "bg-teal/20 text-teal-foreground" : "bg-muted text-muted-foreground"}`} title={r.breakdown.join(" · ")}>
+                          {r.score} / 110
                         </span>
                       </td>
                       <td className="py-3 px-4 text-right">
