@@ -189,6 +189,44 @@ export type Database = {
           },
         ]
       }
+      candidate_calls: {
+        Row: {
+          cancelled_at: string | null
+          candidate_id: string | null
+          created_at: string | null
+          id: string
+          scheduled_date: string
+          scheduled_time: string
+          status: string | null
+        }
+        Insert: {
+          cancelled_at?: string | null
+          candidate_id?: string | null
+          created_at?: string | null
+          id?: string
+          scheduled_date: string
+          scheduled_time: string
+          status?: string | null
+        }
+        Update: {
+          cancelled_at?: string | null
+          candidate_id?: string | null
+          created_at?: string | null
+          id?: string
+          scheduled_date?: string
+          scheduled_time?: string
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidate_calls_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       candidate_documents: {
         Row: {
           candidate_id: string | null
