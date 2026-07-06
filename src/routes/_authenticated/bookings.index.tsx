@@ -386,18 +386,18 @@ function Page() {
           <div className="flex items-center gap-2">
             {/* View toggle */}
             <div className="flex items-center rounded-full border bg-muted/40 p-0.5 h-9">
-              <button onClick={() => setView("list")}
-                className={`h-7 px-3 rounded-full text-xs font-medium transition-colors inline-flex items-center gap-1.5 ${
-                  view === "list" ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground"
-                }`}>
-                <LayoutList className="h-3.5 w-3.5" /> List
-              </button>
-              <button onClick={() => setView("calendar")}
-                className={`h-7 px-3 rounded-full text-xs font-medium transition-colors inline-flex items-center gap-1.5 ${
-                  view === "calendar" ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground"
-                }`}>
-                <Calendar className="h-3.5 w-3.5" /> Calendar
-              </button>
+            <button onClick={() => setView("list")}
+              className={`h-7 px-3 rounded-full text-xs font-medium transition-colors inline-flex items-center gap-1.5 ${
+                view === "list" ? "bg-card shadow text-foreground" : "text-navy-foreground/70 hover:text-navy-foreground"
+              }`}>
+              <LayoutList className="h-3.5 w-3.5" /> List
+            </button>
+            <button onClick={() => setView("calendar")}
+              className={`h-7 px-3 rounded-full text-xs font-medium transition-colors inline-flex items-center gap-1.5 ${
+                view === "calendar" ? "bg-card shadow text-foreground" : "text-navy-foreground/70 hover:text-navy-foreground"
+              }`}>
+              <Calendar className="h-3.5 w-3.5" /> Calendar
+            </button>
             </div>
             <button onClick={() => setShowNew(true)}
               className="h-9 px-3.5 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 inline-flex items-center gap-1.5">
