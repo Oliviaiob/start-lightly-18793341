@@ -375,6 +375,7 @@ function InlineAssign({ shift, pool, onAssign }: {
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
   const ref = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -395,7 +396,9 @@ function InlineAssign({ shift, pool, onAssign }: {
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (ref.current?.contains(target) || dropdownRef.current?.contains(target)) return;
+      setOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -421,6 +424,7 @@ function InlineAssign({ shift, pool, onAssign }: {
       </button>
       {open && createPortal(
         <div
+          ref={dropdownRef}
           className="fixed z-[100] w-72 bg-card border rounded-xl shadow-xl"
           style={{ top: dropdownPos.top, left: dropdownPos.left }}
         >
