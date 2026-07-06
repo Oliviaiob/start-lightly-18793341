@@ -18,6 +18,8 @@ import { Route as AuthenticatedMapRouteImport } from './routes/_authenticated/ma
 import { Route as AuthenticatedJobsRouteImport } from './routes/_authenticated/jobs'
 import { Route as AuthenticatedInterviewsRouteImport } from './routes/_authenticated/interviews'
 import { Route as AuthenticatedComplianceRouteImport } from './routes/_authenticated/compliance'
+import { Route as AuthenticatedComplianceIndexRouteImport } from './routes/_authenticated/compliance.index'
+import { Route as AuthenticatedComplianceIdRouteImport } from './routes/_authenticated/compliance.$id'
 import { Route as AuthenticatedClientsRouteImport } from './routes/_authenticated/clients'
 import { Route as AuthenticatedCandidatesRouteImport } from './routes/_authenticated/candidates'
 import { Route as AuthenticatedBookingsRouteImport } from './routes/_authenticated/bookings'
@@ -76,6 +78,18 @@ const AuthenticatedComplianceRoute = AuthenticatedComplianceRouteImport.update({
   path: '/compliance',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedComplianceIndexRoute =
+  AuthenticatedComplianceIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedComplianceRoute,
+  } as any)
+const AuthenticatedComplianceIdRoute =
+  AuthenticatedComplianceIdRouteImport.update({
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => AuthenticatedComplianceRoute,
+  } as any)
 const AuthenticatedClientsRoute = AuthenticatedClientsRouteImport.update({
   id: '/clients',
   path: '/clients',
@@ -154,7 +168,11 @@ export interface FileRoutesByFullPath {
   '/bookings': typeof AuthenticatedBookingsRouteWithChildren
   '/candidates': typeof AuthenticatedCandidatesRouteWithChildren
   '/clients': typeof AuthenticatedClientsRouteWithChildren
-  '/compliance': typeof AuthenticatedComplianceRoute
+  '/compliance': typeof AuthenticatedComplianceIndexRoute
+  '/compliance/$id': typeof AuthenticatedComplianceIdRoute
+ithChildren
+  '/compliance/$id': typeof AuthenticatedComplianceIdRoute
+  '/compliance/': typeof AuthenticatedComplianceIndexRoute
   '/interviews': typeof AuthenticatedInterviewsRoute
   '/jobs': typeof AuthenticatedJobsRouteWithChildren
   '/map': typeof AuthenticatedMapRoute
@@ -197,7 +215,9 @@ export interface FileRoutesById {
   '/_authenticated/bookings': typeof AuthenticatedBookingsRouteWithChildren
   '/_authenticated/candidates': typeof AuthenticatedCandidatesRouteWithChildren
   '/_authenticated/clients': typeof AuthenticatedClientsRouteWithChildren
-  '/_authenticated/compliance': typeof AuthenticatedComplianceRoute
+  '/_authenticated/compliance': typeof AuthenticatedComplianceRouteWithChildren
+  '/_authenticated/compliance/$id': typeof AuthenticatedComplianceIdRoute
+  '/_authenticated/compliance/': typeof AuthenticatedComplianceIndexRoute
   '/_authenticated/interviews': typeof AuthenticatedInterviewsRoute
   '/_authenticated/jobs': typeof AuthenticatedJobsRouteWithChildren
   '/_authenticated/map': typeof AuthenticatedMapRoute
@@ -506,12 +526,27 @@ const AuthenticatedJobsRouteChildren: AuthenticatedJobsRouteChildren = {
 const AuthenticatedJobsRouteWithChildren =
   AuthenticatedJobsRoute._addFileChildren(AuthenticatedJobsRouteChildren)
 
+interface AuthenticatedComplianceRouteChildren {
+  AuthenticatedComplianceIdRoute: typeof AuthenticatedComplianceIdRoute
+  AuthenticatedComplianceIndexRoute: typeof AuthenticatedComplianceIndexRoute
+}
+
+const AuthenticatedComplianceRouteChildren: AuthenticatedComplianceRouteChildren = {
+  AuthenticatedComplianceIdRoute: AuthenticatedComplianceIdRoute,
+  AuthenticatedComplianceIndexRoute: AuthenticatedComplianceIndexRoute,
+}
+
+const AuthenticatedComplianceRouteWithChildren =
+  AuthenticatedComplianceRoute._addFileChildren(
+    AuthenticatedComplianceRouteChildren,
+  )
+
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAccountRoute: typeof AuthenticatedAccountRoute
   AuthenticatedBookingsRoute: typeof AuthenticatedBookingsRouteWithChildren
   AuthenticatedCandidatesRoute: typeof AuthenticatedCandidatesRouteWithChildren
   AuthenticatedClientsRoute: typeof AuthenticatedClientsRouteWithChildren
-  AuthenticatedComplianceRoute: typeof AuthenticatedComplianceRoute
+  AuthenticatedComplianceRoute: typeof AuthenticatedComplianceRouteWithChildren
   AuthenticatedInterviewsRoute: typeof AuthenticatedInterviewsRoute
   AuthenticatedJobsRoute: typeof AuthenticatedJobsRouteWithChildren
   AuthenticatedMapRoute: typeof AuthenticatedMapRoute
@@ -525,7 +560,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBookingsRoute: AuthenticatedBookingsRouteWithChildren,
   AuthenticatedCandidatesRoute: AuthenticatedCandidatesRouteWithChildren,
   AuthenticatedClientsRoute: AuthenticatedClientsRouteWithChildren,
-  AuthenticatedComplianceRoute: AuthenticatedComplianceRoute,
+  AuthenticatedComplianceRoute: AuthenticatedComplianceRouteWithChildren,
   AuthenticatedInterviewsRoute: AuthenticatedInterviewsRoute,
   AuthenticatedJobsRoute: AuthenticatedJobsRouteWithChildren,
   AuthenticatedMapRoute: AuthenticatedMapRoute,
