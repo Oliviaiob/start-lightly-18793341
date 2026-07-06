@@ -184,6 +184,12 @@ function ChecklistSection({
               <Upload className="h-3.5 w-3.5" /> Upload
             </span>
           </label>
+          {item.key === "dbs_update_service_check" && (
+            <a href="https://secure.crbonline.gov.uk/crsc/check?execution=e1s1" target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-teal/40 text-teal text-xs font-medium hover:bg-teal/5 transition-colors">
+              <ExternalLink className="h-3.5 w-3.5" /> Check on Gov Website
+            </a>
+          )}
           {doc && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0">
               <FileText className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/60" />
