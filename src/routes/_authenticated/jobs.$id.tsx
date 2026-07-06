@@ -19,7 +19,7 @@ import {
 import {
   Briefcase, ArrowLeft, Building2, Users, GraduationCap,
   Banknote, MapPin, Clock, MessageSquare, PhoneCall,
-  Plus, ChevronDown, Star, X,
+  Plus, ChevronDown, Star, X, Sparkles, Copy, Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useScope } from "@/contexts/scope-context";
@@ -48,6 +48,7 @@ type Job = {
   source_boards: string[] | null;
   branch_id: string | null;
   posted_at: string | null;
+  boolean_searches: { broad: string; standard: string; perfect: string } | null;
 };
 
 type PipelineEntry = {
@@ -596,9 +597,14 @@ function Page() {
   const [drawerCandidateId, setDrawerCandidateId] = useState<string | null>(null);
   const [addPipelineCandidate, setAddPipelineCandidate] = useState<{ id: string; name: string } | null>(null);
 
+  // boolean searches
+  const [boolSearches, setBoolSearches] = useState<{ broad: string; standard: string; perfect: string } | null>(null);
+  const [boolLoading, setBoolLoading] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
   const loadAll = async () => {
     const [jRes, pRes, aRes] = await Promise.all([
-      supabase.from("jobs").select("id,title,client_id,status,qualification_required,salary_min,salary_max,location_postcode,description,notes,hours,room,advertising_notes,source_boards,branch_id,posted_at,clients(company_name)").eq("id", id).maybeSingle(),
+      supabase.from("jobs").select("id,title,client_id,status,qualification_required,salary_min,salary_max,location_postcode,description,notes,hours,room,advertising_notes,source_boards,branch_id,posted_at,boolean_searches,clients(company_name)").eq("id", id).maybeSingle(),
       supabase.from("job_pipeline").select("id,stage,stage_changed_at,candidates(id,first_name,last_name,qualification_level,postcode,phone)").eq("job_id", id).order("stage_changed_at", { ascending: false }),
       supabase.from("activity_log").select("id,activity_type,description,created_by,created_at").eq("entity_id", id).eq("entity_type", "job").order("created_at", { ascending: false }).limit(30),
     ]);
@@ -639,6 +645,38 @@ function Page() {
     if (error) { toast.error("Failed: " + error.message); return; }
     toast.success("Changes saved");
     setJob((prev) => prev ? { ...prev, ...draft } : prev);
+  };
+
+  const generateBooleanSearches = async () => {
+    if (!job) return;
+    setBoolLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-boolean-searches", {
+        body: {
+          title: job.title,
+          qualification_required: job.qualification_required,
+          location_postcode: job.location_postcode,
+          description: job.description,
+          room: job.room,
+          hours: job.hours,
+        },
+      });
+      if (error) throw new Error(error.message);
+      const searches = data?.searches ?? null;
+      if (searches) {
+        setBoolSearches(searches);
+        await (supabase as any).from("jobs").update({ boolean_searches: searches }).eq("id", job.id);
+      }
+    } catch (e: any) {
+      toast.error("Couldn't generate searches: " + e.message);
+    }
+    setBoolLoading(false);
+  };
+
+  const copySearch = (key: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
   };
 
   const saveAdvertised = async () => {
@@ -939,32 +977,96 @@ function Page() {
 
       {/* ── Advertised Tab ── */}
       {tab === "advertised" && (
-        <div className="space-y-4 max-w-lg">
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">Source boards</label>
-            <div className="flex gap-4">
-              {SOURCE_BOARDS.map((sb) => (
-                <label key={sb.key} className="flex items-center gap-2 cursor-pointer select-none">
-                  <input type="checkbox"
-                    checked={(draft.source_boards ?? []).includes(sb.key)}
-                    onChange={() => toggleSourceBoard(sb.key)}
-                    className="h-4 w-4 rounded accent-[#1B2B4B]" />
-                  <span className="text-sm font-medium">{sb.label}</span>
-                </label>
-              ))}
+        <div className="space-y-6 max-w-2xl">
+          {/* Source boards + notes */}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Source boards</label>
+              <div className="flex gap-4">
+                {SOURCE_BOARDS.map((sb) => (
+                  <label key={sb.key} className="flex items-center gap-2 cursor-pointer select-none">
+                    <input type="checkbox"
+                      checked={(draft.source_boards ?? []).includes(sb.key)}
+                      onChange={() => toggleSourceBoard(sb.key)}
+                      className="h-4 w-4 rounded accent-[#1B2B4B]" />
+                    <span className="text-sm font-medium">{sb.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Advertising notes</label>
+              <textarea value={draft.advertising_notes ?? ""} onChange={(e) => setD("advertising_notes", e.target.value)}
+                placeholder="Ad copy, posting dates, tracking references…" rows={4}
+                className="w-full text-sm bg-muted/40 rounded-xl p-3 border border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" />
+            </div>
+            <div className="flex justify-end">
+              <button onClick={saveAdvertised} disabled={saving}
+                className="h-10 px-6 rounded-full bg-navy text-white text-sm font-medium hover:opacity-90 disabled:opacity-50">
+                {saving ? "Saving…" : "Save changes"}
+              </button>
             </div>
           </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">Advertising notes</label>
-            <textarea value={draft.advertising_notes ?? ""} onChange={(e) => setD("advertising_notes", e.target.value)}
-              placeholder="Ad copy, posting dates, tracking references…" rows={6}
-              className="w-full text-sm bg-muted/40 rounded-xl p-3 border border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" />
-          </div>
-          <div className="flex justify-end">
-            <button onClick={saveAdvertised} disabled={saving}
-              className="h-10 px-6 rounded-full bg-navy text-white text-sm font-medium hover:opacity-90 disabled:opacity-50">
-              {saving ? "Saving…" : "Save changes"}
-            </button>
+
+          {/* Boolean Search */}
+          <div className="border-t pt-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold">Boolean Search Strings</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">AI-generated search strings for LinkedIn, CV-Library and Reed</p>
+              </div>
+              <button
+                onClick={generateBooleanSearches}
+                disabled={boolLoading}
+                className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-teal text-teal-foreground text-xs font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                {boolLoading ? "Generating…" : boolSearches ? "Regenerate" : "Generate"}
+              </button>
+            </div>
+
+            {boolLoading && (
+              <div className="flex items-center gap-2 py-6 justify-center text-sm text-muted-foreground">
+                <div className="h-4 w-4 border-2 border-teal border-t-transparent rounded-full animate-spin" />
+                Generating boolean searches…
+              </div>
+            )}
+
+            {!boolLoading && boolSearches && (
+              <div className="space-y-3">
+                {([
+                  { key: "broad", label: "Broad", desc: "Wide net — core role keywords", color: "bg-emerald-50 border-emerald-200 text-emerald-800" },
+                  { key: "standard", label: "Standard", desc: "Role + qualification + location", color: "bg-blue-50 border-blue-200 text-blue-800" },
+                  { key: "perfect", label: "Perfect Match", desc: "Highly specific — full criteria", color: "bg-purple-50 border-purple-200 text-purple-800" },
+                ] as const).map(({ key, label, desc, color }) => (
+                  <div key={key} className="rounded-xl border bg-card p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${color}`}>{label}</span>
+                        <span className="text-xs text-muted-foreground">{desc}</span>
+                      </div>
+                      <button
+                        onClick={() => copySearch(key, boolSearches[key])}
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {copiedKey === key ? (
+                          <><Check className="h-3.5 w-3.5 text-teal" /><span className="text-teal">Copied</span></>
+                        ) : (
+                          <><Copy className="h-3.5 w-3.5" />Copy</>
+                        )}
+                      </button>
+                    </div>
+                    <p className="text-xs font-mono bg-muted/50 rounded-lg px-3 py-2 leading-relaxed break-all select-all">{boolSearches[key]}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!boolLoading && !boolSearches && (
+              <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+                Click <span className="font-medium text-foreground">Generate</span> to create boolean search strings based on this job's details
+              </div>
+            )}
           </div>
         </div>
       )}
