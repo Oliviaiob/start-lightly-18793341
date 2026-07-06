@@ -1062,24 +1062,31 @@ function GenerateCVModal({ open, onClose, candidate }: {
   const qualification = candidate.qualification_level || "";
   const currentRole = candidate.current_position || "";
 
-  useEffect(() => {
-    if (!open) return;
-    setEmployment(candidate.current_position || candidate.current_employer ? [{
+  const initState = () => {
+    const emp: CvEmployment[] = [{
       role: candidate.current_position || "",
       company: candidate.current_employer || "",
       dateTo: "Present",
       description: "",
-    }] : [{ role: "", company: "", dateTo: "Present", description: "" }]);
+    }];
+    setEmployment(emp);
     setQualifications(candidate.qualification_level ? [candidate.qualification_level] : [""]);
     setSkills(Array(8).fill(""));
-    setSummary(""); setAvailability("");
+    setSummary("");
+    setAvailability("");
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    initState();
     runAI();
-  }, [open]);
+  }, [open, candidate.id]);
 
   const runAI = async () => {
     setGenerating(true);
+    setSummary("");
     try {
-      const { data } = await supabase.functions.invoke("generate-cv-summary", {
+      const { data, error } = await supabase.functions.invoke("generate-cv-summary", {
         body: {
           first_name: candidate.first_name,
           last_name: candidate.last_name,
@@ -1089,13 +1096,20 @@ function GenerateCVModal({ open, onClose, candidate }: {
           qualifications_text: candidate.qualifications_text,
         },
       });
-      if (data?.profile_summary) setSummary(data.profile_summary);
-      if (data?.availability_text) setAvailability(data.availability_text);
-      if (data?.skills?.length) setSkills(data.skills);
-      if (data?.employment_description) {
-        setEmployment((prev) => prev.map((e, i) => i === 0 ? { ...e, description: data.employment_description } : e));
+      if (error) throw new Error(error.message);
+      const d = data ?? {};
+      setSummary(d.profile_summary ?? "");
+      setAvailability(d.availability_text ?? "");
+      if (Array.isArray(d.skills) && d.skills.length) setSkills(d.skills);
+      if (d.employment_description) {
+        setEmployment((prev) => prev.map((e, i) =>
+          i === 0 ? { ...e, description: d.employment_description } : e
+        ));
       }
-    } catch (_) {}
+    } catch (err) {
+      console.error("CV generation error:", err);
+      setSummary("Click Regenerate to generate an AI profile summary.");
+    }
     setGenerating(false);
   };
 
