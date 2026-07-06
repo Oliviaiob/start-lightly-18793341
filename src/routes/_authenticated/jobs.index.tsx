@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
@@ -18,7 +18,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Briefcase, Search, Plus, X, Users, Link, Upload, Pencil } from "lucide-react";
+import { Briefcase, Search, Plus, X, Users, Link, Upload, Pencil, ChevronDown, Check, Sparkles } from "lucide-react";
 import { useEffectiveScope, useScope } from "@/contexts/scope-context";
 import { toast } from "sonner";
 
@@ -118,48 +118,117 @@ function FilterSelect({ value, onChange, placeholder, options }: {
 // ── Add Job Modal ─────────────────────────────────────────────────────────────
 
 function AddJobModal({
-  open,
-  onClose,
-  onCreated,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onCreated: (id: string) => void;
-}) {
-  const [step, setStep] = useState<"pick" | "manual">("pick");
+  open, onClose, onCreated,
+}: { open: boolean; onClose: () => void; onCreated: (id: string) => void; }) {
+  const [step, setStep] = useState<"pick" | "uploading" | "manual">("pick");
   const [form, setForm] = useState({ ...EMPTY_JOB });
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (!open) { setStep("pick"); setForm({ ...EMPTY_JOB }); return; }
+  // client search state
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientDropOpen, setClientDropOpen] = useState(false);
+  const [addingClient, setAddingClient] = useState(false);
+  const [newClientName, setNewClientName] = useState("");
+  const [savingClient, setSavingClient] = useState(false);
+  const clientRef = useRef<HTMLDivElement>(null);
+
+  // upload state
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const loadClients = () =>
     supabase.from("clients").select("id,company_name").order("company_name").then(({ data }) => {
       setClients((data as ClientOption[]) ?? []);
     });
+
+  useEffect(() => {
+    if (!open) {
+      setStep("pick"); setForm({ ...EMPTY_JOB }); setClientSearch("");
+      setClientDropOpen(false); setAddingClient(false); setNewClientName("");
+      setUploadError(null);
+      return;
+    }
+    loadClients();
   }, [open]);
 
-  const set = (key: string, value: string) =>
-    setForm((prev) => ({ ...prev, [key]: value }));
+  // close client dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (clientRef.current && !clientRef.current.contains(e.target as Node)) setClientDropOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const set = (key: string, value: string) => setForm(prev => ({ ...prev, [key]: value }));
+
+  const selectedClient = clients.find(c => c.id === form.client_id);
+  const filteredClients = clients.filter(c =>
+    c.company_name.toLowerCase().includes(clientSearch.toLowerCase())
+  );
+
+  const handleAddClient = async () => {
+    if (!newClientName.trim()) return;
+    setSavingClient(true);
+    const { data, error } = await supabase.from("clients").insert({ company_name: newClientName.trim() }).select("id,company_name").single();
+    setSavingClient(false);
+    if (error) { toast.error("Failed to add client"); return; }
+    await loadClients();
+    set("client_id", (data as ClientOption).id);
+    setClientSearch((data as ClientOption).company_name);
+    setAddingClient(false); setNewClientName(""); setClientDropOpen(false);
+    toast.success("Client added");
+  };
+
+  const handleFileUpload = async (file: File) => {
+    if (!file.name.match(/\.(pdf)$/i)) { setUploadError("Please upload a PDF file."); return; }
+    setStep("uploading"); setUploadError(null);
+    try {
+      const arrayBuf = await file.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuf);
+      let binary = "";
+      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+      const b64 = btoa(binary);
+      const { data, error } = await supabase.functions.invoke("extract-job-spec", { body: { pdf_base64: b64 } });
+      if (error) throw new Error(error.message);
+      const d = data?.data ?? {};
+      setForm(prev => ({
+        ...prev,
+        title: d.title ?? prev.title,
+        location_postcode: d.location_postcode ?? prev.location_postcode,
+        qualification_required: d.qualification_required ?? prev.qualification_required,
+        salary_min: d.salary_min != null ? String(d.salary_min) : prev.salary_min,
+        salary_max: d.salary_max != null ? String(d.salary_max) : prev.salary_max,
+        description: d.description ?? prev.description,
+      }));
+      // if client_name extracted, try to match
+      if (d.client_name) {
+        const match = clients.find(c => c.company_name.toLowerCase().includes(d.client_name.toLowerCase()));
+        if (match) { set("client_id", match.id); setClientSearch(match.company_name); }
+      }
+      toast.success("Job spec extracted — review the details");
+      setStep("manual");
+    } catch (e: any) {
+      setUploadError("Extraction failed — please fill in the details manually.");
+      setStep("manual");
+    }
+  };
 
   const handleSave = async () => {
     if (!form.title.trim()) { toast.error("Job title is required"); return; }
     setSaving(true);
-    const { data, error } = await supabase
-      .from("jobs")
-      .insert({
-        title: form.title.trim(),
-        client_id: form.client_id || null,
-        status: form.status,
-        qualification_required: form.qualification_required || null,
-        salary_min: form.salary_min ? parseFloat(form.salary_min) : null,
-        salary_max: form.salary_max ? parseFloat(form.salary_max) : null,
-        location_postcode: form.location_postcode.trim() || null,
-        description: form.description.trim() || null,
-        notes: form.notes.trim() || null,
-        posted_at: new Date().toISOString(),
-      })
-      .select("id")
-      .single();
+    const { data, error } = await supabase.from("jobs").insert({
+      title: form.title.trim(),
+      client_id: form.client_id || null,
+      status: form.status,
+      qualification_required: form.qualification_required || null,
+      salary_min: form.salary_min ? parseFloat(form.salary_min) : null,
+      salary_max: form.salary_max ? parseFloat(form.salary_max) : null,
+      location_postcode: form.location_postcode.trim() || null,
+      description: form.description.trim() || null,
+      notes: form.notes.trim() || null,
+      posted_at: new Date().toISOString(),
+    }).select("id").single();
     setSaving(false);
     if (error) { toast.error("Failed to save job: " + error.message); return; }
     toast.success("Job added");
@@ -172,11 +241,14 @@ function AddJobModal({
         <DialogHeader>
           <DialogTitle>Add Job</DialogTitle>
           <DialogDescription>
-            {step === "pick" ? "Choose how you want to add this job." : "Enter the job details manually."}
+            {step === "pick" ? "Choose how you want to add this job."
+              : step === "uploading" ? "Extracting job details…"
+              : "Enter the job details."}
           </DialogDescription>
         </DialogHeader>
 
-        {step === "pick" ? (
+        {/* ── Step: pick ── */}
+        {step === "pick" && (
           <div className="space-y-3 mt-2">
             <button
               onClick={() => toast.info("Import from URL — coming soon")}
@@ -188,16 +260,14 @@ function AddJobModal({
                 <div className="text-xs text-muted-foreground mt-0.5">Paste a job posting link and we'll extract the details.</div>
               </div>
             </button>
-            <button
-              onClick={() => toast.info("Upload Job Spec — coming soon")}
-              className="w-full flex items-start gap-4 p-4 rounded-xl border-2 border-transparent hover:border-navy/20 hover:bg-muted/40 transition-all text-left"
-            >
+            <label className="w-full flex items-start gap-4 p-4 rounded-xl border-2 border-transparent hover:border-navy/20 hover:bg-muted/40 transition-all text-left cursor-pointer">
+              <input type="file" accept=".pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ""; }} />
               <Upload className="h-5 w-5 mt-0.5 text-muted-foreground flex-shrink-0" />
               <div>
                 <div className="font-medium text-sm">Upload Job Spec</div>
-                <div className="text-xs text-muted-foreground mt-0.5">Upload a PDF or Word document.</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Upload a PDF — we'll extract the details with AI.</div>
               </div>
-            </button>
+            </label>
             <button
               onClick={() => setStep("manual")}
               className="w-full flex items-start gap-4 p-4 rounded-xl border-2 border-navy/20 bg-navy/5 hover:bg-navy/10 transition-all text-left"
@@ -209,26 +279,104 @@ function AddJobModal({
               </div>
             </button>
           </div>
-        ) : (
+        )}
+
+        {/* ── Step: uploading ── */}
+        {step === "uploading" && (
+          <div className="flex flex-col items-center justify-center py-14 gap-3">
+            <div className="h-9 w-9 border-2 border-teal border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-muted-foreground">Extracting job spec with AI…</p>
+          </div>
+        )}
+
+        {/* ── Step: manual ── */}
+        {step === "manual" && (
           <div className="space-y-4 mt-2">
+            {uploadError && (
+              <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-700">{uploadError}</div>
+            )}
+
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Job title *</label>
               <Input value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="Room Leader — Level 3" className="h-10" />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
+              {/* Searchable client dropdown */}
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Client</label>
-                <Select value={form.client_id} onValueChange={(v) => set("client_id", v === "__none__" ? "" : v)}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Select client…" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">No client</SelectItem>
-                    {clients.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div ref={clientRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => { setClientDropOpen(v => !v); setAddingClient(false); }}
+                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm flex items-center justify-between gap-2 hover:bg-muted/30 transition-colors"
+                  >
+                    <span className={selectedClient ? "text-foreground" : "text-muted-foreground"}>
+                      {selectedClient ? selectedClient.company_name : "Select client…"}
+                    </span>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  </button>
+                  {clientDropOpen && (
+                    <div className="absolute z-50 mt-1 w-full bg-popover border rounded-xl shadow-lg overflow-hidden">
+                      <div className="p-2 border-b">
+                        <input
+                          autoFocus
+                          type="text"
+                          placeholder="Search clients…"
+                          value={clientSearch}
+                          onChange={e => setClientSearch(e.target.value)}
+                          className="w-full text-sm px-2 py-1.5 rounded-lg bg-muted/50 focus:outline-none focus:ring-2 focus:ring-teal/40"
+                        />
+                      </div>
+                      <div className="max-h-44 overflow-y-auto py-1">
+                        <button
+                          onClick={() => { set("client_id", ""); setClientSearch(""); setClientDropOpen(false); }}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 text-muted-foreground"
+                        >No client</button>
+                        {filteredClients.map(c => (
+                          <button key={c.id} onClick={() => { set("client_id", c.id); setClientSearch(c.company_name); setClientDropOpen(false); }}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 flex items-center justify-between">
+                            {c.company_name}
+                            {form.client_id === c.id && <Check className="h-3.5 w-3.5 text-teal" />}
+                          </button>
+                        ))}
+                        {filteredClients.length === 0 && clientSearch && (
+                          <div className="px-3 py-2 text-xs text-muted-foreground">No matches</div>
+                        )}
+                      </div>
+                      <div className="border-t p-2">
+                        {!addingClient ? (
+                          <button onClick={() => setAddingClient(true)}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-teal font-medium hover:bg-teal/5 rounded-lg transition-colors">
+                            <Plus className="h-4 w-4" /> Add new client
+                          </button>
+                        ) : (
+                          <div className="flex gap-2">
+                            <input
+                              autoFocus
+                              type="text"
+                              placeholder="Client name…"
+                              value={newClientName}
+                              onChange={e => setNewClientName(e.target.value)}
+                              onKeyDown={e => e.key === "Enter" && handleAddClient()}
+                              className="flex-1 text-sm px-2 py-1.5 rounded-lg bg-muted/50 focus:outline-none focus:ring-2 focus:ring-teal/40"
+                            />
+                            <button onClick={handleAddClient} disabled={savingClient}
+                              className="px-3 py-1.5 rounded-lg bg-teal text-teal-foreground text-xs font-medium hover:opacity-90 disabled:opacity-50">
+                              {savingClient ? "…" : "Add"}
+                            </button>
+                            <button onClick={() => { setAddingClient(false); setNewClientName(""); }}
+                              className="px-2 py-1.5 rounded-lg hover:bg-muted text-muted-foreground">
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
+
               <div className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground">Status</label>
                 <Select value={form.status} onValueChange={(v) => set("status", v)}>
@@ -277,28 +425,17 @@ function AddJobModal({
 
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Description</label>
-              <textarea
-                value={form.description}
-                onChange={(e) => set("description", e.target.value)}
-                placeholder="Role overview, responsibilities, ideal candidate…"
-                rows={4}
-                className="w-full text-sm bg-muted/40 rounded-xl p-3 border border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none"
-              />
+              <textarea value={form.description} onChange={(e) => set("description", e.target.value)}
+                placeholder="Role overview, responsibilities, ideal candidate…" rows={4}
+                className="w-full text-sm bg-muted/40 rounded-xl p-3 border border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" />
             </div>
 
             <div className="flex justify-between mt-2">
-              <button onClick={() => setStep("pick")} className="h-10 px-4 text-sm font-medium text-muted-foreground hover:text-foreground">
-                ← Back
-              </button>
+              <button onClick={() => setStep("pick")} className="h-10 px-4 text-sm font-medium text-muted-foreground hover:text-foreground">← Back</button>
               <div className="flex gap-3">
-                <button onClick={onClose} className="h-10 px-5 rounded-full border text-sm font-medium hover:bg-muted transition-colors">
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="h-10 px-5 rounded-full bg-navy text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
-                >
+                <button onClick={onClose} className="h-10 px-5 rounded-full border text-sm font-medium hover:bg-muted transition-colors">Cancel</button>
+                <button onClick={handleSave} disabled={saving}
+                  className="h-10 px-5 rounded-full bg-navy text-white text-sm font-medium hover:opacity-90 disabled:opacity-50">
                   {saving ? "Saving…" : "Save job"}
                 </button>
               </div>
@@ -309,6 +446,7 @@ function AddJobModal({
     </Dialog>
   );
 }
+
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
