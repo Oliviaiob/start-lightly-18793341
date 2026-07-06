@@ -15,33 +15,35 @@ const options = [
     label: "Add Temporary Candidate",
     description: "Register a candidate available for temp shifts",
     icon: Users,
-    route: "/candidates/new",
-    search: { type: "temporary" },
+    to: "/candidates" as const,
+    search: { open: "temp" },
     accent: "bg-teal text-teal-foreground",
   },
   {
     label: "Add Permanent Candidate",
     description: "Register a candidate for permanent placement",
     icon: Users,
-    route: "/candidates/new",
-    search: { type: "permanent" },
+    to: "/candidates" as const,
+    search: { open: "perm" },
     accent: "bg-navy/10 text-navy",
   },
   {
     label: "Add Client",
     description: "Onboard a new nursery, family or agency partner",
     icon: Building2,
-    route: "/clients",
+    to: "/clients" as const,
+    search: { open: "new" },
     accent: "bg-teal/25 text-teal-foreground",
   },
   {
     label: "Add Job",
     description: "Post a new role or vacancy",
     icon: Briefcase,
-    route: "/jobs",
+    to: "/jobs" as const,
+    search: { open: "new" },
     accent: "bg-warning/25 text-[oklch(0.45_0.12_75)]",
   },
-] as const;
+];
 
 export function QuickAddMenu() {
   const [open, setOpen] = useState(false);
@@ -66,7 +68,7 @@ export function QuickAddMenu() {
               key={opt.label}
               onClick={() => {
                 setOpen(false);
-                navigate({ to: opt.route, search: "search" in opt ? opt.search : undefined });
+                navigate({ to: opt.to, search: opt.search });
               }}
               className="w-full flex items-center gap-3 p-3 rounded-xl border border-border/70 hover:border-navy/40 hover:bg-muted/60 transition-all group text-left"
             >

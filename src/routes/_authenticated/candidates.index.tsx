@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/page-header";
@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { fmtQual } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/candidates/")({
+  validateSearch: (s: Record<string,unknown>) => ({ open: (s.open as string | undefined) }),
   component: Page,
 });
 
@@ -107,6 +108,11 @@ function Page() {
 
   const [addTempOpen, setAddTempOpen] = useState(false);
   const [addPermOpen, setAddPermOpen] = useState(false);
+  const { open: openParam } = useSearch({ from: "/_authenticated/candidates/" });
+  useEffect(() => {
+    if (openParam === "temp") { setAddTempOpen(true); }
+    else if (openParam === "perm") { setAddPermOpen(true); }
+  }, [openParam]);
   const [rows, setRows] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   // availability: submittedThisWeek = Set of candidate_ids; timeOffToday = Map<id, title>

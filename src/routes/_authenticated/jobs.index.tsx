@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/page-header";
@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import * as mammoth from "mammoth";
 
 export const Route = createFileRoute("/_authenticated/jobs/")({
+  validateSearch: (s: Record<string,unknown>) => ({ open: (s.open as string | undefined) }),
   component: Page,
 });
 
@@ -510,6 +511,8 @@ function Page() {
   const [statusFilter, setStatusFilter] = useState<string>(ALL);
   const [qualFilter, setQualFilter] = useState<string>(ALL);
   const [showAddJob, setShowAddJob] = useState(false);
+  const { open: openParam } = useSearch({ from: "/_authenticated/jobs/" });
+  useEffect(() => { if (openParam === "new") setShowAddJob(true); }, [openParam]);
 
   const loadJobs = async () => {
     if (!userId) return;

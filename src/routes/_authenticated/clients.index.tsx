@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/page-header";
@@ -23,6 +23,7 @@ import { useEffectiveScope, useScope } from "@/contexts/scope-context";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/clients/")({
+  validateSearch: (s: Record<string,unknown>) => ({ open: (s.open as string | undefined) }),
   component: Page,
 });
 
@@ -407,6 +408,8 @@ function Page() {
   const [statusFilter, setStatusFilter] = useState<string>(ALL);
   const [tobFilter, setTobFilter] = useState<string>(ALL);
   const [showAddClient, setShowAddClient] = useState(false);
+  const { open: openParam } = useSearch({ from: "/_authenticated/clients/" });
+  useEffect(() => { if (openParam === "new") setShowAddClient(true); }, [openParam]);
   const [branchPromptClientId, setBranchPromptClientId] = useState<string | null>(null);
 
   const loadClients = async () => {
