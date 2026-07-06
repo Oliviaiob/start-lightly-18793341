@@ -1098,8 +1098,7 @@ function GenerateCVModal({ open, onClose, candidate }: {
       });
       if (error) throw new Error(error.message);
       const d = data ?? {};
-      // DEBUG: show full response keys in summary
-      setSummary(d.profile_summary || `[DEBUG] Keys: ${Object.keys(d).join(", ")} | summary: "${d.profile_summary}"`);
+      setSummary(d.profile_summary ?? "");
       setAvailability(d.availability_text ?? "");
       if (Array.isArray(d.skills) && d.skills.length) setSkills(d.skills);
       if (d.employment_description) {
@@ -1249,7 +1248,7 @@ p { font-size:13px; line-height:1.7; color:#444; }
               <CvSection title="Profile Summary">
                 <textarea value={summary} onChange={(e) => setSummary(e.target.value)} rows={5}
                   placeholder="Profile summary will be generated automatically…"
-                  className="w-full text-sm rounded-xl border px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none leading-relaxed" />
+                  className="w-full text-sm text-foreground bg-background rounded-xl border px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none leading-relaxed" />
                 <div className="mt-2">
                   <label className="text-xs font-medium text-[#0E9E8E] block mb-1">Availability &amp; Preferences</label>
                   <input value={availability} onChange={(e) => setAvailability(e.target.value)}
@@ -1265,15 +1264,15 @@ p { font-size:13px; line-height:1.7; color:#444; }
                     <div key={i} className="rounded-xl border p-4 space-y-3 bg-muted/20">
                       <div className="grid grid-cols-3 gap-2">
                         <input value={e.role} onChange={(ev) => setEmp(i, "role", ev.target.value)} placeholder="Job title"
-                          className="text-sm rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" />
+                          className="text-sm text-foreground bg-background rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" />
                         <input value={e.company} onChange={(ev) => setEmp(i, "company", ev.target.value)} placeholder="Employer"
-                          className="text-sm rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" />
+                          className="text-sm text-foreground bg-background rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" />
                         <input value={e.dateTo} onChange={(ev) => setEmp(i, "dateTo", ev.target.value)} placeholder="End date / Present"
-                          className="text-sm rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" />
+                          className="text-sm text-foreground bg-background rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" />
                       </div>
                       <textarea value={e.description} onChange={(ev) => setEmp(i, "description", ev.target.value)} rows={3}
                         placeholder="Describe responsibilities and achievements…"
-                        className="w-full text-sm rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" />
+                        className="w-full text-sm text-foreground bg-background rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" />
                       <button onClick={() => removeEmp(i)} className="text-xs text-rose-500 hover:text-rose-600">Remove</button>
                     </div>
                   ))}
@@ -1289,7 +1288,7 @@ p { font-size:13px; line-height:1.7; color:#444; }
                   {qualifications.map((q, i) => (
                     <div key={i} className="flex gap-2">
                       <input value={q} onChange={(e) => setQual(i, e.target.value)} placeholder="e.g. Level 3 Early Years Educator"
-                        className="flex-1 text-sm rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" />
+                        className="flex-1 text-sm text-foreground bg-background rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" />
                       <button onClick={() => removeQual(i)} className="text-xs text-rose-500 px-2 hover:text-rose-600">✕</button>
                     </div>
                   ))}
@@ -1305,7 +1304,7 @@ p { font-size:13px; line-height:1.7; color:#444; }
                   {skills.map((s, i) => (
                     <div key={i} className="flex gap-2">
                       <input value={s} onChange={(e) => setSkill(i, e.target.value)} placeholder="e.g. EYFS Framework"
-                        className="flex-1 text-sm rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" />
+                        className="flex-1 text-sm text-foreground bg-background rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" />
                       <button onClick={() => removeSkill(i)} className="text-xs text-rose-500 px-1 hover:text-rose-600">✕</button>
                     </div>
                   ))}
