@@ -1098,7 +1098,8 @@ function GenerateCVModal({ open, onClose, candidate }: {
       });
       if (error) throw new Error(error.message);
       const d = data ?? {};
-      setSummary(d.profile_summary ?? "");
+      // DEBUG: show full response keys in summary
+      setSummary(d.profile_summary || `[DEBUG] Keys: ${Object.keys(d).join(", ")} | summary: "${d.profile_summary}"`);
       setAvailability(d.availability_text ?? "");
       if (Array.isArray(d.skills) && d.skills.length) setSkills(d.skills);
       if (d.employment_description) {
