@@ -83,6 +83,7 @@ type Candidate = {
   perm_safeguarding: string | null;
   cv_original_url: string | null;
   cv_soar_url: string | null;
+  profile_summary: string | null;
   created_by: string | null;
   created_at: string | null;
 };
@@ -214,6 +215,7 @@ function Page() {
   const [cvOpen, setCvOpen] = useState(false);
   const [wpOpen, setWpOpen] = useState(false);
   const [cvUploading, setCvUploading] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [me, setMe] = useState<string | null>(null);
   const [creatorName, setCreatorName] = useState<string>("");
@@ -233,6 +235,32 @@ function Page() {
   const [refs, setRefs] = useState<Reference[]>([]);
 
   const [rateInput, setRateInput] = useState<string>("");
+
+  const generateSummary = async (candidate: Candidate) => {
+    setSummaryLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-profile-summary", {
+        body: {
+          first_name: candidate.first_name,
+          last_name: candidate.last_name,
+          current_position: candidate.current_position,
+          current_employer: candidate.current_employer,
+          qualification_level: candidate.qualification_level,
+          qualifications_text: candidate.qualifications_text,
+          candidate_type: candidate.candidate_type,
+        },
+      });
+      if (error) throw new Error(error.message);
+      const summary = data?.summary ?? "";
+      if (summary) {
+        await (supabase as any).from("candidates").update({ profile_summary: summary }).eq("id", candidate.id);
+        setC(prev => prev ? { ...prev, profile_summary: summary } : prev);
+      }
+    } catch (e: any) {
+      toast.error("Couldn't generate summary: " + e.message);
+    }
+    setSummaryLoading(false);
+  };
 
   const uploadCV = async (file: File) => {
     if (!c) return;
@@ -274,6 +302,27 @@ function Page() {
         .maybeSingle();
       setC(cand as Candidate | null);
       setRateInput(cand?.hourly_rate != null ? String(cand.hourly_rate) : "");
+      // Auto-generate profile summary if not yet set
+      if (cand && !(cand as any).profile_summary) {
+        // fire-and-forget; don't block the page load
+        (async () => {
+          try {
+            const { data: sd } = await supabase.functions.invoke("generate-profile-summary", {
+              body: {
+                first_name: cand.first_name, last_name: cand.last_name,
+                current_position: cand.current_position, current_employer: cand.current_employer,
+                qualification_level: cand.qualification_level, qualifications_text: cand.qualifications_text,
+                candidate_type: cand.candidate_type,
+              },
+            });
+            const s = sd?.summary ?? "";
+            if (s) {
+              await (supabase as any).from("candidates").update({ profile_summary: s }).eq("id", cand.id);
+              setC(prev => prev ? { ...prev, profile_summary: s } : prev);
+            }
+          } catch (_) { /* silent */ }
+        })();
+      }
 
       if (cand?.created_by) {
         const { data: prof } = await supabase
@@ -563,7 +612,7 @@ function Page() {
       </Card>
 
       {/* Contact info bar */}
-      <Card className="p-4 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
+      <Card className="px-4 pt-4 pb-3 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
         <div className="grid gap-4 text-sm" style={{gridTemplateColumns:"2fr 1.5fr 1fr 1fr 2fr 2fr"}}>
           <EmailContactChip value={c.email} />
           <ContactChip icon={Phone} label="Phone" value={c.phone} />
@@ -571,6 +620,26 @@ function Page() {
           <ContactChip icon={Home} label="Postcode" value={c.postcode} />
           <ContactChip icon={Building2} label="Current Employer" value={c.current_employer} />
           <ContactChip icon={GraduationCap} label="Qualification" value={c.qualification_level} />
+        </div>
+        <div className="mt-3 pt-3 border-t border-border/60 flex items-start gap-2 min-h-[28px]">
+          <Sparkles className="h-3.5 w-3.5 text-teal mt-0.5 flex-shrink-0" />
+          {summaryLoading ? (
+            <span className="text-xs text-muted-foreground italic animate-pulse">Generating summary…</span>
+          ) : c.profile_summary ? (
+            <div className="flex-1 flex items-start justify-between gap-3">
+              <p className="text-xs text-muted-foreground leading-relaxed">{c.profile_summary}</p>
+              <button
+                onClick={() => generateSummary(c)}
+                className="flex-shrink-0 text-[10px] text-teal/70 hover:text-teal font-medium transition-colors"
+                title="Regenerate summary"
+              >Refresh</button>
+            </div>
+          ) : (
+            <button
+              onClick={() => generateSummary(c)}
+              className="text-xs text-teal/70 hover:text-teal font-medium transition-colors"
+            >Generate AI summary</button>
+          )}
         </div>
       </Card>
 
