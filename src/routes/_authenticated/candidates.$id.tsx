@@ -535,7 +535,7 @@ function Page() {
 
       {/* Contact info bar */}
       <Card className="p-4 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 text-sm">
+        <div className="grid gap-4 text-sm" style={{gridTemplateColumns:"2fr 1.5fr 1fr 1fr 2fr 2fr"}}>
           <EmailContactChip value={c.email} />
           <ContactChip icon={Phone} label="Phone" value={c.phone} />
           <ContactChip icon={MapPin} label="Location" value={c.town} />
