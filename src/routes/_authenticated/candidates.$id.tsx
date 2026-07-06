@@ -41,6 +41,7 @@ import {
   Home,
   GraduationCap,
   Copy,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -212,6 +213,7 @@ function Page() {
   const [c, setC] = useState<Candidate | null>(null);
   const [cvOpen, setCvOpen] = useState(false);
   const [wpOpen, setWpOpen] = useState(false);
+  const [cvUploading, setCvUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [me, setMe] = useState<string | null>(null);
   const [creatorName, setCreatorName] = useState<string>("");
@@ -231,6 +233,33 @@ function Page() {
   const [refs, setRefs] = useState<Reference[]>([]);
 
   const [rateInput, setRateInput] = useState<string>("");
+
+  const uploadCV = async (file: File) => {
+    if (!c) return;
+    setCvUploading(true);
+    try {
+      const filePath = `cv/${c.id}_${Date.now()}.pdf`;
+      const { error: upErr } = await supabase.storage
+        .from("candidate-documents")
+        .upload(filePath, file, { contentType: "application/pdf", upsert: true });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from("candidate-documents").getPublicUrl(filePath);
+      const publicUrl = urlData.publicUrl;
+      await supabase.from("candidates").update({ cv_original_url: publicUrl }).eq("id", c.id);
+      await supabase.from("candidate_documents").insert({
+        candidate_id: c.id,
+        document_type: "cv",
+        file_name: file.name,
+        file_url: publicUrl,
+        status: "active",
+      });
+      setC(prev => prev ? { ...prev, cv_original_url: publicUrl } : prev);
+      toast.success("CV uploaded successfully");
+    } catch (e: any) {
+      toast.error("Upload failed: " + e.message);
+    }
+    setCvUploading(false);
+  };
 
   useEffect(() => {
     (async () => {
@@ -805,24 +834,40 @@ function Page() {
           </TabsContent>
 
           <TabsContent value="cv" className="mt-5 text-sm">
-            <div className="space-y-3">
-              {c.cv_original_url ? (
-                <a href={c.cv_original_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 p-3 rounded-xl bg-muted/40 hover:bg-muted transition-colors">
-                  <FileText className="h-4 w-4 text-navy" /> View Original CV
-                </a>
-              ) : (
-                <div className="text-muted-foreground">No CV uploaded yet.</div>
-              )}
+            <div className="space-y-4">
+              {/* Original CV */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Original CV</span>
+                  <label className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium cursor-pointer transition-opacity ${cvUploading ? "opacity-50 pointer-events-none" : "bg-navy/10 text-navy hover:bg-navy/20"}`}>
+                    <Upload className="h-3.5 w-3.5" />
+                    {cvUploading ? "Uploading…" : c.cv_original_url ? "Replace CV" : "Upload CV"}
+                    <input type="file" accept=".pdf" className="hidden" disabled={cvUploading} onChange={e => { const f = e.target.files?.[0]; if (f) uploadCV(f); e.target.value = ""; }} />
+                  </label>
+                </div>
+                {c.cv_original_url ? (
+                  <a href={c.cv_original_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 p-3 rounded-xl bg-muted/40 hover:bg-muted transition-colors">
+                    <FileText className="h-4 w-4 text-navy" /> View Original CV
+                  </a>
+                ) : (
+                  <div className="text-muted-foreground text-sm py-1">No CV uploaded yet.</div>
+                )}
+              </div>
+
+              {/* SOAR CV */}
               {c.cv_soar_url && (
-                <div className="inline-flex items-center gap-3 p-3 rounded-xl bg-teal/10 border border-teal/20">
-                  <Sparkles className="h-4 w-4 text-teal" />
-                  <div>
-                    <div className="text-sm font-medium text-foreground">SOAR CV</div>
-                    <div className="text-xs text-muted-foreground">
-                      Last generated {c.cv_soar_url.startsWith("generated:") ? new Date(c.cv_soar_url.replace("generated:","")).toLocaleDateString("en-GB") : ""}
+                <div>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">SOAR CV</div>
+                  <div className="inline-flex items-center gap-3 p-3 rounded-xl bg-teal/10 border border-teal/20">
+                    <Sparkles className="h-4 w-4 text-teal" />
+                    <div>
+                      <div className="text-sm font-medium text-foreground">SOAR CV</div>
+                      <div className="text-xs text-muted-foreground">
+                        Last generated {c.cv_soar_url.startsWith("generated:") ? new Date(c.cv_soar_url.replace("generated:","")).toLocaleDateString("en-GB") : ""}
+                      </div>
                     </div>
+                    <button onClick={() => setCvOpen(true)} className="ml-2 text-xs text-teal font-medium hover:opacity-80">Regenerate →</button>
                   </div>
-                  <button onClick={() => setCvOpen(true)} className="ml-2 text-xs text-teal font-medium hover:opacity-80">Regenerate →</button>
                 </div>
               )}
             </div>
