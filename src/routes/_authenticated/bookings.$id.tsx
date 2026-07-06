@@ -247,7 +247,7 @@ function AddCandidateModal({ shiftId, bookingId, open, onClose, onAdded }: {
   useEffect(() => {
     if (!open) { setSelected(null); setSearch(""); setDropOpen(false); return; }
     supabase.from("candidates").select("id,first_name,last_name,qualification_level,phone,has_dbs")
-      .in("status_temp", ["active", "available"]).order("first_name")
+      .in("status_temp", ["active", "compliance_review"]).order("first_name")
       .then(({ data }) => setCandidates((data as CandidateOption[]) ?? []));
   }, [open]);
 
