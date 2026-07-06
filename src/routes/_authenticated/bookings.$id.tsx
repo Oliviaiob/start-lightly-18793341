@@ -139,22 +139,47 @@ function ShiftStatusBadge({ s }: { s: Shift }) {
 
 // ── Candidate Drawer ──────────────────────────────────────────────────────────
 
+type PastShift = {
+  id: string; shift_date: string; shift_type: string | null;
+  start_time: string | null; end_time: string | null; total_hours: number | null;
+  client_name: string | null;
+};
+
 function CandidateDrawer({ candidateId, onClose }: { candidateId: string | null; onClose: () => void }) {
   const [candidate, setCandidate] = useState<CandidateFull | null>(null);
+  const [pastShifts, setPastShifts] = useState<PastShift[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!candidateId) { setCandidate(null); return; }
+    if (!candidateId) { setCandidate(null); setPastShifts([]); return; }
     setLoading(true);
-    supabase.from("candidates")
-      .select("id,first_name,last_name,email,phone,qualification_level,candidate_type,status_perm,status_temp,postcode,city,source,has_dbs,available_days")
-      .eq("id", candidateId).maybeSingle()
-      .then(({ data }) => { setCandidate(data as CandidateFull ?? null); setLoading(false); });
+    const today = new Date().toISOString().slice(0, 10);
+    Promise.all([
+      supabase.from("candidates")
+        .select("id,first_name,last_name,email,phone,qualification_level,candidate_type,status_perm,status_temp,postcode,city,source,has_dbs,available_days")
+        .eq("id", candidateId).maybeSingle(),
+      supabase.from("temp_shifts")
+        .select("id,shift_date,shift_type,start_time,end_time,total_hours,booking:bookings!booking_id(client:clients(company_name))")
+        .eq("candidate_id", candidateId)
+        .eq("shift_status", "confirmed")
+        .lt("shift_date", today)
+        .order("shift_date", { ascending: false })
+        .limit(20),
+    ]).then(([candRes, shiftsRes]) => {
+      setCandidate(candRes.data as CandidateFull ?? null);
+      setPastShifts(((shiftsRes.data ?? []) as any[]).map((s) => ({
+        id: s.id, shift_date: s.shift_date, shift_type: s.shift_type,
+        start_time: s.start_time, end_time: s.end_time, total_hours: s.total_hours,
+        client_name: s.booking?.client?.company_name ?? null,
+      })));
+      setLoading(false);
+    });
   }, [candidateId]);
 
   if (!candidateId) return null;
   const name = candidate ? `${candidate.first_name ?? ""} ${candidate.last_name ?? ""}`.trim() : "";
   const initials = candidate ? `${candidate.first_name?.[0] ?? ""}${candidate.last_name?.[0] ?? ""}`.toUpperCase() : "…";
+  const isTemp = candidate?.candidate_type === "temp" || candidate?.candidate_type === "both";
 
   return (
     <>
@@ -191,9 +216,7 @@ function CandidateDrawer({ candidateId, onClose }: { candidateId: string | null;
             <div className="rounded-xl bg-muted/30 p-4 space-y-2">
               <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-1">Status</div>
               <Row label="Type" value={candidate.candidate_type === "temp" ? "Temp" : candidate.candidate_type === "perm" ? "Permanent" : candidate.candidate_type ?? "—"} />
-              {(candidate.candidate_type === "temp" || candidate.candidate_type === "both") && (
-                <Row label="Temp status" value={candidate.status_temp ?? "—"} />
-              )}
+              {isTemp && <Row label="Temp status" value={candidate.status_temp ?? "—"} />}
               <Row label="DBS" value={candidate.has_dbs ? "✓ Valid DBS" : "No DBS"} />
             </div>
             {candidate.available_days && candidate.available_days.length > 0 && (
@@ -204,6 +227,41 @@ function CandidateDrawer({ candidateId, onClose }: { candidateId: string | null;
                     <span key={d} className="text-xs px-2 py-0.5 rounded-full bg-navy/10 text-navy font-medium capitalize">{d}</span>
                   ))}
                 </div>
+              </div>
+            )}
+            {isTemp && (
+              <div className="rounded-xl bg-muted/30 p-4">
+                <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-3">
+                  Previous shifts
+                  {pastShifts.length > 0 && (
+                    <span className="ml-1.5 normal-case tracking-normal font-normal text-muted-foreground/70">({pastShifts.length})</span>
+                  )}
+                </div>
+                {pastShifts.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">No shifts completed yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {pastShifts.map((s) => {
+                      const hrs = s.total_hours ?? calcHours(s.start_time, s.end_time);
+                      return (
+                        <div key={s.id} className="flex items-start justify-between gap-2 text-xs">
+                          <div className="min-w-0">
+                            <div className="font-medium">{fmtDate(s.shift_date)}</div>
+                            <div className="text-muted-foreground truncate">
+                              {s.client_name ?? "—"}
+                              {s.shift_type ? ` · ${shiftTypeLabel(s.shift_type)}` : ""}
+                            </div>
+                          </div>
+                          {hrs != null && (
+                            <span className="flex-shrink-0 text-[10px] bg-navy/10 text-navy px-1.5 py-0.5 rounded-full font-medium">
+                              {hrs}h
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>
