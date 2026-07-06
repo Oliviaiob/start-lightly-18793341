@@ -259,7 +259,7 @@ type FilterKey = "all" | "pending_compliance" | "compliance_in_progress" | "comp
 
 const STAT_TILES: { key: FilterKey; label: string; dotClass: string; textClass: string; borderClass: string }[] = [
   { key: "all",                    label: "All",         dotClass: "bg-navy",          textClass: "text-navy",          borderClass: "border-navy/20"    },
-  { key: "pending_compliance",     label: "Pending",     dotClass: "bg-amber-400",     textClass: "text-amber-700",     borderClass: "border-amber-200"  },
+  { key: "pending_compliance",     label: "Pending",     dotClass: "bg-amber-400",     textClass: "text-amber-400",     borderClass: "border-amber-200"  },
   { key: "compliance_in_progress", label: "In Progress", dotClass: "bg-blue-400",      textClass: "text-blue-700",      borderClass: "border-blue-200"   },
   { key: "compliance_review",      label: "Review",      dotClass: "bg-purple-400",    textClass: "text-purple-700",    borderClass: "border-purple-200" },
   { key: "active",                 label: "Active",      dotClass: "bg-green-500",     textClass: "text-green-700",     borderClass: "border-green-200"  },
