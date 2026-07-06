@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import {
   ArrowLeft,
+  X,
   Star,
   Pencil,
   Mail,
@@ -201,6 +203,7 @@ function nameOf(p: { display_name?: string | null; first_name?: string | null; l
 function Page() {
   const { id } = Route.useParams();
   const [c, setC] = useState<Candidate | null>(null);
+  const [cvOpen, setCvOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [me, setMe] = useState<string | null>(null);
   const [creatorName, setCreatorName] = useState<string>("");
@@ -505,10 +508,13 @@ function Page() {
               Send Email
             </HeaderBtn>
             <HeaderBtn icon={Plus}>Add to Shortlist</HeaderBtn>
-            <button className="h-9 px-3.5 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-1.5">
+            <button onClick={() => setCvOpen(true)} className="h-9 px-3.5 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-1.5">
               <Sparkles className="h-3.5 w-3.5" />
               {isPerm ? "Generate SOAR CV" : "Generate Worker Profile"}
             </button>
+            {cvOpen && c && (
+              <GenerateCVModal open={cvOpen} onClose={() => setCvOpen(false)} candidate={c} />
+            )}
           </div>
         </div>
       </Card>
@@ -1032,3 +1038,281 @@ function ActivityIcon({ type }: { type: string | null }) {
   if (t.includes("compliance")) return <ShieldCheck className="h-3.5 w-3.5" />;
   return <Sparkles className="h-3.5 w-3.5" />;
 }
+
+// ── SOAR CV Generator Modal ──────────────────────────────────────────────────
+
+type CvEmployment = { role: string; company: string; dateTo: string; description: string };
+
+function GenerateCVModal({ open, onClose, candidate }: {
+  open: boolean; onClose: () => void; candidate: {
+    id: string; first_name: string | null; last_name: string | null;
+    town: string | null; postcode: string | null; qualification_level: string | null;
+    qualifications_text: string | null; current_position: string | null; current_employer: string | null;
+  };
+}) {
+  const [generating, setGenerating] = useState(false);
+  const [summary, setSummary] = useState("");
+  const [availability, setAvailability] = useState("");
+  const [employment, setEmployment] = useState<CvEmployment[]>([]);
+  const [qualifications, setQualifications] = useState<string[]>([]);
+  const [skills, setSkills] = useState<string[]>([]);
+
+  const name = `${candidate.first_name ?? ""} ${candidate.last_name ?? ""}`.trim();
+  const location = candidate.town || candidate.postcode || "";
+  const qualification = candidate.qualification_level || "";
+  const currentRole = candidate.current_position || "";
+
+  useEffect(() => {
+    if (!open) return;
+    setEmployment(candidate.current_position || candidate.current_employer ? [{
+      role: candidate.current_position || "",
+      company: candidate.current_employer || "",
+      dateTo: "Present",
+      description: "",
+    }] : [{ role: "", company: "", dateTo: "Present", description: "" }]);
+    setQualifications(candidate.qualification_level ? [candidate.qualification_level] : [""]);
+    setSkills(Array(8).fill(""));
+    setSummary(""); setAvailability("");
+    runAI();
+  }, [open]);
+
+  const runAI = async () => {
+    setGenerating(true);
+    try {
+      const { data } = await supabase.functions.invoke("generate-cv-summary", {
+        body: {
+          first_name: candidate.first_name,
+          last_name: candidate.last_name,
+          qualification_level: candidate.qualification_level,
+          current_position: candidate.current_position,
+          current_employer: candidate.current_employer,
+          qualifications_text: candidate.qualifications_text,
+        },
+      });
+      if (data?.profile_summary) setSummary(data.profile_summary);
+      if (data?.availability_text) setAvailability(data.availability_text);
+      if (data?.skills?.length) setSkills(data.skills);
+      if (data?.employment_description) {
+        setEmployment((prev) => prev.map((e, i) => i === 0 ? { ...e, description: data.employment_description } : e));
+      }
+    } catch (_) {}
+    setGenerating(false);
+  };
+
+  const downloadPDF = () => {
+    const empHtml = employment
+      .filter((e) => e.role || e.company)
+      .map((e) => `
+        <div style="margin-bottom:20px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <strong style="font-size:14px">${e.role}</strong>
+            <span style="color:#888;font-size:13px">${e.dateTo || "Present"}</span>
+          </div>
+          <div style="color:#0E9E8E;font-style:italic;font-size:13px;margin-bottom:8px">${e.company}</div>
+          <p style="margin:0;font-size:13px;line-height:1.6;color:#444">${e.description}</p>
+        </div>`).join("");
+
+    const qualHtml = qualifications.filter(Boolean).map((q) => `<li style="font-size:13px;margin-left:20px;padding:3px 0">${q}</li>`).join("");
+
+    const filteredSkills = skills.filter(Boolean);
+    const skillsHtml = filteredSkills.map((s) => `<li style="font-size:13px;margin-left:20px;padding:3px 0;break-inside:avoid">${s}</li>`).join("");
+
+    const logoSvg = `<svg width="100" height="32" viewBox="0 0 120 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <text x="0" y="28" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="30" font-weight="800" fill="white">Soar</text>
+      <text x="96" y="12" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" fill="#2DD4BF">✳</text>
+    </svg>`;
+
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>SOAR CV – ${name}</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color:#333; background:#fff; }
+.header { background:#1B2B4B; padding:44px 60px 36px; color:white; }
+.logo { margin-bottom:28px; }
+.cname { font-size:46px; font-weight:800; letter-spacing:-1px; margin-bottom:6px; }
+.meta { display:flex; justify-content:space-between; align-items:flex-end; margin-top:4px; }
+.meta-left { font-size:15px; opacity:0.9; line-height:1.9; }
+.pill { background:#2DD4BF; color:#1B2B4B; padding:9px 22px; border-radius:50px; font-weight:700; font-size:14px; }
+.body { padding:44px 60px; }
+.sec { margin-bottom:32px; }
+.sec-title { font-size:12px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; color:#1B2B4B; border-bottom:2.5px solid #2DD4BF; padding-bottom:5px; margin-bottom:14px; }
+p { font-size:13px; line-height:1.7; color:#444; }
+.avail { color:#0E9E8E; font-style:italic; font-size:13px; line-height:1.6; margin-top:14px; }
+.skills-grid { columns:2; column-gap:40px; }
+.footer { border-top:1px solid #e5e5e5; margin:0 60px; padding:16px 0; font-size:11px; color:#aaa; }
+@media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+</style></head><body>
+<div class="header">
+  <div class="logo">${logoSvg}</div>
+  <div class="cname">${name}</div>
+  <div class="meta">
+    <div class="meta-left"><div>${location}</div><div>${currentRole}</div></div>
+    ${qualification ? `<div class="pill">${qualification}</div>` : ""}
+  </div>
+</div>
+<div class="body">
+  ${summary ? `<div class="sec"><div class="sec-title">Profile Summary</div><p>${summary.split("\n").join("<br>")}</p>${availability ? `<p class="avail">Availability &amp; Preferences: ${availability}</p>` : ""}</div>` : ""}
+  ${empHtml ? `<div class="sec"><div class="sec-title">Employment History</div>${empHtml}</div>` : ""}
+  ${qualHtml ? `<div class="sec"><div class="sec-title">Qualifications</div><ul>${qualHtml}</ul></div>` : ""}
+  ${skillsHtml ? `<div class="sec"><div class="sec-title">Key Skills</div><ul class="skills-grid">${skillsHtml}</ul></div>` : ""}
+</div>
+<div class="footer">Presented by SOAR Staffing Group · soarrecruitment.co.uk</div>
+</body></html>`;
+
+    const win = window.open("", "_blank");
+    if (win) { win.document.write(html); win.document.close(); setTimeout(() => win.print(), 600); }
+  };
+
+  const addEmp = () => setEmployment((p) => [...p, { role: "", company: "", dateTo: "", description: "" }]);
+  const setEmp = (i: number, k: keyof CvEmployment, v: string) =>
+    setEmployment((p) => p.map((e, idx) => idx === i ? { ...e, [k]: v } : e));
+  const removeEmp = (i: number) => setEmployment((p) => p.filter((_, idx) => idx !== i));
+
+  const addQual = () => setQualifications((p) => [...p, ""]);
+  const setQual = (i: number, v: string) => setQualifications((p) => p.map((q, idx) => idx === i ? v : q));
+  const removeQual = (i: number) => setQualifications((p) => p.filter((_, idx) => idx !== i));
+
+  const addSkill = () => setSkills((p) => [...p, ""]);
+  const setSkill = (i: number, v: string) => setSkills((p) => p.map((s, idx) => idx === i ? v : s));
+  const removeSkill = (i: number) => setSkills((p) => p.filter((_, idx) => idx !== i));
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-background rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden">
+        {/* Modal header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
+          <h2 className="font-semibold text-base">SOAR CV Preview</h2>
+          <div className="flex items-center gap-2">
+            <button onClick={runAI} disabled={generating}
+              className="h-8 px-3 rounded-lg border text-xs font-medium inline-flex items-center gap-1.5 hover:bg-muted/40 disabled:opacity-50">
+              <Sparkles className="h-3.5 w-3.5" />
+              {generating ? "Generating…" : "Regenerate"}
+            </button>
+            <button onClick={downloadPDF} disabled={generating}
+              className="h-8 px-4 rounded-lg bg-navy text-white text-xs font-medium inline-flex items-center gap-1.5 hover:opacity-90 disabled:opacity-50">
+              <FileText className="h-3.5 w-3.5" /> Download PDF
+            </button>
+            <button onClick={onClose} className="h-8 px-3 rounded-lg border text-xs font-medium hover:bg-muted/40">Close</button>
+          </div>
+        </div>
+
+        {/* Scrollable content */}
+        <div className="overflow-y-auto flex-1">
+          {/* CV Header preview */}
+          <div className="bg-[#1B2B4B] text-white px-8 py-8">
+            <div className="mb-6">
+              <span className="text-2xl font-black tracking-tight">Soar</span>
+              <span className="text-teal text-lg ml-0.5">✳</span>
+            </div>
+            <div className="text-3xl font-bold mb-2">{name}</div>
+            <div className="flex items-end justify-between gap-4">
+              <div className="text-sm opacity-90 space-y-0.5">
+                <div>{location}</div>
+                <div>{currentRole}</div>
+              </div>
+              {qualification && (
+                <div className="bg-teal text-[#1B2B4B] text-xs font-bold px-4 py-2 rounded-full shrink-0">
+                  {qualification}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Generating overlay */}
+          {generating && (
+            <div className="flex items-center justify-center gap-3 py-10 text-sm text-muted-foreground">
+              <div className="h-5 w-5 border-2 border-teal border-t-transparent rounded-full animate-spin" />
+              Generating CV content with AI…
+            </div>
+          )}
+
+          {/* Editable sections */}
+          {!generating && (
+            <div className="px-8 py-6 space-y-7">
+              {/* Profile Summary */}
+              <CvSection title="Profile Summary">
+                <textarea value={summary} onChange={(e) => setSummary(e.target.value)} rows={5}
+                  placeholder="Profile summary will be generated automatically…"
+                  className="w-full text-sm rounded-xl border px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none leading-relaxed" />
+                <div className="mt-2">
+                  <label className="text-xs font-medium text-[#0E9E8E] block mb-1">Availability &amp; Preferences</label>
+                  <input value={availability} onChange={(e) => setAvailability(e.target.value)}
+                    placeholder="e.g. Seeking a full-time nursery role in South London"
+                    className="w-full text-sm rounded-xl border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40 italic text-[#0E9E8E] placeholder:not-italic placeholder:text-muted-foreground" />
+                </div>
+              </CvSection>
+
+              {/* Employment History */}
+              <CvSection title="Employment History">
+                <div className="space-y-4">
+                  {employment.map((e, i) => (
+                    <div key={i} className="rounded-xl border p-4 space-y-3 bg-muted/20">
+                      <div className="grid grid-cols-3 gap-2">
+                        <input value={e.role} onChange={(ev) => setEmp(i, "role", ev.target.value)} placeholder="Job title"
+                          className="text-sm rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" />
+                        <input value={e.company} onChange={(ev) => setEmp(i, "company", ev.target.value)} placeholder="Employer"
+                          className="text-sm rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" />
+                        <input value={e.dateTo} onChange={(ev) => setEmp(i, "dateTo", ev.target.value)} placeholder="End date / Present"
+                          className="text-sm rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" />
+                      </div>
+                      <textarea value={e.description} onChange={(ev) => setEmp(i, "description", ev.target.value)} rows={3}
+                        placeholder="Describe responsibilities and achievements…"
+                        className="w-full text-sm rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" />
+                      <button onClick={() => removeEmp(i)} className="text-xs text-rose-500 hover:text-rose-600">Remove</button>
+                    </div>
+                  ))}
+                  <button onClick={addEmp} className="text-xs text-teal font-medium hover:opacity-80 flex items-center gap-1">
+                    <Plus className="h-3.5 w-3.5" /> Add role
+                  </button>
+                </div>
+              </CvSection>
+
+              {/* Qualifications */}
+              <CvSection title="Qualifications">
+                <div className="space-y-2">
+                  {qualifications.map((q, i) => (
+                    <div key={i} className="flex gap-2">
+                      <input value={q} onChange={(e) => setQual(i, e.target.value)} placeholder="e.g. Level 3 Early Years Educator"
+                        className="flex-1 text-sm rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" />
+                      <button onClick={() => removeQual(i)} className="text-xs text-rose-500 px-2 hover:text-rose-600">✕</button>
+                    </div>
+                  ))}
+                  <button onClick={addQual} className="text-xs text-teal font-medium hover:opacity-80 flex items-center gap-1">
+                    <Plus className="h-3.5 w-3.5" /> Add qualification
+                  </button>
+                </div>
+              </CvSection>
+
+              {/* Key Skills */}
+              <CvSection title="Key Skills">
+                <div className="grid grid-cols-2 gap-2">
+                  {skills.map((s, i) => (
+                    <div key={i} className="flex gap-2">
+                      <input value={s} onChange={(e) => setSkill(i, e.target.value)} placeholder="e.g. EYFS Framework"
+                        className="flex-1 text-sm rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal/40" />
+                      <button onClick={() => removeSkill(i)} className="text-xs text-rose-500 px-1 hover:text-rose-600">✕</button>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={addSkill} className="mt-2 text-xs text-teal font-medium hover:opacity-80 flex items-center gap-1">
+                  <Plus className="h-3.5 w-3.5" /> Add skill
+                </button>
+              </CvSection>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CvSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h3 className="text-xs font-bold uppercase tracking-widest text-[#1B2B4B] border-b-2 border-teal pb-1.5 mb-4">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
