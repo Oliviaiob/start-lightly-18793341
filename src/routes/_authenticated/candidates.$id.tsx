@@ -219,6 +219,7 @@ function Page() {
   const [c, setC] = useState<Candidate | null>(null);
   const [cvOpen, setCvOpen] = useState(false);
   const [wpOpen, setWpOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [cvUploading, setCvUploading] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [personalEditing, setPersonalEditing] = useState(false);
@@ -600,16 +601,25 @@ function Page() {
             </HeaderBtn>
             <HeaderBtn icon={Plus}>Add to Shortlist</HeaderBtn>
             {isPerm ? (
+              <button onClick={() => setChatOpen(true)} title="Message candidate" className="h-9 w-9 rounded-full border hover:bg-muted transition-colors inline-flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground">
+                <MessageCircle className="h-4 w-4" />
+              </button>
               <button onClick={() => setCvOpen(true)} className="h-9 px-3.5 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-1.5">
                 <Sparkles className="h-3.5 w-3.5" /> Generate SOAR CV
               </button>
             ) : (
+              <button onClick={() => setChatOpen(true)} title="Message candidate" className="h-9 w-9 rounded-full border hover:bg-muted transition-colors inline-flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground">
+                <MessageCircle className="h-4 w-4" />
+              </button>
               <button onClick={() => setWpOpen(true)} className="h-9 px-3.5 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-1.5">
                 <FileText className="h-3.5 w-3.5" /> Generate Worker Profile
               </button>
             )}
             {cvOpen && c && isPerm && (
               <GenerateCVModal open={cvOpen} onClose={() => setCvOpen(false)} candidate={c} />
+            )}
+            {chatOpen && c && (
+              <ChatDrawer candidateId={c.id} candidateName={`${c.first_name ?? ""} ${c.last_name ?? ""}`.trim()} candidatePhone={c.phone ?? null} onClose={() => setChatOpen(false)} />
             )}
             {wpOpen && c && isTemp && (
               <GenerateWorkerProfileModal open={wpOpen} onClose={() => setWpOpen(false)} candidate={c} />
@@ -2222,5 +2232,41 @@ function MessagesTab({ candidateId, candidatePhone }: { candidateId: string; can
         </button>
       </div>
     </div>
+  );
+}
+
+// ── ChatDrawer ────────────────────────────────────────────────────────────────
+function ChatDrawer({ candidateId, candidateName, candidatePhone, onClose }: {
+  candidateId: string;
+  candidateName: string;
+  candidatePhone: string | null;
+  onClose: () => void;
+}) {
+  const initials = candidateName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/20" onClick={onClose} />
+      <div className="fixed inset-y-0 right-0 z-50 w-[420px] bg-card shadow-2xl flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b bg-navy shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-white/10 text-white grid place-items-center text-xs font-bold">
+              {initials}
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-white">{candidateName}</div>
+              {candidatePhone && <div className="text-[11px] text-white/60">{candidatePhone}</div>}
+            </div>
+          </div>
+          <button onClick={onClose} className="h-7 w-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+            <X className="h-4 w-4 text-white" />
+          </button>
+        </div>
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          <MessagesTab candidateId={candidateId} candidatePhone={candidatePhone} />
+        </div>
+      </div>
+    </>
   );
 }
