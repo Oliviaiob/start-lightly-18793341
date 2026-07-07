@@ -470,7 +470,7 @@ function Page() {
     const ext = file.name.split(".").pop() ?? "bin";
     const filePath = `${id}/${key}/${Date.now()}.${ext}`;
     const { error: storageError } = await supabase.storage
-      .from("compliance-documents")
+      .from("compliance")
       .upload(filePath, file, { upsert: true, contentType: file.type || "application/octet-stream" });
     if (storageError) {
       toast.error("Upload failed: " + storageError.message);
@@ -479,7 +479,7 @@ function Page() {
     }
 
     // 2. Get public URL
-    const { data: urlData } = supabase.storage.from("compliance-documents").getPublicUrl(filePath);
+    const { data: urlData } = supabase.storage.from("compliance").getPublicUrl(filePath);
     const fileUrl = urlData?.publicUrl ?? null;
 
     // 3. Remove any existing doc record for this key then insert new one
