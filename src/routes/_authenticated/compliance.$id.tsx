@@ -8,6 +8,7 @@ import {
   Copy, Mail, Link2, BanIcon, PartyPopper, ChevronRight, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { WorkflowPanel, type WorkflowStateData, type WorkflowActivityData, type ActionOwner, type DerivedWorkflowState } from "@/components/workflow-panel";
 
 export const Route = createFileRoute("/_authenticated/compliance/$id")({
   component: Page,
@@ -22,7 +23,9 @@ type ChecklistKey =
   | "safeguarding_training_cert" | "paediatric_first_aid_cert" | "qualification_certificates"
   | "work_reference_1" | "work_reference_2" | "character_reference";
 
-type ItemStatus = "pending" | "uploaded" | "verified" | "flagged" | "not_required";
+type ItemStatus = "pending" | "awaiting_candidate" | "uploaded" | "under_review"
+  | "approved" | "verified" | "rejected" | "flagged"
+  | "manual_review" | "awaiting_referee" | "awaiting_manager" | "not_required";
 
 const CHECKLIST_ITEMS: { key: ChecklistKey; label: string; group: string; required: boolean }[] = [
   { key: "proof_of_id",              label: "Proof of ID",              group: "Identity",   required: true  },
@@ -46,11 +49,16 @@ const REQUIRED_KEYS = CHECKLIST_ITEMS.filter((i) => i.required).map((i) => i.key
 const GROUPS = ["Identity", "RTW", "DBS", "Training", "References"] as const;
 
 const STATUS_OPTIONS: { value: ItemStatus; label: string }[] = [
-  { value: "pending",       label: "Pending"      },
-  { value: "uploaded",      label: "Uploaded"     },
-  { value: "verified",      label: "Verified"     },
-  { value: "flagged",       label: "Flagged"      },
-  { value: "not_required",  label: "Not Required" },
+  { value: "pending",            label: "Pending"            },
+  { value: "awaiting_candidate", label: "Awaiting Candidate" },
+  { value: "uploaded",           label: "Uploaded"           },
+  { value: "under_review",       label: "Under Review"       },
+  { value: "approved",           label: "Approved"           },
+  { value: "rejected",           label: "Rejected"           },
+  { value: "manual_review",      label: "Manual Review"      },
+  { value: "awaiting_referee",   label: "Awaiting Referee"   },
+  { value: "awaiting_manager",   label: "Awaiting Manager"   },
+  { value: "not_required",       label: "Not Required"       },
 ];
 
 const OVERALL_STATUS_OPTIONS = [
@@ -113,11 +121,18 @@ function fmtFileSize(bytes: number | null) {
 // ── Status badge (item-level) ─────────────────────────────────────────────────
 
 const ITEM_BADGE: Record<string, { label: string; bg: string; text: string }> = {
-  verified:     { label: "Verified",     bg: "bg-green-100",  text: "text-green-700"  },
-  flagged:      { label: "Flagged",      bg: "bg-red-100",    text: "text-red-700"    },
-  uploaded:     { label: "Uploaded",     bg: "bg-blue-100",   text: "text-blue-700"   },
-  not_required: { label: "Not Required", bg: "bg-muted",      text: "text-muted-foreground" },
-  pending:      { label: "Pending",      bg: "bg-amber-100",  text: "text-amber-700"  },
+  pending:            { label: "Pending",            bg: "bg-amber-100",  text: "text-amber-700"  },
+  awaiting_candidate: { label: "Awaiting Candidate", bg: "bg-blue-100",   text: "text-blue-700"   },
+  uploaded:           { label: "Uploaded",           bg: "bg-blue-100",   text: "text-blue-700"   },
+  under_review:       { label: "Under Review",       bg: "bg-indigo-100", text: "text-indigo-700" },
+  approved:           { label: "Approved",           bg: "bg-green-100",  text: "text-green-700"  },
+  verified:           { label: "Verified",           bg: "bg-green-100",  text: "text-green-700"  },
+  rejected:           { label: "Rejected",           bg: "bg-red-100",    text: "text-red-700"    },
+  flagged:            { label: "Flagged",            bg: "bg-red-100",    text: "text-red-700"    },
+  manual_review:      { label: "Manual Review",      bg: "bg-amber-100",  text: "text-amber-700"  },
+  awaiting_referee:   { label: "Awaiting Referee",   bg: "bg-orange-100", text: "text-orange-700" },
+  awaiting_manager:   { label: "Awaiting Manager",   bg: "bg-purple-100", text: "text-purple-700" },
+  not_required:       { label: "Not Required",       bg: "bg-muted",      text: "text-muted-foreground" },
 };
 
 function ItemBadge({ status }: { status: string | null }) {
@@ -126,29 +141,66 @@ function ItemBadge({ status }: { status: string | null }) {
 }
 
 function ItemStatusIcon({ status }: { status: string | null }) {
-  if (status === "verified")      return <CheckCircle className="h-5 w-5 text-green-500" />;
-  if (status === "flagged")       return <AlertTriangle className="h-5 w-5 text-red-500" />;
-  if (status === "uploaded")      return <Clock className="h-5 w-5 text-blue-400" />;
+  if (status === "verified" || status === "approved") return <CheckCircle className="h-5 w-5 text-green-500" />;
+  if (status === "flagged"  || status === "rejected") return <AlertTriangle className="h-5 w-5 text-red-500" />;
+  if (status === "uploaded" || status === "under_review") return <Clock className="h-5 w-5 text-blue-400" />;
+  if (status === "manual_review" || status === "awaiting_manager") return <AlertTriangle className="h-5 w-5 text-amber-500" />;
   if (status === "not_required")  return <Minus className="h-5 w-5 text-muted-foreground/40" />;
   return <Circle className="h-5 w-5 text-muted-foreground/25" />;
 }
 
 // ── Checklist Item Section ────────────────────────────────────────────────────
 
+function deriveWorkflowState(
+  item: (typeof CHECKLIST_ITEMS)[number],
+  status: string,
+  hasDoc: boolean
+): DerivedWorkflowState {
+  const isRef = item.key.includes("reference");
+  switch (status) {
+    case "approved": case "verified": case "not_required":
+      return { waitingOn: "System", nextAction: "No action required", aiRecommendation: "No action required", priority: 9 };
+    case "uploaded":
+      return { waitingOn: "Sophie", nextAction: `Review ${item.label.toLowerCase()}`, aiRecommendation: "Run AI check to verify document", priority: 3 };
+    case "under_review":
+      return { waitingOn: "Sophie", nextAction: "AI check in progress", aiRecommendation: "Awaiting AI analysis", priority: 3 };
+    case "flagged": case "rejected":
+      return { waitingOn: "Sophie", nextAction: "Review flagged document", aiRecommendation: "Review AI flag — request replacement if needed", priority: 2 };
+    case "manual_review":
+      return { waitingOn: "Manager", nextAction: "Manual review required", aiRecommendation: "Escalate to Manager", priority: 3 };
+    case "awaiting_referee":
+      return { waitingOn: "Referee", nextAction: "Awaiting referee response", aiRecommendation: "Chase referee", priority: 4 };
+    case "awaiting_manager":
+      return { waitingOn: "Manager", nextAction: "Awaiting manager approval", aiRecommendation: "Escalate to Manager", priority: 3 };
+    case "awaiting_candidate":
+      return { waitingOn: "Candidate", nextAction: "Awaiting candidate upload", aiRecommendation: "Await candidate response", priority: 5 };
+    default:
+      if (hasDoc) return { waitingOn: "Sophie", nextAction: `Run AI check on ${item.label.toLowerCase()}`, aiRecommendation: "Run AI check to verify document", priority: 3 };
+      if (isRef)  return { waitingOn: "Referee", nextAction: "Send reference request", aiRecommendation: "Chase referee", priority: 6 };
+      return { waitingOn: "Candidate", nextAction: `Upload ${item.label.toLowerCase()}`, aiRecommendation: "Send candidate reminder", priority: 5 };
+  }
+}
+
 function ChecklistSection({
-  item, status, doc, aiResult, note, onStatusChange, onNoteChange, onNoteBlur, onUpload, onRemove, onRecheck, saving,
+  item, status, doc, aiResult, note, workflowState, workflowActivity,
+  onStatusChange, onNoteChange, onNoteBlur, onUpload, onRemove, onRecheck,
+  onWorkflowUpdate, onWorkflowLog, saving,
 }: {
   item: (typeof CHECKLIST_ITEMS)[number];
   status: ItemStatus;
   doc: DocumentRecord | null;
   aiResult: any | null;
   note: string;
+  workflowState: WorkflowStateData | null;
+  workflowActivity: WorkflowActivityData[];
   onStatusChange: (val: ItemStatus) => void;
   onNoteChange: (val: string) => void;
   onNoteBlur: () => void;
   onUpload: (file: File) => void;
   onRemove: () => void;
   onRecheck: () => void;
+  onWorkflowUpdate: (updates: Partial<WorkflowStateData>) => Promise<void>;
+  onWorkflowLog: (desc: string, source?: "system" | "ai" | "recruiter") => Promise<void>;
   saving: boolean;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -297,6 +349,17 @@ function ChecklistSection({
           </div>
         )}
 
+        {/* AI Workflow Panel */}
+        <WorkflowPanel
+          state={workflowState}
+          activity={workflowActivity}
+          derived={deriveWorkflowState(item, status, !!doc)}
+          onUpdate={onWorkflowUpdate}
+          onLogActivity={onWorkflowLog}
+          agent="sophie"
+          variant="compact"
+        />
+
         {/* Recruiter notes */}
         <textarea value={note} onChange={(e) => onNoteChange(e.target.value)} onBlur={onNoteBlur}
           placeholder="Recruiter notes…"
@@ -321,6 +384,9 @@ function Page() {
   const [overallStatus, setOverallStatus] = useState<string>("pending_compliance");
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [lastMessage, setLastMessage] = useState<{ content: string; direction: string; created_at: string } | null>(null);
+  const [workflowStates, setWorkflowStates] = useState<WorkflowStateData[]>([]);
+  const [workflowActivity, setWorkflowActivity] = useState<WorkflowActivityData[]>([]);
+  const [workflowAvailable, setWorkflowAvailable] = useState(true);
 
   const loadAll = async () => {
     setLoading(true);
@@ -331,6 +397,20 @@ function Page() {
       supabase.from("references").select("id,referee_name,referee_email,company_name,ref_type,ref_number,status,requested_at,received_at").eq("candidate_id", id).order("ref_number", { ascending: true }),
       (supabase as any).from("messages").select("content,direction,created_at").eq("candidate_id", id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
+    // Load workflow engine data (graceful fallback if migration not yet run)
+    if (workflowAvailable) {
+      try {
+        const [wsRes, waRes] = await Promise.all([
+          (supabase as any).from("workflow_states").select("*").eq("entity_type", "compliance_item").eq("entity_id", id),
+          (supabase as any).from("workflow_activity").select("*").eq("entity_type", "compliance_item").eq("entity_id", id).order("created_at", { ascending: false }).limit(100),
+        ]);
+        if (wsRes.error?.code === "42P01") { setWorkflowAvailable(false); }
+        else {
+          setWorkflowStates(wsRes.data ?? []);
+          setWorkflowActivity(waRes.data ?? []);
+        }
+      } catch { setWorkflowAvailable(false); }
+    }
     if (candRes.error) { toast.error("Candidate not found"); setLoading(false); return; }
     const cand = candRes.data as Candidate | null;
     setCandidate(cand);
@@ -400,6 +480,7 @@ function Page() {
       setSavingItem(null);
     }
     await loadAll();
+    await logWorkflowActivity(key, `${file.name} uploaded`, "system");
     toast.success("Document uploaded");
   };
 
@@ -414,7 +495,33 @@ function Page() {
     // Reset status to pending
     await updateItem(key, "pending");
     await loadAll();
+    await logWorkflowActivity(key, `Document removed — awaiting replacement`, "system");
     toast.success("Document removed");
+  };
+
+  const upsertWorkflowState = async (key: string, updates: Partial<WorkflowStateData>) => {
+    if (!workflowAvailable) return;
+    try {
+      const { data, error } = await (supabase as any).from("workflow_states").upsert({
+        entity_type: "compliance_item", entity_id: id, item_key: key,
+        assigned_agent: "sophie", ...updates, updated_at: new Date().toISOString(),
+      }, { onConflict: "entity_type,entity_id,item_key" }).select("*").single();
+      if (!error && data) setWorkflowStates(prev => { const rest = prev.filter(s => s.item_key !== key); return [...rest, data]; });
+    } catch {}
+  };
+
+  const logWorkflowActivity = async (key: string, description: string, source: "system" | "ai" | "recruiter" = "system") => {
+    if (!workflowAvailable) return;
+    try {
+      const { data } = await (supabase as any).from("workflow_activity").insert({
+        entity_type: "compliance_item", entity_id: id, item_key: key,
+        description, source, agent: source === "ai" ? "sophie" : null,
+      }).select("*").single();
+      if (data) {
+        setWorkflowActivity(prev => [data, ...prev]);
+        await upsertWorkflowState(key, { last_activity_at: data.created_at, last_activity_desc: description });
+      }
+    } catch {}
   };
 
   const runAiCheck = async (key: ChecklistKey) => {
@@ -441,8 +548,11 @@ function Page() {
       if (error) throw error;
       // Refresh checklist to pick up auto-updated status and ai_results
       await loadAll();
-      if (data?.status === "verified") toast.success("AI check passed ✓");
-      else if (data?.status === "flagged") toast.error("AI check flagged an issue — review notes");
+      const aiStatus = data?.status ?? "unknown";
+      await logWorkflowActivity(key, `AI check completed — ${aiStatus}`, "ai");
+      const derived = deriveWorkflowState(CHECKLIST_ITEMS.find(i => i.key === key)!, aiStatus, true);
+      await upsertWorkflowState(key, { current_status: aiStatus, waiting_on: derived.waitingOn as ActionOwner, next_action: derived.nextAction, ai_recommendation: derived.aiRecommendation, priority: derived.priority });
+      if (data?.status === "flagged") toast.error("AI check flagged an issue — review notes");
       else toast.info("Manual review required for this item");
     } catch (e: any) {
       toast.error("AI check failed: " + (e?.message ?? "Unknown error"));
@@ -567,6 +677,10 @@ function Page() {
             onUpload={(file) => handleUpload(item.key, file)}
             onRemove={() => handleRemove(item.key)}
             onRecheck={() => runAiCheck(item.key)}
+            workflowState={workflowStates.find(s => s.item_key === item.key) ?? null}
+            workflowActivity={workflowActivity.filter(a => a.item_key === item.key)}
+            onWorkflowUpdate={(updates) => upsertWorkflowState(item.key, updates)}
+            onWorkflowLog={(desc, src) => logWorkflowActivity(item.key, desc, src)}
             saving={savingItem === item.key}
           />
         );
