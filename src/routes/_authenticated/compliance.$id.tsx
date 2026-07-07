@@ -349,21 +349,34 @@ function Page() {
 
   const runAiCheck = async (key: ChecklistKey) => {
     setSavingItem(key);
-    // In production this would call an edge function; for now we show a placeholder result
     const doc = docs.find((d) => d.document_type === key);
-    if (!doc) { toast.error("No document to check"); setSavingItem(null); return; }
-    const fakeResult = {
-      checked_at: new Date().toISOString(),
-      extracted: "AI check initiated — results will appear once processed.",
-      status: "pending",
-    };
+    // Text-only checks don't need an uploaded document
+    const textOnlyKeys = ["right_to_work", "ni_number_check"];
+    if (!doc && !textOnlyKeys.includes(key)) {
+      toast.error("Upload a document first before running an AI check");
+      setSavingItem(null);
+      return;
+    }
     try {
-      const cl = await getOrCreateChecklist();
-      const merged: Record<string, unknown> = { ...(checklist?.ai_results ?? {}), [key]: fakeResult };
-      await supabase.from("compliance_checklists").update({ ai_results: merged as any }).eq("id", cl.id!);
-      setChecklist((prev) => prev ? { ...prev, ai_results: merged } : null);
-      toast.success("AI check initiated");
-    } catch (e: any) { toast.error("Failed"); }
+      const { data, error } = await supabase.functions.invoke("check-compliance-document", {
+        body: {
+          document_type: key,
+          candidate_id: id,
+          doc_id: doc?.id ?? null,
+          text_content: null,
+          candidate_name: candidate ? `${candidate.first_name ?? ""} ${candidate.last_name ?? ""}`.trim() : null,
+          candidate_qualification_level: candidate?.qualification_level ?? null,
+        },
+      });
+      if (error) throw error;
+      // Refresh checklist to pick up auto-updated status and ai_results
+      await loadAll();
+      if (data?.status === "verified") toast.success("AI check passed ✓");
+      else if (data?.status === "flagged") toast.error("AI check flagged an issue — review notes");
+      else toast.info("Manual review required for this item");
+    } catch (e: any) {
+      toast.error("AI check failed: " + (e?.message ?? "Unknown error"));
+    }
     setSavingItem(null);
   };
 
