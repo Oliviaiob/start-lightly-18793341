@@ -276,6 +276,7 @@ function Page() {
       supabase.from("compliance_checklists").select("*").eq("candidate_id", id).maybeSingle(),
       supabase.from("candidate_documents").select("id,document_type,file_name,file_url,status,uploaded_at,file_size").eq("candidate_id", id).order("uploaded_at", { ascending: false }),
       supabase.from("references").select("id,referee_name,referee_email,company_name,ref_type,ref_number,status,requested_at,received_at").eq("candidate_id", id).order("ref_number", { ascending: true }),
+      (supabase as any).from("messages").select("content,direction,created_at").eq("candidate_id", id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
     if (candRes.error) { toast.error("Candidate not found"); setLoading(false); return; }
     const cand = candRes.data as Candidate | null;
