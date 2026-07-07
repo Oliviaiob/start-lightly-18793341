@@ -25,6 +25,11 @@ export type WorkflowStateData = {
   last_activity_desc?: string | null;
   next_followup_at?: string | null;
   ai_recommendation?: string | null;
+  override_reason?: string | null;
+  locked_by_human?: boolean;
+  due_status?: string | null;        // overdue | due_today | scheduled | no_action_needed
+  confidence_score?: number | null;  // 0–100, written by AI
+  handover_to?: string | null;       // agent to hand ownership to
   updated_at?: string;
 };
 
@@ -70,6 +75,23 @@ const PRIORITY_CONFIG: Record<number, { label: string; dot: string; text: string
   6: { label: "Low",       dot: "bg-blue-300",   text: "text-blue-600"   },
   9: { label: "None",      dot: "bg-gray-200",   text: "text-gray-400"   },
 };
+
+const DUE_STATUS_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
+  overdue:          { label: "Overdue",         bg: "bg-red-100",   text: "text-red-700"   },
+  due_today:        { label: "Due Today",        bg: "bg-amber-100", text: "text-amber-700" },
+  scheduled:        { label: "Scheduled",        bg: "bg-blue-100",  text: "text-blue-600"  },
+  no_action_needed: { label: "No Action Needed", bg: "bg-green-100", text: "text-green-700" },
+};
+
+function computeDueStatus(followUp: string | null | undefined, storedStatus: string | null | undefined, waitingOn: ActionOwner): string {
+  if (waitingOn === "System") return "no_action_needed";
+  if (storedStatus) return storedStatus;
+  if (!followUp) return "scheduled";
+  const diff = new Date(followUp).setHours(0,0,0,0) - new Date().setHours(0,0,0,0);
+  if (diff < 0) return "overdue";
+  if (diff === 0) return "due_today";
+  return "scheduled";
+}
 
 const OWNER_OPTIONS: ActionOwner[] = [
   "Candidate", "Client", "Referee", "Manager",
@@ -158,9 +180,12 @@ export function WorkflowPanel({
   // Edit form state
   const [editForm, setEditForm] = useState({
     waiting_on: waitingOn,
-    next_action: nextAction,
+    next_action: nextAction ?? "",
     priority: String(priority),
     next_followup_at: followUp ? followUp.slice(0, 10) : "",
+    override_reason: state?.override_reason ?? "",
+    locked_by_human: state?.locked_by_human ?? false,
+    handover_to: state?.handover_to ?? "",
   });
 
   const openEdit = () => {
@@ -169,6 +194,9 @@ export function WorkflowPanel({
       next_action: nextAction ?? "",
       priority: String(priority),
       next_followup_at: followUp ? followUp.slice(0, 10) : "",
+      override_reason: state?.override_reason ?? "",
+      locked_by_human: state?.locked_by_human ?? false,
+      handover_to: state?.handover_to ?? "",
     });
     setEditing(true);
   };
@@ -180,6 +208,9 @@ export function WorkflowPanel({
       next_action: editForm.next_action || null,
       priority: Number(editForm.priority),
       next_followup_at: editForm.next_followup_at ? new Date(editForm.next_followup_at).toISOString() : null,
+      override_reason: editForm.override_reason || null,
+      locked_by_human: editForm.locked_by_human,
+      handover_to: editForm.handover_to || null,
     });
     setEditing(false);
     setSaving(false);
@@ -210,11 +241,25 @@ export function WorkflowPanel({
             <WaitingOnBadge owner={waitingOn} />
           </div>
           <PriorityDot priority={priority} />
-          {followUp && (
-            <div className="flex items-center gap-1 text-muted-foreground">
-              <Calendar className="h-3 w-3" />
-              <span>{fmtDate(followUp)}</span>
-            </div>
+          {(() => {
+            const ds = computeDueStatus(followUp, state?.due_status, waitingOn);
+            const cfg = DUE_STATUS_CONFIG[ds] ?? DUE_STATUS_CONFIG.scheduled;
+            if (ds === "no_action_needed") return null;
+            return (
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${cfg.bg} ${cfg.text}`}>
+                {cfg.label}{followUp && ds === "scheduled" ? ` · ${fmtDate(followUp)}` : ""}
+              </span>
+            );
+          })()}
+          {state?.locked_by_human && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground" title="Locked by recruiter — AI will not overwrite">
+              🔒 Locked
+            </span>
+          )}
+          {state?.handover_to && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full font-medium">
+              → {state.handover_to.charAt(0).toUpperCase() + state.handover_to.slice(1)}
+            </span>
           )}
         </div>
         <button
@@ -287,6 +332,36 @@ export function WorkflowPanel({
               </button>
             </div>
           </div>
+          <div>
+            <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Override Reason <span className="normal-case font-normal">(why you changed this)</span></label>
+            <input
+              type="text"
+              value={editForm.override_reason}
+              onChange={e => setEditForm(p => ({ ...p, override_reason: e.target.value }))}
+              className="w-full h-7 text-xs rounded-lg border border-border/50 bg-background px-2 focus:outline-none focus:ring-1 focus:ring-teal/40"
+              placeholder="e.g. Candidate on holiday until Friday"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Hand Over To</label>
+            <select
+              value={editForm.handover_to}
+              onChange={e => setEditForm(p => ({ ...p, handover_to: e.target.value }))}
+              className="w-full h-7 text-xs rounded-lg border border-border/50 bg-background px-2 focus:outline-none focus:ring-1 focus:ring-teal/40"
+            >
+              <option value="">— No handover —</option>
+              {["Sophie","Mia","Grace","Sammie","Lilly"].map(a => <option key={a} value={a.toLowerCase()}>{a}</option>)}
+            </select>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={editForm.locked_by_human}
+              onChange={e => setEditForm(p => ({ ...p, locked_by_human: e.target.checked }))}
+              className="h-3.5 w-3.5 rounded"
+            />
+            <span className="text-xs">🔒 Lock this decision — AI will not overwrite</span>
+          </label>
           <div className="flex gap-2 pt-0.5">
             <button onClick={saveEdit} disabled={saving}
               className="inline-flex items-center gap-1 h-7 px-3 rounded-lg bg-navy text-white text-xs font-medium hover:opacity-90 disabled:opacity-50">
@@ -316,8 +391,25 @@ export function WorkflowPanel({
                 {agent ? `${agent.charAt(0).toUpperCase() + agent.slice(1)}: ` : "AI: "}
                 {aiRec}
               </span>
+              {state?.confidence_score != null && (
+                <span className={`ml-auto shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                  state.confidence_score >= 85 ? "bg-green-100 text-green-700"
+                  : state.confidence_score >= 65 ? "bg-amber-100 text-amber-700"
+                  : "bg-red-100 text-red-700"
+                }`}>
+                  {Math.round(state.confidence_score)}%
+                </span>
+              )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Override reason */}
+      {state?.override_reason && (
+        <div className="px-3.5 pb-2 flex items-start gap-1.5 text-[11px] text-muted-foreground border-t border-border/20 pt-2">
+          <span className="shrink-0">✏️</span>
+          <span><span className="font-medium">Recruiter override:</span> {state.override_reason}</span>
         </div>
       )}
 

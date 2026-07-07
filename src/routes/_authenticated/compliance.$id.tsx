@@ -568,9 +568,19 @@ function Page() {
       // Refresh checklist to pick up auto-updated status and ai_results
       await loadAll();
       const aiStatus = data?.status ?? "unknown";
-      await logWorkflowActivity(key, `AI check completed — ${aiStatus}`, "ai");
+      const rawConfidence = typeof data?.confidence === "number" ? data.confidence : null;
+      const confidenceScore = rawConfidence != null ? Math.round(rawConfidence * 100) : null;
+      await logWorkflowActivity(key, `AI check completed — ${aiStatus}${confidenceScore != null ? ` (${confidenceScore}% confidence)` : ""}`, "ai");
       const derived = deriveWorkflowState(CHECKLIST_ITEMS.find(i => i.key === key)!, aiStatus, true);
-      await upsertWorkflowState(key, { current_status: aiStatus, waiting_on: derived.waitingOn as ActionOwner, next_action: derived.nextAction, ai_recommendation: derived.aiRecommendation, priority: derived.priority });
+      await upsertWorkflowState(key, {
+        current_status: aiStatus,
+        waiting_on: derived.waitingOn as ActionOwner,
+        next_action: derived.nextAction,
+        ai_recommendation: derived.aiRecommendation,
+        priority: derived.priority,
+        confidence_score: confidenceScore,
+        due_status: (aiStatus === "verified" || aiStatus === "approved") ? "no_action_needed" : undefined,
+      });
       if (data?.status === "flagged") toast.error("AI check flagged an issue — review notes");
       else toast.info("Manual review required for this item");
     } catch (e: any) {
