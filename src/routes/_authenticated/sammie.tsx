@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fmtQual } from "@/lib/utils";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_authenticated/sammie" as any)({
+export const Route = createFileRoute("/_authenticated/sammie")({
   component: SammiePage,
 });
 

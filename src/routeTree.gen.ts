@@ -325,6 +325,8 @@ export interface FileRouteTypes {
     | '/_authenticated/map'
     | '/_authenticated/placements'
     | '/_authenticated/settings'
+    | '/_authenticated/sammie'
+    | '/_authenticated/inbox'
     | '/_authenticated/'
     | '/_authenticated/bookings/$id'
     | '/_authenticated/candidates/$id'
@@ -521,6 +523,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/bookings/$id'
       preLoaderRoute: typeof AuthenticatedBookingsIdRouteImport
       parentRoute: typeof AuthenticatedBookingsRoute
+    }
+    '/_authenticated/inbox': {
+      id: '/_authenticated/inbox'
+      path: '/inbox'
+      fullPath: '/inbox'
+      preLoaderRoute: typeof AuthenticatedInboxRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/sammie': {
+      id: '/_authenticated/sammie'
+      path: '/sammie'
+      fullPath: '/sammie'
+      preLoaderRoute: typeof AuthenticatedSammieRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
   }
 }

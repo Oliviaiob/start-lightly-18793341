@@ -4,7 +4,7 @@ import { Send, MessageSquare, Search, Phone, Mail, MessageCircle, CheckCheck, Cl
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_authenticated/inbox" as any)({ component: InboxPage });
+export const Route = createFileRoute("/_authenticated/inbox")({ component: InboxPage });
 
 interface Candidate { id: string; first_name: string | null; last_name: string | null; phone: string | null; email: string | null; }
 interface Message { id: string; candidate_id: string; content: string; direction: "inbound" | "outbound"; channel: string; status: string; created_at: string; }
