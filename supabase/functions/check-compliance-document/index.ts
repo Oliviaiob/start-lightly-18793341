@@ -153,25 +153,41 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (doc?.file_url) {
-        // Fetch the file
-        const fileRes = await fetch(doc.file_url);
-        const fileBuffer = await fileRes.arrayBuffer();
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(fileBuffer)));
-        const contentType = fileRes.headers.get("content-type") ?? "image/jpeg";
+        // Fetch headers only first to get content-type and size
+        const headRes = await fetch(doc.file_url, { method: "HEAD" });
+        const contentType = headRes.headers.get("content-type") ?? "image/jpeg";
+        const contentLength = Number(headRes.headers.get("content-length") ?? "0");
+        const MAX_BYTES = 5 * 1024 * 1024; // 5MB limit
 
-        if (contentType.startsWith("image/")) {
+        if (contentLength > MAX_BYTES) {
+          messageContent.push({
+            type: "text",
+            text: `Note: The uploaded file (${doc.file_name}, ${(contentLength / 1024 / 1024).toFixed(1)}MB) exceeds the 5MB analysis limit. Please ask the candidate to upload a smaller/compressed version. This check cannot be completed automatically.`,
+          });
+        } else if (contentType.startsWith("image/")) {
+          // Use URL source — no base64 needed, no size issues, bucket is public
           messageContent.push({
             type: "image",
-            source: { type: "base64", media_type: contentType, data: base64 },
+            source: { type: "url", url: doc.file_url },
           });
+          messageContent.push({ type: "text", text: `File name: ${doc.file_name}` });
         } else if (contentType === "application/pdf") {
+          // PDFs need base64 — use chunked encoding to avoid stack overflow on large files
+          const fileBuffer = await (await fetch(doc.file_url)).arrayBuffer();
+          const bytes = new Uint8Array(fileBuffer);
+          let binary = "";
+          const CHUNK = 8192;
+          for (let i = 0; i < bytes.length; i += CHUNK) {
+            binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
+          }
           messageContent.push({
             type: "document",
-            source: { type: "base64", media_type: "application/pdf", data: base64 },
+            source: { type: "base64", media_type: "application/pdf", data: btoa(binary) },
           });
+          messageContent.push({ type: "text", text: `File name: ${doc.file_name}` });
+        } else {
+          messageContent.push({ type: "text", text: `File name: ${doc.file_name} (unsupported format — manual review required)` });
         }
-
-        messageContent.push({ type: "text", text: `File name: ${doc.file_name}` });
       }
     }
 
