@@ -27,6 +27,7 @@ interface ChatMessage {
   searchBullets?: string[];
   resultCount?: number;
   draftSubject?: string;
+  pills?: { label: string; sendText: string }[];
 }
 
 interface CandidateResult {
@@ -66,13 +67,108 @@ interface DrawerData {
   title: string;
 }
 
-// ─── Suggested prompts ────────────────────────────────────────────────────────
+// ─── Suggested prompts & guided flows ─────────────────────────────────────────
+
+interface GuidedFlow {
+  userLabel: string;
+  sammieResponse: string;
+  pills: { label: string; sendText: string }[];
+}
+
+const GUIDED_FLOWS: Record<string, GuidedFlow> = {
+  "find-candidates": {
+    userLabel: "Find candidates",
+    sammieResponse: "Got it! What kind of candidates are you looking for?",
+    pills: [
+      { label: "👥 Temps available today", sendText: "Find me temp candidates available today" },
+      { label: "🎓 Level 3 qualified", sendText: "Find Level 3 qualified candidates" },
+      { label: "📅 Available this week", sendText: "Find candidates available this week" },
+      { label: "📍 By location", sendText: "Find candidates by location" },
+    ],
+  },
+  "find-jobs": {
+    userLabel: "Find jobs",
+    sammieResponse: "Sure! What kind of roles are you after?",
+    pills: [
+      { label: "📋 All active vacancies", sendText: "Show me all active job vacancies" },
+      { label: "🎓 Level 3 permanent", sendText: "Show active Level 3 permanent roles" },
+      { label: "👥 Temporary roles", sendText: "Show all active temporary roles" },
+      { label: "📍 By location", sendText: "Show open roles filtered by location" },
+    ],
+  },
+  "draft-message": {
+    userLabel: "Draft a message",
+    sammieResponse: "Sure! Who are you writing to? I can help with...",
+    pills: [
+      { label: "✉️ Email", sendText: "Draft a professional recruitment email" },
+      { label: "📅 Interview invitation", sendText: "Draft an interview invitation" },
+      { label: "📞 Callback request", sendText: "Draft a callback request message" },
+      { label: "💬 WhatsApp message", sendText: "Draft a short friendly WhatsApp message to a candidate" },
+      { label: "📋 Job offer", sendText: "Draft a job offer message" },
+      { label: "❌ Rejection", sendText: "Draft a warm rejection message" },
+    ],
+  },
+  "boolean-search": {
+    userLabel: "Boolean search",
+    sammieResponse: "Let's build your Boolean search. What role are you hiring for?",
+    pills: [
+      { label: "Nursery Nurse", sendText: "Generate boolean searches for a Nursery Nurse role" },
+      { label: "Room Leader", sendText: "Generate boolean searches for a Room Leader role" },
+      { label: "Nursery Manager", sendText: "Generate boolean searches for a Nursery Manager role" },
+      { label: "Early Years Educator", sendText: "Generate boolean searches for an Early Years Educator role" },
+    ],
+  },
+  "check-availability": {
+    userLabel: "Check availability",
+    sammieResponse: "I can check who's free. When are you looking for cover?",
+    pills: [
+      { label: "📅 Today", sendText: "Find temp candidates available today" },
+      { label: "📅 Tomorrow", sendText: "Find temp candidates available tomorrow" },
+      { label: "📅 This week", sendText: "Find temp candidates available this week" },
+      { label: "📅 This Friday", sendText: "Find temp candidates available this Friday" },
+    ],
+  },
+  "summarise-candidate": {
+    userLabel: "Summarise a candidate",
+    sammieResponse: "I can pull a profile summary together. What would you like me to focus on?",
+    pills: [
+      { label: "📄 Full CV summary", sendText: "Summarise a candidate's CV and work history" },
+      { label: "🎯 Match for a role", sendText: "Check how well a candidate matches a specific role" },
+      { label: "🔑 Key skills", sendText: "Pull out a candidate's key skills and strengths" },
+      { label: "⚠️ Gaps to flag", sendText: "Identify any gaps or concerns in a candidate's profile" },
+    ],
+  },
+  "interview-invite": {
+    userLabel: "Write an interview invite",
+    sammieResponse: "On it! What type of interview is it?",
+    pills: [
+      { label: "📞 Phone interview", sendText: "Draft an invitation for a phone interview" },
+      { label: "🖥️ Video interview", sendText: "Draft an invitation for a video interview" },
+      { label: "🏢 In-person interview", sendText: "Draft an invitation for an in-person interview at the nursery" },
+      { label: "👥 Group assessment", sendText: "Draft an invitation for a group assessment day" },
+    ],
+  },
+  "suggest-matches": {
+    userLabel: "Suggest candidate matches",
+    sammieResponse: "I'll find the best matches for you. How would you like me to rank them?",
+    pills: [
+      { label: "⭐ Best overall match", sendText: "Find the best overall matching candidates for a role" },
+      { label: "📍 Closest location", sendText: "Find candidates closest to the job location" },
+      { label: "🎓 Qualification match", sendText: "Find candidates matching the required qualification level" },
+      { label: "📅 Available soonest", sendText: "Find candidates available at the earliest date" },
+    ],
+  },
+};
 
 const SUGGESTED_PROMPTS = [
-  { icon: Users, label: "Find candidates", text: "Find me a Level 3 qualified temp available tomorrow in Croydon" },
-  { icon: Search, label: "Boolean search", text: "Generate boolean searches for a Level 3 Room Leader role in SE London" },
-  { icon: MessageSquare, label: "Draft message", text: "Draft an interview invitation for a Nursery Nurse role" },
-  { icon: Briefcase, label: "Find jobs", text: "Show me all active Level 3 permanent vacancies" },
+  { icon: Users, label: "Find candidates", flowKey: "find-candidates" },
+  { icon: Briefcase, label: "Find jobs", flowKey: "find-jobs" },
+  { icon: MessageSquare, label: "Draft a message", flowKey: "draft-message" },
+  { icon: Search, label: "Boolean search", flowKey: "boolean-search" },
+  { icon: Clock, label: "Check availability", flowKey: "check-availability" },
+  { icon: Star, label: "Summarise candidate", flowKey: "summarise-candidate" },
+  { icon: Mail, label: "Interview invite", flowKey: "interview-invite" },
+  { icon: Sparkles, label: "Suggest matches", flowKey: "suggest-matches" },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -236,6 +332,14 @@ function SammiePage() {
     }));
   };
 
+  const triggerGuidedFlow = useCallback((flowKey: string) => {
+    const flow = GUIDED_FLOWS[flowKey];
+    if (!flow) return;
+    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", content: flow.userLabel, timestamp: new Date() };
+    const sammieMsg: ChatMessage = { id: crypto.randomUUID(), role: "sammie", content: flow.sammieResponse, timestamp: new Date(), pills: flow.pills };
+    setMessages(prev => [...prev, userMsg, sammieMsg]);
+  }, []);
+
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || loading) return;
     const userMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", content: text, timestamp: new Date() };
@@ -343,15 +447,15 @@ function SammiePage() {
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full gap-6 text-center pb-8">
-              <img src="/Sammie.png" alt="Sammie" className="w-20 h-20 rounded-full object-cover shadow-lg ring-4 ring-teal/30" />
+              <img src="/Sammie.png" alt="Sammie" className="w-28 h-28 rounded-full object-cover shadow-lg ring-4 ring-teal/30" />
               <div>
                 <h2 className="text-xl font-semibold">Hey, I'm Sammie ✨</h2>
                 <p className="text-muted-foreground text-sm mt-1 max-w-sm">Your AI recruitment assistant. I can help you find candidates, search vacancies, generate Boolean strings, draft messages and more.</p>
               </div>
-              <div className="grid grid-cols-2 gap-2 w-full max-w-sm">
+              <div className="grid grid-cols-2 gap-2 w-full max-w-md">
                 {SUGGESTED_PROMPTS.map(p => (
-                  <button key={p.label} onClick={() => sendMessage(p.text)}
-                    className="flex items-center gap-2 p-3 rounded-xl border border-border/70 hover:border-teal/40 hover:bg-muted/40 text-left transition-all group">
+                  <button key={p.label} onClick={() => triggerGuidedFlow(p.flowKey)}
+                    className="flex items-center gap-2.5 p-3 rounded-xl border border-border/70 hover:border-teal/40 hover:bg-muted/40 text-left transition-all group">
                     <p.icon className="h-4 w-4 text-teal shrink-0" />
                     <span className="text-xs font-medium">{p.label}</span>
                   </button>
@@ -390,6 +494,21 @@ function SammiePage() {
                         {msg.resultCount} results — View in panel <ChevronRight className="h-3 w-3" />
                       </button>
                     )}
+                  </div>
+                )}
+
+                {/* Pill options */}
+                {msg.role === "sammie" && msg.pills && msg.pills.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {msg.pills.map(pill => (
+                      <button
+                        key={pill.label}
+                        onClick={() => sendMessage(pill.sendText)}
+                        className="inline-flex items-center h-8 px-3 rounded-full border border-teal/40 bg-teal/5 text-xs font-medium text-foreground hover:bg-teal/15 hover:border-teal/60 transition-all"
+                      >
+                        {pill.label}
+                      </button>
+                    ))}
                   </div>
                 )}
 
