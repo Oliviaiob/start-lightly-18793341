@@ -63,6 +63,13 @@ function InboxPage() {
       return { candidate: cand, lastMessage: candMsgs[0] ?? null, unread };
     }).filter(Boolean) as Thread[];
 
+    // Sort: unread first, then by most recent message
+    ts.sort((a, b) => {
+      if ((a.unread > 0) !== (b.unread > 0)) return a.unread > 0 ? -1 : 1;
+      const ta = a.lastMessage ? new Date(a.lastMessage.created_at).getTime() : 0;
+      const tb = b.lastMessage ? new Date(b.lastMessage.created_at).getTime() : 0;
+      return tb - ta;
+    });
     setThreads(ts);
   }, []);
 
@@ -221,7 +228,7 @@ function InboxPage() {
                 className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/40 transition-colors border-b border-border/30 ${isActive ? "bg-muted/60" : ""}`}>
                 <div className="w-9 h-9 rounded-full bg-navy/10 text-navy grid place-items-center text-xs font-bold shrink-0 relative">
                   {initials}
-                  {t.unread > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-teal text-white text-[9px] grid place-items-center font-bold">{t.unread}</span>}
+                  {t.unread > 0 && <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-teal border-2 border-card" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1">
