@@ -465,16 +465,35 @@ function Page() {
 
   const handleUpload = async (key: ChecklistKey, file: File) => {
     setSavingItem(key);
-    // Create document record (without actual storage — file_url would be set by edge function in production)
+
+    // 1. Upload file to Supabase Storage
+    const ext = file.name.split(".").pop() ?? "bin";
+    const filePath = `${id}/${key}/${Date.now()}.${ext}`;
+    const { error: storageError } = await supabase.storage
+      .from("compliance-documents")
+      .upload(filePath, file, { upsert: true, contentType: file.type || "application/octet-stream" });
+    if (storageError) {
+      toast.error("Upload failed: " + storageError.message);
+      setSavingItem(null);
+      return;
+    }
+
+    // 2. Get public URL
+    const { data: urlData } = supabase.storage.from("compliance-documents").getPublicUrl(filePath);
+    const fileUrl = urlData?.publicUrl ?? null;
+
+    // 3. Remove any existing doc record for this key then insert new one
+    await supabase.from("candidate_documents").delete().eq("candidate_id", id).eq("document_type", key);
     const { error } = await supabase.from("candidate_documents").insert({
       candidate_id: id, document_type: key, file_name: file.name,
-      file_size: file.size, status: "pending",
+      file_size: file.size, file_url: fileUrl, status: "pending",
       uploaded_at: new Date().toISOString(),
     });
-    if (error) { toast.error("Upload failed: " + error.message); setSavingItem(null); return; }
-    // Auto-advance status to uploaded if currently pending
+    if (error) { toast.error("Record failed: " + error.message); setSavingItem(null); return; }
+
+    // 4. Auto-advance status to uploaded
     const currentStatus = checklist?.[key];
-    if (!currentStatus || currentStatus === "pending") {
+    if (!currentStatus || currentStatus === "pending" || currentStatus === "awaiting_candidate") {
       await updateItem(key, "uploaded");
     } else {
       setSavingItem(null);
