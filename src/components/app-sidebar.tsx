@@ -17,6 +17,7 @@ import {
   UserCircle2,
   Building,
   Sparkles,
+  MessageSquare,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -60,6 +61,7 @@ const operations: NavItem[] = [
 ];
 const workspace: NavItem[] = [
   { title: "Placements", url: "/placements", icon: Trophy },
+  { title: "Inbox", url: "/inbox", icon: MessageSquare },
   { title: "Sammie", url: "/sammie", icon: Sparkles, iconColor: "text-teal" },
   { title: "Settings", url: "/settings", icon: Settings },
 ];

@@ -15,6 +15,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedSammieRouteImport } from './routes/_authenticated/sammie'
+import { Route as AuthenticatedInboxRouteImport } from './routes/_authenticated/inbox'
 import { Route as AuthenticatedPlacementsRouteImport } from './routes/_authenticated/placements'
 import { Route as AuthenticatedMapRouteImport } from './routes/_authenticated/map'
 import { Route as AuthenticatedJobsRouteImport } from './routes/_authenticated/jobs'
@@ -71,6 +72,11 @@ const AuthenticatedMapRoute = AuthenticatedMapRouteImport.update({
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 
+const AuthenticatedInboxRoute = AuthenticatedInboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedSammieRoute = AuthenticatedSammieRouteImport.update({
   id: '/sammie',
   path: '/sammie',
@@ -189,6 +195,7 @@ export interface FileRoutesByFullPath {
   '/placements': typeof AuthenticatedPlacementsRoute
   '/settings': typeof AuthenticatedSettingsRoute
     '/sammie': typeof AuthenticatedSammieRoute
+    '/inbox': typeof AuthenticatedInboxRoute
   '/bookings/$id': typeof AuthenticatedBookingsIdRoute
   '/candidates/$id': typeof AuthenticatedCandidatesIdRoute
   '/candidates/new': typeof AuthenticatedCandidatesNewRoute
@@ -210,6 +217,7 @@ export interface FileRoutesByTo {
   '/placements': typeof AuthenticatedPlacementsRoute
   '/settings': typeof AuthenticatedSettingsRoute
     '/sammie': typeof AuthenticatedSammieRoute
+    '/inbox': typeof AuthenticatedInboxRoute
   '/': typeof AuthenticatedIndexRoute
   '/bookings/$id': typeof AuthenticatedBookingsIdRoute
   '/candidates/$id': typeof AuthenticatedCandidatesIdRoute
@@ -239,6 +247,7 @@ export interface FileRoutesById {
   '/_authenticated/placements': typeof AuthenticatedPlacementsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/sammie': typeof AuthenticatedSammieRoute
+  '/_authenticated/inbox': typeof AuthenticatedInboxRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/bookings/$id': typeof AuthenticatedBookingsIdRoute
   '/_authenticated/candidates/$id': typeof AuthenticatedCandidatesIdRoute
@@ -268,6 +277,7 @@ export interface FileRouteTypes {
     | '/placements'
     | '/settings'
     | '/sammie'
+    | '/inbox'
     | '/bookings/$id'
     | '/candidates/$id'
     | '/candidates/new'
@@ -288,6 +298,7 @@ export interface FileRouteTypes {
     | '/placements'
     | '/settings'
     | '/sammie'
+    | '/inbox'
     | '/'
     | '/bookings/$id'
     | '/candidates/$id'
@@ -600,6 +611,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedMapRoute: typeof AuthenticatedMapRoute
   AuthenticatedPlacementsRoute: typeof AuthenticatedPlacementsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedInboxRoute: typeof AuthenticatedInboxRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
 }
 
@@ -615,6 +627,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPlacementsRoute: AuthenticatedPlacementsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
       AuthenticatedSammieRoute,
+      AuthenticatedInboxRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
 }
 

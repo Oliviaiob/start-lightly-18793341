@@ -42,6 +42,9 @@ import {
   GraduationCap,
   Copy,
   Upload,
+  MessageCircle,
+  Send,
+  CheckCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { fmtQual } from "@/lib/utils";
@@ -877,6 +880,7 @@ function Page() {
             <TabTrig value="docs" icon={FolderOpen}>Documents</TabTrig>
             <TabTrig value="refs" icon={UserRound}>References</TabTrig>
             {isTemp && <TabTrig value="availability" icon={Clock}>Availability</TabTrig>}
+            <TabTrig value="messages" icon={MessageCircle}>Messages</TabTrig>
           </TabsList>
 
           <TabsContent value="personal" className="mt-5">
@@ -1157,6 +1161,9 @@ function Page() {
               <AvailabilityTab candidateId={c.id} />
             </TabsContent>
           )}
+          <TabsContent value="messages" className="mt-5">
+            <MessagesTab candidateId={c.id} candidatePhone={c.phone ?? null} />
+          </TabsContent>
         </Tabs>
       </Card>
     </div>
@@ -2118,3 +2125,102 @@ function CvSection({ title, children }: { title: string; children: React.ReactNo
   );
 }
 
+
+// ── MessagesTab ───────────────────────────────────────────────────────────────
+function MessagesTab({ candidateId, candidatePhone }: { candidateId: string; candidatePhone: string | null }) {
+  const [messages, setMessages] = useState<{ id: string; content: string; direction: string; channel: string; status: string; created_at: string }[]>([]);
+  const [input, setInput] = useState("");
+  const [channel, setChannel] = useState<"internal" | "whatsapp" | "sms">("internal");
+  const [sending, setSending] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null)); }, []);
+
+  const load = async () => {
+    const { data } = await (supabase as any).from("messages")
+      .select("*").eq("candidate_id", candidateId).order("created_at", { ascending: true });
+    setMessages(data ?? []);
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+    await (supabase as any).from("messages").update({ status: "read" }).eq("candidate_id", candidateId).eq("direction", "inbound").neq("status", "read");
+  };
+
+  useEffect(() => { load(); }, [candidateId]);
+
+  useEffect(() => {
+    const ch = supabase.channel(`messages-candidate-${candidateId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `candidate_id=eq.${candidateId}` }, (payload) => {
+        setMessages(prev => [...prev, payload.new as any]);
+        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+      }).subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [candidateId]);
+
+  const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const channelIcon = (ch: string) => ch === "whatsapp" ? <MessageCircle className="h-3 w-3 text-green-500" /> : ch === "sms" ? <Phone className="h-3 w-3 text-blue-500" /> : ch === "email" ? <Mail className="h-3 w-3 text-orange-400" /> : null;
+
+  const send = async () => {
+    if (!input.trim() || !userId) return;
+    setSending(true);
+    try {
+      await supabase.functions.invoke("send-message", {
+        body: { candidate_id: candidateId, recruiter_id: userId, content: input.trim(), channel, candidate_phone: candidatePhone },
+      });
+      setInput("");
+      load();
+    } catch { toast.error("Failed to send message"); }
+    finally { setSending(false); }
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Channel selector */}
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] text-muted-foreground font-medium">Send via:</span>
+        {(["internal", "whatsapp", "sms"] as const).map(ch => (
+          <button key={ch} onClick={() => setChannel(ch)}
+            className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11px] font-medium transition-colors ${channel === ch ? "bg-navy text-white" : "border hover:bg-muted"}`}>
+            {ch === "whatsapp" ? <MessageCircle className="h-3 w-3" /> : ch === "sms" ? <Phone className="h-3 w-3" /> : <Mail className="h-3 w-3" />}
+            {ch === "whatsapp" ? "WhatsApp" : ch === "sms" ? "SMS" : "CRM"}
+          </button>
+        ))}
+      </div>
+
+      {/* Message thread */}
+      <div className="min-h-[200px] max-h-[400px] overflow-y-auto flex flex-col gap-2.5 px-1">
+        {messages.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-40 text-sm text-muted-foreground gap-2">
+            <MessageCircle className="h-8 w-8 text-muted-foreground/30" />
+            No messages yet
+          </div>
+        )}
+        {messages.map(msg => (
+          <div key={msg.id} className={`flex ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}>
+            <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm ${msg.direction === "outbound" ? "bg-navy text-white rounded-br-sm" : "bg-muted text-foreground rounded-bl-sm"}`}>
+              <p className="leading-relaxed">{msg.content}</p>
+              <div className={`flex items-center gap-1 mt-1 ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}>
+                <span className="text-[10px] opacity-60">{fmtTime(msg.created_at)}</span>
+                {channelIcon(msg.channel)}
+                {msg.direction === "outbound" && msg.status === "read" && <CheckCheck className="h-3 w-3 text-teal opacity-80" />}
+              </div>
+            </div>
+          </div>
+        ))}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Compose */}
+      <div className="flex items-end gap-2 bg-background rounded-xl border border-border/60 focus-within:border-teal/40 focus-within:ring-2 focus-within:ring-teal/10 transition-all px-4 py-2.5">
+        <textarea value={input} onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+          placeholder="Type a message…" rows={1} disabled={sending}
+          className="flex-1 resize-none bg-transparent text-sm focus:outline-none leading-relaxed max-h-28 overflow-y-auto"
+          onInput={e => { const t = e.target as HTMLTextAreaElement; t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 112) + "px"; }} />
+        <button onClick={send} disabled={!input.trim() || sending}
+          className="h-8 w-8 rounded-full bg-teal text-teal-foreground grid place-items-center hover:opacity-90 disabled:opacity-40 transition-opacity shrink-0">
+          <Send className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
