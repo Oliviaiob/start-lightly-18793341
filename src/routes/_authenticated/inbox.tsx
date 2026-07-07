@@ -1,6 +1,6 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Send, MessageSquare, Search, Phone, Mail, MessageCircle, CheckCheck, Clock, ChevronRight } from "lucide-react";
+import { Send, MessageSquare, Search, Phone, Mail, MessageCircle, CheckCheck, Clock, ChevronRight, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -15,7 +15,6 @@ const channelLabel = (ch: string) => ({ whatsapp: "WhatsApp", sms: "SMS", email:
 const fmtTime = (iso: string) => { const d = new Date(iso); const now = new Date(); const diff = (now.getTime() - d.getTime()) / 86400000; return diff < 1 ? d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : diff < 7 ? d.toLocaleDateString("en-GB", { weekday: "short" }) : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" }); };
 
 function InboxPage() {
-  const navigate = useNavigate();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -24,6 +23,7 @@ function InboxPage() {
   const [sending, setSending] = useState(false);
   const [search, setSearch] = useState("");
   const [userId, setUserId] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null)); }, []);
@@ -164,7 +164,7 @@ function InboxPage() {
                 <div className="text-xs text-muted-foreground">{selectedCandidate.phone ?? selectedCandidate.email ?? "No contact info"}</div>
               </div>
             </div>
-            <button onClick={() => navigate({ to: "/candidates/$id", params: { id: selected } })}
+            <button onClick={() => setDrawerOpen(true)}
               className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-medium hover:bg-muted transition-colors">
               View profile <ChevronRight className="h-3.5 w-3.5" />
             </button>
@@ -194,7 +194,7 @@ function InboxPage() {
             <div ref={bottomRef} />
           </div>
 
-          {/* Compose */}
+          {/* Compose */
           <div className="px-5 py-4 border-t border-border/40 bg-card/50 shrink-0 space-y-2">
             {/* Channel selector */}
             <div className="flex items-center gap-2">
@@ -225,6 +225,117 @@ function InboxPage() {
           <p className="text-sm">Select a conversation to get started</p>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── CandidateDrawer ────────────────────────────────────────────────────────────
+function CandidateDrawer({ candidateId, onClose }: { candidateId: string; onClose: () => void }) {
+  const [candidate, setCandidate] = useState<{
+    id: string; first_name: string | null; last_name: string | null;
+    email: string | null; phone: string | null; qualification_level: string | null;
+    candidate_type: string | null; status_perm: string | null; status_temp: string | null;
+    postcode: string | null; city: string | null; source: string | null;
+    has_dbs: boolean | null; available_days: string[] | null;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    supabase.from("candidates")
+      .select("id,first_name,last_name,email,phone,qualification_level,candidate_type,status_perm,status_temp,postcode,city,source,has_dbs,available_days")
+      .eq("id", candidateId).maybeSingle()
+      .then(({ data }) => { setCandidate(data as any); setLoading(false); });
+  }, [candidateId]);
+
+  const name = candidate ? `${candidate.first_name ?? ""} ${candidate.last_name ?? ""}`.trim() : "";
+  const initials = candidate ? `${candidate.first_name?.[0] ?? ""}${candidate.last_name?.[0] ?? ""}`.toUpperCase() : "…";
+  const fmtQual = (q: string | null) => q ? q.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "—";
+  const typeLabel = (t: string | null) => ({ perm: "Permanent", temp: "Temp", both: "Perm & Temp" }[t ?? ""] ?? t ?? "—");
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/20" onClick={onClose} />
+      <div className="fixed inset-y-0 right-0 z-50 w-[400px] bg-card shadow-2xl overflow-y-auto flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b bg-navy shrink-0">
+          <span className="text-white font-semibold text-sm">Candidate Profile</span>
+          <button onClick={onClose} className="h-7 w-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+            <X className="h-4 w-4 text-white" />
+          </button>
+        </div>
+
+        {loading && <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">Loading…</div>}
+
+        {!loading && candidate && (
+          <div className="flex-1 p-6 space-y-5">
+            {/* Avatar + name */}
+            <div className="flex items-center gap-4">
+              <div className="h-14 w-14 rounded-full bg-navy flex items-center justify-center shrink-0">
+                <span className="text-lg font-bold text-white">{initials}</span>
+              </div>
+              <div>
+                <div className="text-lg font-bold">{name}</div>
+                <div className="text-sm text-muted-foreground">{fmtQual(candidate.qualification_level)}</div>
+              </div>
+            </div>
+
+            {/* Contact */}
+            <div className="rounded-xl bg-muted/30 p-4 space-y-2">
+              <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-1">Contact</div>
+              <DrawerRow label="Email" value={candidate.email ?? "—"} />
+              <DrawerRow label="Phone" value={candidate.phone ?? "—"} />
+            </div>
+
+            {/* Location */}
+            <div className="rounded-xl bg-muted/30 p-4 space-y-2">
+              <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-1">Location</div>
+              <DrawerRow label="City" value={candidate.city ?? "—"} />
+              <DrawerRow label="Postcode" value={candidate.postcode ?? "—"} />
+            </div>
+
+            {/* Status */}
+            <div className="rounded-xl bg-muted/30 p-4 space-y-2">
+              <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-1">Status</div>
+              <DrawerRow label="Type" value={typeLabel(candidate.candidate_type)} />
+              {(candidate.candidate_type === "perm" || candidate.candidate_type === "both") && (
+                <DrawerRow label="Perm status" value={candidate.status_perm ?? "—"} />
+              )}
+              {(candidate.candidate_type === "temp" || candidate.candidate_type === "both") && (
+                <DrawerRow label="Temp status" value={candidate.status_temp ?? "—"} />
+              )}
+              <DrawerRow label="DBS" value={candidate.has_dbs ? "✓ Valid DBS" : "No DBS"} />
+            </div>
+
+            {/* Availability */}
+            {candidate.available_days && candidate.available_days.length > 0 && (
+              <div className="rounded-xl bg-muted/30 p-4">
+                <div className="text-[11px] uppercase tracking-widest font-semibold text-muted-foreground mb-2">Availability</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {candidate.available_days.map((d) => (
+                    <span key={d} className="text-xs px-2 py-0.5 rounded-full bg-navy/10 text-navy font-medium capitalize">{d}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Open full profile */}
+            <a href={`/candidates/${candidate.id}`}
+              className="flex items-center justify-center gap-2 w-full h-9 rounded-lg border text-sm font-medium hover:bg-muted transition-colors">
+              Open full profile <ChevronRight className="h-4 w-4" />
+            </a>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function DrawerRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium text-right">{value}</span>
     </div>
   );
 }
