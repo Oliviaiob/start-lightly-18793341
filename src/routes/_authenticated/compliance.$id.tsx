@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   ArrowLeft, CheckCircle, AlertTriangle, Clock, Minus, Circle,
   Upload, FileText, RefreshCw, ExternalLink, Smartphone, Sparkles,
-  Copy, Mail, Link2, BanIcon, PartyPopper, ChevronRight,
+  Copy, Mail, Link2, BanIcon, PartyPopper, ChevronRight, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -136,7 +136,7 @@ function ItemStatusIcon({ status }: { status: string | null }) {
 // ── Checklist Item Section ────────────────────────────────────────────────────
 
 function ChecklistSection({
-  item, status, doc, aiResult, note, onStatusChange, onNoteChange, onNoteBlur, onUpload, onRecheck, saving,
+  item, status, doc, aiResult, note, onStatusChange, onNoteChange, onNoteBlur, onUpload, onRemove, onRecheck, saving,
 }: {
   item: (typeof CHECKLIST_ITEMS)[number];
   status: ItemStatus;
@@ -147,6 +147,7 @@ function ChecklistSection({
   onNoteChange: (val: string) => void;
   onNoteBlur: () => void;
   onUpload: (file: File) => void;
+  onRemove: () => void;
   onRecheck: () => void;
   saving: boolean;
 }) {
@@ -198,6 +199,13 @@ function ChecklistSection({
                 {doc.file_name ?? "Uploaded file"}
               </a>
               {doc.file_size && <span className="text-muted-foreground/50">({fmtFileSize(doc.file_size)})</span>}
+              <button
+                onClick={onRemove}
+                className="ml-1 p-0.5 rounded hover:bg-red-100 hover:text-red-600 text-muted-foreground/40 transition-colors"
+                title="Remove document"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
             </div>
           )}
         </div>
@@ -395,6 +403,20 @@ function Page() {
     toast.success("Document uploaded");
   };
 
+  const handleRemove = async (key: ChecklistKey) => {
+    const doc = docs.find((d) => d.document_type === key);
+    if (!doc) return;
+    const confirmed = window.confirm(`Remove ${doc.file_name ?? "this document"}? You can upload a replacement after.`);
+    if (!confirmed) return;
+    setSavingItem(key);
+    const { error } = await supabase.from("candidate_documents").delete().eq("id", doc.id);
+    if (error) { toast.error("Remove failed: " + error.message); setSavingItem(null); return; }
+    // Reset status to pending
+    await updateItem(key, "pending");
+    await loadAll();
+    toast.success("Document removed");
+  };
+
   const runAiCheck = async (key: ChecklistKey) => {
     setSavingItem(key);
     const doc = docs.find((d) => d.document_type === key);
@@ -543,6 +565,7 @@ function Page() {
             onNoteChange={(val) => setNotes((prev) => ({ ...prev, [item.key]: val }))}
             onNoteBlur={() => saveNote(item.key)}
             onUpload={(file) => handleUpload(item.key, file)}
+            onRemove={() => handleRemove(item.key)}
             onRecheck={() => runAiCheck(item.key)}
             saving={savingItem === item.key}
           />
