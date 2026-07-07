@@ -652,7 +652,8 @@ function Page() {
 
 type SummaryProps = {
   candidate: { first_name: string | null; last_name: string | null } | null;
-  checklist: Record<string, string | null> | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  checklist: Record<string, any> | null;
   docs: { document_type: string | null; uploaded_at: string | null }[];
   references: { ref_number: number | null; status: string | null; requested_at: string | null; received_at: string | null; referee_name: string | null }[];
   lastMessage: { content: string; direction: string; created_at: string } | null;
@@ -684,7 +685,8 @@ function daysSince(iso: string | null): number {
 }
 
 function buildBlockers(
-  checklist: Record<string, string | null> | null,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  checklist: Record<string, any> | null,
   docs: SummaryProps["docs"],
   references: SummaryProps["references"],
   lastMessage: SummaryProps["lastMessage"]
