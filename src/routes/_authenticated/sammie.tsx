@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fmtQual } from "@/lib/utils";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_authenticated/sammie")({
+export const Route = createFileRoute("/_authenticated/sammie" as any)({
   component: SammiePage,
 });
 
@@ -627,7 +627,7 @@ function SammiePage() {
                         {copiedKey === key ? <><Check className="h-3 w-3 text-teal" />Copied</> : <><Copy className="h-3 w-3" />Copy</>}
                       </button>
                     </div>
-                    <p className="text-xs font-mono leading-relaxed text-foreground bg-muted/40 rounded-lg p-3">{drawer.boolean[key]}</p>
+                    <p className="text-xs font-mono leading-relaxed text-foreground bg-muted/40 rounded-lg p-3">{drawer.boolean?.[key] ?? ""}</p>
                   </div>
                 ))}
               </div>

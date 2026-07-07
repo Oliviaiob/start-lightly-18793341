@@ -589,6 +589,7 @@ function AddPermCandidateModal({ open, onClose, onCreated }: {
         current_position: d.current_position ?? "", current_employer: d.current_employer ?? "",
         qualification_level: d.qualification_level ?? "__none__",
         qualifications_text: d.qualifications_text ?? "",
+        expected_salary: d.expected_salary ?? "",
       });
       toast.success("CV extracted — review the details below");
       setStep("review");
@@ -601,7 +602,7 @@ function AddPermCandidateModal({ open, onClose, onCreated }: {
   const save = async () => {
     if (!form.first_name || !form.last_name || !form.email) { toast.error("First name, last name and email are required"); return; }
     setSaving(true);
-    const { data, error } = await supabase.from("candidates").insert({
+    const { data, error } = await (supabase as any).from("candidates").insert({
       first_name: form.first_name, last_name: form.last_name,
       email: form.email || null, phone: form.phone || null,
       town: form.town || null, postcode: form.postcode || null,
@@ -609,7 +610,7 @@ function AddPermCandidateModal({ open, onClose, onCreated }: {
       current_employer: form.current_employer || null,
       qualification_level: form.qualification_level === "__none__" ? null : form.qualification_level,
       qualifications_text: form.qualifications_text || null,
-      expected_salary: form.expected_salary ? Number(form.expected_salary) : null,
+      ...(form.expected_salary ? { expected_salary: Number(form.expected_salary) } : {}),
       candidate_type: "perm", status_perm: "not_contacted",
     }).select("id").single();
     setSaving(false);

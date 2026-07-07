@@ -4,7 +4,7 @@ import { Send, MessageSquare, Search, Phone, Mail, MessageCircle, CheckCheck, Cl
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_authenticated/inbox")({ component: InboxPage });
+export const Route = createFileRoute("/_authenticated/inbox" as any)({ component: InboxPage });
 
 interface Candidate { id: string; first_name: string | null; last_name: string | null; phone: string | null; email: string | null; }
 interface Message { id: string; candidate_id: string; content: string; direction: "inbound" | "outbound"; channel: string; status: string; created_at: string; }
@@ -45,7 +45,7 @@ function InboxPage() {
     const ts: Thread[] = allCandIds.map(cid => {
       const cand = cands.find((c: Candidate) => c.id === cid);
       if (!cand) return null;
-      const candMsgs = byCandidate[cid] ?? [];
+      const candMsgs = byCandidate[cid as string] ?? [];
       const unread = candMsgs.filter((m: Message) => m.direction === "inbound" && m.status !== "read").length;
       return { candidate: cand, lastMessage: candMsgs[0] ?? null, unread };
     }).filter(Boolean) as Thread[];
@@ -194,7 +194,7 @@ function InboxPage() {
             <div ref={bottomRef} />
           </div>
 
-          {/* Compose */
+          {/* Compose */}
           <div className="px-5 py-4 border-t border-border/40 bg-card/50 shrink-0 space-y-2">
             {/* Channel selector */}
             <div className="flex items-center gap-2">

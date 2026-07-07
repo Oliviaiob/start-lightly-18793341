@@ -897,7 +897,7 @@ function Page() {
                   <button
                     onClick={async () => {
                       await (supabase as any).from("candidates").update(personalDraft).eq("id", c.id);
-                      setCandidate((prev: any) => prev ? { ...prev, ...personalDraft } : prev);
+                      setC((prev: any) => prev ? { ...prev, ...personalDraft } : prev);
                       setPersonalEditing(false);
                     }}
                     className="h-8 px-4 rounded-full bg-navy text-white text-xs font-medium hover:opacity-90"
