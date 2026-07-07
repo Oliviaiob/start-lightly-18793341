@@ -204,29 +204,74 @@ function ChecklistSection({
 
         {/* AI check result */}
         {doc && (
-          <div className={`rounded-xl border px-4 py-3 ${aiResult ? "bg-green-50/50 border-green-200" : "bg-muted/30 border-border/40"}`}>
+          <div className={`rounded-xl border px-4 py-3 ${
+            !aiResult ? "bg-muted/30 border-border/40"
+            : aiResult.status === "flagged" ? "bg-red-50/50 border-red-200"
+            : aiResult.status === "manual_review" ? "bg-amber-50/50 border-amber-200"
+            : "bg-green-50/50 border-green-200"
+          }`}>
             {aiResult ? (
-              <div className="space-y-1.5">
+              <div className="space-y-2">
+                {/* Header row */}
                 <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">
-                      <CheckCircle className="h-3 w-3" /> Checked
-                    </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {aiResult.status === "flagged" ? (
+                      <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-semibold bg-red-100 text-red-700">
+                        <AlertTriangle className="h-3 w-3" /> Flagged
+                      </span>
+                    ) : aiResult.status === "manual_review" ? (
+                      <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">
+                        <Clock className="h-3 w-3" /> Manual Review
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">
+                        <CheckCircle className="h-3 w-3" /> Checked
+                      </span>
+                    )}
                     <span className="text-[11px] text-muted-foreground">
                       {doc.file_name ?? "file"} · checked {fmtDateTime(aiResult.checked_at ?? doc.uploaded_at)}
                     </span>
                   </div>
                   <button onClick={onRecheck}
-                    className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+                    className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors shrink-0">
                     <RefreshCw className="h-3 w-3" /> Re-check
                   </button>
                 </div>
-                {aiResult.extracted && (
+                {/* Summary */}
+                {aiResult.summary && (
+                  <p className="text-[11px] text-foreground/80 font-medium">{aiResult.summary}</p>
+                )}
+                {/* Extracted fields */}
+                {aiResult.extracted && typeof aiResult.extracted === "object" && Object.keys(aiResult.extracted).length > 0 && (
                   <p className="text-[11px] text-muted-foreground">
-                    {typeof aiResult.extracted === "string"
-                      ? aiResult.extracted
-                      : Object.entries(aiResult.extracted).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join(" · ")}
+                    {Object.entries(aiResult.extracted as Record<string, unknown>)
+                      .filter(([, v]) => v !== null && v !== undefined && v !== "")
+                      .map(([k, v]) => `${k.replace(/_/g, " ")}: ${String(v)}`).join(" · ")}
                   </p>
+                )}
+                {/* Legacy plain-text extracted (old placeholder format) */}
+                {aiResult.extracted && typeof aiResult.extracted === "string" && aiResult.extracted !== "AI check initiated — results will appear once processed." && (
+                  <p className="text-[11px] text-muted-foreground">{aiResult.extracted}</p>
+                )}
+                {/* Reasons if flagged */}
+                {aiResult.status === "flagged" && aiResult.reasons && Array.isArray(aiResult.reasons) && aiResult.reasons.length > 0 && (
+                  <ul className="space-y-0.5">
+                    {(aiResult.reasons as string[]).map((r, i) => (
+                      <li key={i} className="text-[11px] text-red-700 flex items-start gap-1">
+                        <span className="shrink-0 mt-0.5">•</span>{r}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {/* Manual review instructions */}
+                {aiResult.status === "manual_review" && aiResult.reasons && Array.isArray(aiResult.reasons) && aiResult.reasons.length > 0 && (
+                  <ul className="space-y-0.5">
+                    {(aiResult.reasons as string[]).map((r, i) => (
+                      <li key={i} className="text-[11px] text-amber-700 flex items-start gap-1">
+                        <span className="shrink-0 mt-0.5">•</span>{r}
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
             ) : (
