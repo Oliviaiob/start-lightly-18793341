@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   ArrowLeft, CheckCircle, AlertTriangle, Clock, Minus, Circle,
   Upload, FileText, RefreshCw, ExternalLink, Smartphone, Sparkles,
-  Copy, Mail, Link2,
+  Copy, Mail, Link2, BanIcon, PartyPopper, ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -267,10 +267,11 @@ function Page() {
   const [savingItem, setSavingItem] = useState<string | null>(null);
   const [overallStatus, setOverallStatus] = useState<string>("pending_compliance");
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [lastMessage, setLastMessage] = useState<{ content: string; direction: string; created_at: string } | null>(null);
 
   const loadAll = async () => {
     setLoading(true);
-    const [candRes, clRes, docsRes, refsRes] = await Promise.all([
+    const [candRes, clRes, docsRes, refsRes, msgRes] = await Promise.all([
       supabase.from("candidates").select("id,first_name,last_name,email,phone,qualification_level,status_temp,source,dbs_next_check_due,paediatric_first_aid_expiry,onboarding_email_sent_at,bank_details_token").eq("id", id).maybeSingle(),
       supabase.from("compliance_checklists").select("*").eq("candidate_id", id).maybeSingle(),
       supabase.from("candidate_documents").select("id,document_type,file_name,file_url,status,uploaded_at,file_size").eq("candidate_id", id).order("uploaded_at", { ascending: false }),
@@ -294,6 +295,7 @@ function Page() {
     }
     setDocs((docsRes.data as DocumentRecord[]) ?? []);
     setReferences((refsRes.data as ReferenceRecord[]) ?? []);
+    setLastMessage((msgRes as any)?.data ?? null);
     setLoading(false);
   };
 
@@ -453,6 +455,15 @@ function Page() {
           </div>
         </div>
       </div>
+
+      {/* Blocker Summary */}
+      <ComplianceSummary
+        candidate={candidate}
+        checklist={checklist}
+        docs={docs}
+        references={references}
+        lastMessage={lastMessage}
+      />
 
       {/* Compliance checklist */}
       <div className="space-y-3">
@@ -632,6 +643,206 @@ function Page() {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── ComplianceSummary ─────────────────────────────────────────────────────────
+
+type SummaryProps = {
+  candidate: { first_name: string | null; last_name: string | null } | null;
+  checklist: Record<string, string | null> | null;
+  docs: { document_type: string | null; uploaded_at: string | null }[];
+  references: { ref_number: number | null; status: string | null; requested_at: string | null; received_at: string | null; referee_name: string | null }[];
+  lastMessage: { content: string; direction: string; created_at: string } | null;
+};
+
+type Blocker = {
+  label: string;
+  status: string | null;
+  detail: string;
+  nextAction: string;
+  expectedCompletion?: string;
+  urgent?: boolean;
+};
+
+function relativeTime(iso: string | null): string {
+  if (!iso) return "unknown";
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 172800) return "yesterday";
+  if (diff < 604800) return `${Math.floor(diff / 86400)} days ago`;
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+function daysSince(iso: string | null): number {
+  if (!iso) return 999;
+  return (Date.now() - new Date(iso).getTime()) / 86400000;
+}
+
+function buildBlockers(
+  checklist: Record<string, string | null> | null,
+  docs: SummaryProps["docs"],
+  references: SummaryProps["references"],
+  lastMessage: SummaryProps["lastMessage"]
+): Blocker[] {
+  const blockers: Blocker[] = [];
+  const lastContactStr = lastMessage
+    ? `Last contacted ${relativeTime(lastMessage.created_at)}`
+    : "Not yet contacted";
+  const daysSinceContact = lastMessage ? daysSince(lastMessage.created_at) : 999;
+  const chaseAction = daysSinceContact < 1
+    ? "Awaiting response"
+    : daysSinceContact < 3
+    ? "Follow up with candidate"
+    : "Contact candidate — overdue";
+
+  const addDocBlocker = (key: string, label: string, urgent = false) => {
+    const status = checklist?.[key] ?? "pending";
+    if (status === "verified" || status === "not_required") return;
+    const doc = docs.find(d => d.document_type === key);
+    if (status === "flagged") {
+      blockers.push({ label, status, detail: "Document uploaded but flagged by AI — review required.", nextAction: "Review AI flag", urgent: true });
+    } else if (doc) {
+      blockers.push({ label, status: "uploaded", detail: `Document uploaded ${relativeTime(doc.uploaded_at)} — AI check not yet run.`, nextAction: "Run AI check" });
+    } else {
+      blockers.push({ label, status: "pending", detail: `No document uploaded. ${lastContactStr}.`, nextAction: chaseAction, urgent, expectedCompletion: daysSinceContact < 1 ? "Expected today" : undefined });
+    }
+  };
+
+  const addTextBlocker = (key: string, label: string, thing: string) => {
+    const status = checklist?.[key] ?? "pending";
+    if (status === "verified" || status === "not_required") return;
+    blockers.push({ label, status, detail: `${thing} not yet received. ${lastContactStr}.`, nextAction: chaseAction });
+  };
+
+  const addRefBlocker = (refNum: number, label: string) => {
+    const key = refNum === 1 ? "work_reference_1" : refNum === 2 ? "work_reference_2" : "character_reference";
+    const status = checklist?.[key] ?? "pending";
+    if (status === "verified" || status === "not_required") return;
+    const ref = references.find(r => r.ref_number === refNum);
+
+    if (status === "flagged") {
+      blockers.push({ label, status, detail: `Reference received from ${ref?.referee_name ?? "referee"} but flagged — review content.`, nextAction: "Review reference", urgent: true });
+    } else if (ref?.received_at) {
+      blockers.push({ label, status: "uploaded", detail: `Reference received from ${ref.referee_name ?? "referee"} — AI check not yet run.`, nextAction: "Run AI check" });
+    } else if (ref?.requested_at) {
+      const days = daysSince(ref.requested_at);
+      const sent = relativeTime(ref.requested_at);
+      if (days < 3) {
+        blockers.push({ label, status: "pending", detail: `Reference request sent ${sent} to ${ref.referee_name ?? "referee"}.`, nextAction: "Awaiting response", expectedCompletion: "Expected within 2–3 days" });
+      } else if (days < 7) {
+        blockers.push({ label, status: "pending", detail: `Reference request sent ${sent} — no response yet.`, nextAction: "Send reminder to referee", urgent: days > 5, expectedCompletion: "Expected within 1–2 days if chased" });
+      } else {
+        blockers.push({ label, status: "pending", detail: `Reference request sent ${sent} — overdue with no response.`, nextAction: "Chase referee or request alternative", urgent: true });
+      }
+    } else {
+      blockers.push({ label, status: "pending", detail: "Reference request not yet sent.", nextAction: "Send reference request" });
+    }
+  };
+
+  // Identity
+  addDocBlocker("proof_of_id", "Proof of ID");
+  addDocBlocker("passport_photo", "Passport Photo");
+  addDocBlocker("proof_of_address_1", "Proof of Address (1)");
+  addDocBlocker("proof_of_address_2", "Proof of Address (2)");
+  // RTW
+  addTextBlocker("right_to_work", "Right to Work", "Right to work declaration");
+  addTextBlocker("ni_number_check", "NI Number", "NI number");
+  // DBS
+  addDocBlocker("dbs_certificate", "DBS Certificate", true);
+  const dbsUpdateStatus = checklist?.["dbs_update_service_check"] ?? "pending";
+  if (dbsUpdateStatus !== "verified" && dbsUpdateStatus !== "not_required") {
+    blockers.push({ label: "DBS Update Service", status: dbsUpdateStatus, detail: "Manual check required on the government website.", nextAction: "Check gov.uk Update Service portal" });
+  }
+  addDocBlocker("childrens_barred_list", "Children's Barred List", true);
+  // Training
+  addDocBlocker("safeguarding_training_cert", "Safeguarding Training");
+  addDocBlocker("paediatric_first_aid_cert", "Paediatric First Aid");
+  // References
+  addRefBlocker(1, "Work Reference 1");
+  addRefBlocker(2, "Work Reference 2");
+
+  return blockers;
+}
+
+function ComplianceSummary({ candidate, checklist, docs, references, lastMessage }: SummaryProps) {
+  const firstName = candidate?.first_name ?? "Candidate";
+  const blockers = buildBlockers(checklist, docs, references, lastMessage);
+  const urgent = blockers.filter(b => b.urgent);
+  const nonUrgent = blockers.filter(b => !b.urgent);
+  const ordered = [...urgent, ...nonUrgent];
+
+  if (ordered.length === 0) {
+    return (
+      <div className="rounded-2xl border border-green-200 bg-green-50/60 px-5 py-4 flex items-center gap-3">
+        <div className="h-9 w-9 rounded-full bg-green-500 grid place-items-center shrink-0">
+          <PartyPopper className="h-4.5 w-4.5 text-white" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-green-800">{firstName} is cleared to work ✓</p>
+          <p className="text-xs text-green-700 mt-0.5">All required compliance items are complete.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show top 3 blockers max to keep it scannable
+  const shown = ordered.slice(0, 3);
+  const remaining = ordered.length - shown.length;
+
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50/50 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-amber-200/60 bg-amber-100/40">
+        <div className="h-8 w-8 rounded-full bg-amber-500 grid place-items-center shrink-0">
+          <BanIcon className="h-4 w-4 text-white" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-amber-900">
+            {firstName} cannot work — {ordered.length} blocker{ordered.length !== 1 ? "s" : ""}
+          </p>
+          <p className="text-xs text-amber-700">
+            {urgent.length > 0 ? `${urgent.length} urgent · ` : ""}{nonUrgent.length} pending
+          </p>
+        </div>
+      </div>
+
+      {/* Blockers */}
+      <div className="divide-y divide-amber-100">
+        {shown.map((b, i) => (
+          <div key={i} className={`px-5 py-3.5 flex items-start gap-3 ${b.urgent ? "bg-red-50/40" : ""}`}>
+            <div className={`mt-0.5 h-5 w-5 rounded-full grid place-items-center shrink-0 ${b.urgent ? "bg-red-100" : "bg-amber-100"}`}>
+              {b.urgent
+                ? <AlertTriangle className="h-3 w-3 text-red-500" />
+                : <Clock className="h-3 w-3 text-amber-600" />
+              }
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-semibold text-foreground">{b.label}</span>
+                {b.urgent && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 font-medium">Urgent</span>}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{b.detail}</p>
+              <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
+                  <ChevronRight className="h-3 w-3" /> {b.nextAction}
+                </span>
+                {b.expectedCompletion && (
+                  <span className="text-[11px] text-muted-foreground">{b.expectedCompletion}</span>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+        {remaining > 0 && (
+          <div className="px-5 py-2.5 text-xs text-muted-foreground">
+            + {remaining} more blocker{remaining !== 1 ? "s" : ""} — see checklist below
+          </div>
+        )}
       </div>
     </div>
   );
