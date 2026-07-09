@@ -149,12 +149,14 @@ export function AppSidebar() {
       <SidebarHeader className="pt-4 pb-3">
         <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between"} gap-2 px-2`}>
           <div className={`flex items-center gap-3 ${collapsed ? "" : "px-1"}`}>
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal to-sidebar-primary text-teal-foreground grid place-items-center shrink-0 shadow-sm">
-              <Activity className="h-4 w-4" strokeWidth={2.5} />
-            </div>
+            <img
+              src="https://ltpsljknjenpomsxixlx.supabase.co/storage/v1/object/public/brand/logo-icon-navy.png"
+              alt="Soar"
+              className="w-9 h-9 rounded-xl shrink-0 object-cover shadow-sm"
+            />
             {!collapsed && (
               <div className="min-w-0">
-                <div className="text-sidebar-foreground font-semibold text-sm tracking-tight truncate">SOAR</div>
+                <div className="text-sidebar-foreground font-semibold text-sm tracking-tight truncate">Soar</div>
                 <div className="text-sidebar-foreground/50 text-[11px] truncate">Recruitment CRM</div>
               </div>
             )}

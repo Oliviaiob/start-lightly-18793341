@@ -108,7 +108,7 @@ export default function ManagerApprovalPage() {
     <div className="min-h-screen bg-[#f8f9fc]">
       <header className="bg-[#0a1628] text-white px-4 py-5">
         <div className="max-w-xl mx-auto">
-          <div className="text-teal-300 font-bold tracking-wide text-sm">SOAR RECRUITMENT</div>
+          <img src="https://ltpsljknjenpomsxixlx.supabase.co/storage/v1/object/public/brand/logo-icon-navy.png" alt="Soar" className="h-8 w-8 rounded-lg object-cover" />
           <div className="text-slate-400 text-xs mt-0.5">Timesheet approval</div>
         </div>
       </header>

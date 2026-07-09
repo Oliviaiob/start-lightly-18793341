@@ -57,10 +57,11 @@ function AuthPage() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-navy text-navy-foreground text-xl font-bold mb-4">
-            S
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight">SOAR Recruitment</h1>
+          <img
+            src="https://ltpsljknjenpomsxixlx.supabase.co/storage/v1/object/public/brand/logo-horizontal.png"
+            alt="Soar Recruitment"
+            className="h-14 mx-auto mb-2 object-contain"
+          />
           <p className="text-sm text-muted-foreground mt-1">Sign in to your CRM</p>
         </div>
         <Card className="p-6">

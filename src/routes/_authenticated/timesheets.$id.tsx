@@ -100,7 +100,7 @@ function printTimesheetPDF(sub: Submission, shifts: Shift[]) {
     </style>
   </head><body>
     <div class="header">
-      <div><div class="brand">SOAR <span>Recruitment</span></div><div style="font-size:11px;color:#94a3b8;margin-top:2px;">Timesheet Record</div></div>
+      <div style="display:flex;align-items:center;gap:10px"><img src="https://ltpsljknjenpomsxixlx.supabase.co/storage/v1/object/public/brand/logo-horizontal.png" style="height:36px;object-fit:contain;" alt="Soar" /><div style="font-size:11px;color:#94a3b8;margin-top:2px;">Timesheet Record</div></div>
       <div style="text-align:right;"><div style="font-size:18px;font-weight:700;">${sub.total_submitted_hours ?? "—"}h</div><div style="font-size:11px;color:#94a3b8;">Total hours</div></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:24px;">
