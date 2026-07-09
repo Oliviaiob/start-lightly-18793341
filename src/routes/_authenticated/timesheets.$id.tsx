@@ -26,7 +26,7 @@ type Submission = {
   submitted_at: string | null; approved_at: string | null; paid_at: string | null;
   notes: string | null;
   candidates: { first_name: string | null; last_name: string | null; email: string | null; phone: string | null } | null;
-  clients: { name: string; contact_email: string | null } | null;
+  clients: { company_name: string; contact_email: string | null } | null;
 };
 
 const STATUS_CONFIG: Record<string, { label: string; colour: string }> = {
@@ -67,7 +67,7 @@ export default function TimesheetDetailPage() {
   const load = async () => {
     const [{ data: s }, { data: sh }, { data: l }] = await Promise.all([
       supabase.from("timesheet_submissions").select(`
-        *, candidates(first_name, last_name, email, phone), clients(name, contact_email)
+        *, candidates(first_name, last_name, email, phone), clients(company_name, contact_email)
       `).eq("id", id).single(),
       supabase.from("timesheet_submission_shifts").select("*").eq("submission_id", id).order("shift_date"),
       supabase.from("timesheet_status_log").select("*").eq("submission_id", id).order("created_at"),
@@ -137,7 +137,7 @@ export default function TimesheetDetailPage() {
             </div>
             <h1 className="text-xl font-semibold">{candidateName}</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              {sub.clients?.name} · {sub.role} · Week ending {weekLabel}
+              {sub.clients?.company_name} · {sub.role} · Week ending {weekLabel}
             </p>
             {sub.booking_reference && <p className="text-xs font-mono text-muted-foreground mt-1">{sub.booking_reference}</p>}
           </div>

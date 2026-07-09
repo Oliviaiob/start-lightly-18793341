@@ -19,7 +19,7 @@ type Submission = {
   submitted_at: string | null;
   approved_at: string | null;
   candidates: { first_name: string | null; last_name: string | null } | null;
-  clients: { name: string } | null;
+  clients: { company_name: string } | null;
   shift_count: number;
 };
 
@@ -57,13 +57,13 @@ export default function TimesheetsPage() {
         id, week_ending, status, role, booking_reference,
         hours_discrepancy, total_submitted_hours, submitted_at, approved_at,
         candidates(first_name, last_name),
-        clients(name),
+        clients(company_name),
         timesheet_submission_shifts(id)
       `)
       .order("week_ending", { ascending: false })
       .limit(500)
       .then(({ data, error }) => {
-        if (error) { toast.error("Failed to load timesheets"); return; }
+        if (error) { toast.error("Failed to load timesheets"); setLoading(false); return; }
         setRows((data ?? []).map((r: any) => ({
           ...r,
           shift_count: r.timesheet_submission_shifts?.length ?? 0,
@@ -78,7 +78,7 @@ export default function TimesheetsPage() {
       if (discrepancyOnly && !r.hours_discrepancy) return false;
       if (q) {
         const name = `${r.candidates?.first_name ?? ""} ${r.candidates?.last_name ?? ""}`.toLowerCase();
-        const client = (r.clients?.name ?? "").toLowerCase();
+        const client = (r.clients?.company_name ?? "").toLowerCase();
         const ref = (r.booking_reference ?? "").toLowerCase();
         if (![name, client, ref].some(s => s.includes(q.toLowerCase()))) return false;
       }
@@ -161,7 +161,7 @@ export default function TimesheetsPage() {
                 <td className="py-3 px-4 font-medium">
                   {r.candidates ? `${r.candidates.first_name ?? ""} ${r.candidates.last_name ?? ""}`.trim() : "—"}
                 </td>
-                <td className="py-3 px-3 text-muted-foreground">{r.clients?.name ?? "—"}</td>
+                <td className="py-3 px-3 text-muted-foreground">{r.clients?.company_name ?? "—"}</td>
                 <td className="py-3 px-3 text-muted-foreground">{fmtWeek(r.week_ending)}</td>
                 <td className="py-3 px-3 text-muted-foreground text-xs">{r.role ?? "—"}</td>
                 <td className="py-3 px-3 text-center">{r.shift_count}</td>
