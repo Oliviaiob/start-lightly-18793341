@@ -143,6 +143,13 @@ type Placement = {
   placement_type: string | null;
   placement_date: string | null;
   perm_salary: number | null;
+  salary_expectation_min: number | null;
+  salary_expectation_ideal: number | null;
+  notice_period_weeks: number | null;
+  max_commute_minutes: number | null;
+  preferred_nursery_type: string | null;
+  recruiter_personality_notes: string | null;
+  career_aspiration_notes: string | null;
   temp_rate: number | null;
   client?: { name: string | null } | null;
   job?: { title: string | null } | null;
@@ -894,6 +901,7 @@ function Page() {
             <TabTrig value="docs" icon={FolderOpen}>Documents</TabTrig>
             <TabTrig value="refs" icon={UserRound}>References</TabTrig>
             {isTemp && <TabTrig value="availability" icon={Clock}>Availability</TabTrig>}
+            {isPerm && <TabTrig value="permnotes" icon={ClipboardCheck}>Perm Notes</TabTrig>}
             <TabTrig value="messages" icon={MessageCircle}>Messages</TabTrig>
           </TabsList>
 
@@ -1178,6 +1186,12 @@ function Page() {
           <TabsContent value="messages" className="mt-5">
             <MessagesTab candidateId={c.id} candidatePhone={c.phone ?? null} />
           </TabsContent>
+
+          {isPerm && (
+            <TabsContent value="permnotes" className="mt-5">
+              <PermNotesTab candidate={c} onSave={(patch) => setC((prev: any) => prev ? { ...prev, ...patch } : prev)} />
+            </TabsContent>
+          )}
         </Tabs>
       </Card>
     </div>
@@ -2272,5 +2286,186 @@ function ChatDrawer({ candidateId, candidateName, candidatePhone, onClose }: {
         </div>
       </div>
     </>
+  );
+}
+
+// ── PermNotesTab ──────────────────────────────────────────────────────────────
+const NURSERY_TYPES = [
+  "Private Day Nursery",
+  "Maintained Nursery School",
+  "School Nursery / Reception",
+  "Children's Centre",
+  "SEN / Specialist Setting",
+  "Hospital Nursery",
+  "Forest School",
+  "Childminder",
+  "Any",
+];
+
+function PermNotesTab({ candidate, onSave }: { candidate: any; onSave: (patch: any) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<any>({});
+
+  const startEdit = () => {
+    setDraft({
+      salary_expectation_min: candidate.salary_expectation_min ?? null,
+      salary_expectation_ideal: candidate.salary_expectation_ideal ?? null,
+      notice_period_weeks: candidate.notice_period_weeks ?? null,
+      max_commute_minutes: candidate.max_commute_minutes ?? null,
+      preferred_nursery_type: candidate.preferred_nursery_type ?? null,
+      recruiter_personality_notes: candidate.recruiter_personality_notes ?? null,
+      career_aspiration_notes: candidate.career_aspiration_notes ?? null,
+    });
+    setEditing(true);
+  };
+
+  const save = async () => {
+    await (supabase as any).from("candidates").update(draft).eq("id", candidate.id);
+    onSave(draft);
+    setEditing(false);
+  };
+
+  const inp = "w-full h-9 px-3 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal/40";
+  const txt = "w-full px-3 py-2 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none";
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="font-semibold text-sm">Recruiter Notes &amp; Matching Preferences</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Captured during qualification call — used by Sammie for permanent matching</p>
+        </div>
+        {editing ? (
+          <div className="flex gap-2">
+            <button onClick={() => setEditing(false)} className="h-8 px-4 rounded-full border text-xs font-medium hover:bg-muted">Cancel</button>
+            <button onClick={save} className="h-8 px-4 rounded-full bg-navy text-white text-xs font-medium hover:opacity-90">Save</button>
+          </div>
+        ) : (
+          <button onClick={startEdit} className="h-8 px-4 rounded-full border text-xs font-medium hover:bg-muted">Edit</button>
+        )}
+      </div>
+
+      {/* Salary */}
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Salary Expectations</p>
+        <div className="grid grid-cols-2 gap-4">
+          {editing ? (
+            <>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Minimum (£)</label>
+                <input type="number" className={inp} placeholder="e.g. 25000"
+                  value={draft.salary_expectation_min ?? ""}
+                  onChange={e => setDraft((d: any) => ({ ...d, salary_expectation_min: e.target.value ? Number(e.target.value) : null }))} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Ideal (£)</label>
+                <input type="number" className={inp} placeholder="e.g. 28000"
+                  value={draft.salary_expectation_ideal ?? ""}
+                  onChange={e => setDraft((d: any) => ({ ...d, salary_expectation_ideal: e.target.value ? Number(e.target.value) : null }))} />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Minimum</p>
+                <p className="text-sm font-medium">{candidate.salary_expectation_min ? `£${Number(candidate.salary_expectation_min).toLocaleString()}` : "—"}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Ideal</p>
+                <p className="text-sm font-medium">{candidate.salary_expectation_ideal ? `£${Number(candidate.salary_expectation_ideal).toLocaleString()}` : "—"}</p>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Logistics */}
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Logistics</p>
+        <div className="grid grid-cols-3 gap-4">
+          {editing ? (
+            <>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Notice Period (weeks)</label>
+                <input type="number" className={inp} placeholder="e.g. 4"
+                  value={draft.notice_period_weeks ?? ""}
+                  onChange={e => setDraft((d: any) => ({ ...d, notice_period_weeks: e.target.value ? Number(e.target.value) : null }))} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Max Commute (mins)</label>
+                <input type="number" className={inp} placeholder="e.g. 30"
+                  value={draft.max_commute_minutes ?? ""}
+                  onChange={e => setDraft((d: any) => ({ ...d, max_commute_minutes: e.target.value ? Number(e.target.value) : null }))} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Preferred Nursery Type</label>
+                <select className={inp} value={draft.preferred_nursery_type ?? ""}
+                  onChange={e => setDraft((d: any) => ({ ...d, preferred_nursery_type: e.target.value || null }))}>
+                  <option value="">—</option>
+                  {NURSERY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Notice Period</p>
+                <p className="text-sm font-medium">{candidate.notice_period_weeks ? `${candidate.notice_period_weeks} weeks` : "—"}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Max Commute</p>
+                <p className="text-sm font-medium">{candidate.max_commute_minutes ? `${candidate.max_commute_minutes} mins` : "—"}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Preferred Setting</p>
+                <p className="text-sm font-medium">{candidate.preferred_nursery_type ?? "—"}</p>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Notes */}
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Recruiter Notes</p>
+        <div className="grid grid-cols-1 gap-4">
+          {editing ? (
+            <>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Personality &amp; Soft Skills</label>
+                <textarea className={txt} rows={3} placeholder="Notes on personality, communication style, soft skills, cultural fit…"
+                  value={draft.recruiter_personality_notes ?? ""}
+                  onChange={e => setDraft((d: any) => ({ ...d, recruiter_personality_notes: e.target.value || null }))} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Career Aspirations &amp; Values</label>
+                <textarea className={txt} rows={3} placeholder="What are they looking for long term? Values, ethos, career goals, reasons for moving…"
+                  value={draft.career_aspiration_notes ?? ""}
+                  onChange={e => setDraft((d: any) => ({ ...d, career_aspiration_notes: e.target.value || null }))} />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Personality &amp; Soft Skills</p>
+                <p className="text-sm whitespace-pre-wrap">{candidate.recruiter_personality_notes ?? <span className="text-muted-foreground">—</span>}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Career Aspirations &amp; Values</p>
+                <p className="text-sm whitespace-pre-wrap">{candidate.career_aspiration_notes ?? <span className="text-muted-foreground">—</span>}</p>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Sammie hint */}
+      {!editing && !candidate.salary_expectation_min && !candidate.recruiter_personality_notes && (
+        <div className="rounded-xl bg-teal-50 border border-teal-100 px-4 py-3 text-xs text-teal-700">
+          <span className="font-semibold">Sammie tip:</span> Fill in salary expectations and recruiter notes to improve permanent match quality.
+        </div>
+      )}
+    </div>
   );
 }
