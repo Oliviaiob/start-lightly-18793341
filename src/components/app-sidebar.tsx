@@ -150,15 +150,16 @@ export function AppSidebar() {
         <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between"} gap-2 px-2`}>
           <div className={`flex items-center gap-3 ${collapsed ? "" : "px-1"}`}>
             <img
-              src="https://ltpsljknjenpomsxixlx.supabase.co/storage/v1/object/public/brand/logo-icon-navy.png"
+              src="https://ltpsljknjenpomsxixlx.supabase.co/storage/v1/object/public/brand/favicon-icon.png"
               alt="Soar"
-              className="w-9 h-9 rounded-xl shrink-0 object-cover shadow-sm"
+              className="w-9 h-9 rounded-xl shrink-0 object-contain bg-navy shadow-sm"
             />
             {!collapsed && (
-              <div className="min-w-0">
-                <div className="text-sidebar-foreground font-semibold text-sm tracking-tight truncate">Soar</div>
-                <div className="text-sidebar-foreground/50 text-[11px] truncate">Recruitment CRM</div>
-              </div>
+              <img
+                src="https://ltpsljknjenpomsxixlx.supabase.co/storage/v1/object/public/brand/Logo-white.png"
+                alt="Soar Recruitment"
+                className="h-7 object-contain object-left max-w-[100px]"
+              />
             )}
           </div>
         </div>

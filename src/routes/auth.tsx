@@ -58,9 +58,9 @@ function AuthPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <img
-            src="https://ltpsljknjenpomsxixlx.supabase.co/storage/v1/object/public/brand/logo-horizontal.png"
+            src="https://ltpsljknjenpomsxixlx.supabase.co/storage/v1/object/public/brand/Logo-blue.png"
             alt="Soar Recruitment"
-            className="h-14 mx-auto mb-2 object-contain"
+            className="h-12 mx-auto mb-2 object-contain"
           />
           <p className="text-sm text-muted-foreground mt-1">Sign in to your CRM</p>
         </div>
