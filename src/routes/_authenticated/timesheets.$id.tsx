@@ -54,6 +54,85 @@ function calcHours(start: string, end: string, breakMin: number) {
   return Math.max(0, mins / 60).toFixed(2);
 }
 
+function printTimesheetPDF(sub: Submission, shifts: Shift[]) {
+  const candidateName = sub.candidates
+    ? `${sub.candidates.first_name ?? ""} ${sub.candidates.last_name ?? ""}`.trim()
+    : "Unknown";
+  const weekLabel = new Date(sub.week_ending).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+
+  const shiftRows = shifts.map(s => `
+    <tr style="${s.hours_discrepancy_flagged ? "background:#fffbeb;" : ""}">
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;">${fmtDate(s.shift_date)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;color:#64748b;">${fmtTime(s.scheduled_start)}–${fmtTime(s.scheduled_end)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;${s.hours_discrepancy_flagged ? "color:#b45309;font-weight:600;" : ""}">${fmtTime(s.submitted_start)}–${fmtTime(s.submitted_end)}${s.hours_discrepancy_flagged ? " ⚠" : ""}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;color:#64748b;">${fmtTime(s.check_in)} / ${fmtTime(s.check_out)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;color:#64748b;">${s.break_minutes}m</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;">${calcHours(s.submitted_start, s.submitted_end, s.break_minutes) ?? "—"}h</td>
+    </tr>
+  `).join("");
+
+  const candSig = sub.candidate_signature
+    ? `<div style="margin-top:24px;padding:16px;border:1px solid #e2e8f0;border-radius:8px;">
+        <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#94a3b8;margin:0 0 8px;">Candidate Signature</p>
+        <img src="${sub.candidate_signature}" style="max-height:60px;" />
+        ${sub.candidate_signed_at ? `<p style="font-size:11px;color:#94a3b8;margin:4px 0 0;">${new Date(sub.candidate_signed_at).toLocaleString("en-GB")}</p>` : ""}
+      </div>` : "";
+
+  const mgrSig = sub.manager_signature
+    ? `<div style="margin-top:24px;padding:16px;border:1px solid #e2e8f0;border-radius:8px;">
+        <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#94a3b8;margin:0 0 8px;">Manager Signature</p>
+        <img src="${sub.manager_signature}" style="max-height:60px;" />
+        <p style="font-size:12px;font-weight:500;margin:4px 0 0;">${sub.manager_name ?? ""}${sub.manager_position ? ` · ${sub.manager_position}` : ""}</p>
+        ${sub.manager_signed_at ? `<p style="font-size:11px;color:#94a3b8;margin:2px 0 0;">${new Date(sub.manager_signed_at).toLocaleString("en-GB")}</p>` : ""}
+      </div>` : "";
+
+  const html = `<!DOCTYPE html><html><head>
+    <title>Timesheet – ${candidateName} – ${weekLabel}</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; color: #1e293b; padding: 32px; }
+      @media print { body { padding: 16px; } }
+      .header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 20px; border-bottom: 2px solid #0f172a; margin-bottom: 24px; }
+      .brand { font-size: 20px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px; }
+      .brand span { color: #14b8a6; }
+      table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+      th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; border-bottom: 2px solid #e2e8f0; }
+    </style>
+  </head><body>
+    <div class="header">
+      <div><div class="brand">SOAR <span>Recruitment</span></div><div style="font-size:11px;color:#94a3b8;margin-top:2px;">Timesheet Record</div></div>
+      <div style="text-align:right;"><div style="font-size:18px;font-weight:700;">${sub.total_submitted_hours ?? "—"}h</div><div style="font-size:11px;color:#94a3b8;">Total hours</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:24px;">
+      <div><div style="font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Candidate</div><div style="font-weight:600;margin-top:2px;">${candidateName}</div></div>
+      <div><div style="font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Client</div><div style="font-weight:600;margin-top:2px;">${sub.clients?.company_name ?? "—"}</div></div>
+      <div><div style="font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Week ending</div><div style="font-weight:600;margin-top:2px;">${weekLabel}</div></div>
+      <div><div style="font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Role</div><div style="margin-top:2px;">${sub.role ?? "—"}</div></div>
+      <div><div style="font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Reference</div><div style="margin-top:2px;font-family:monospace;font-size:11px;">${sub.booking_reference ?? "—"}</div></div>
+      <div><div style="font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Status</div><div style="margin-top:2px;">${STATUS_CONFIG[sub.status]?.label ?? sub.status}</div></div>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Date</th><th>Scheduled</th><th>Submitted</th><th>Check in/out</th><th>Break</th><th>Hours</th>
+      </tr></thead>
+      <tbody>${shiftRows}</tbody>
+    </table>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      ${candSig}${mgrSig}
+    </div>
+    <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;text-align:center;">
+      Generated ${new Date().toLocaleString("en-GB")} · SOAR Recruitment · hello@soarrecruitment.co.uk
+    </div>
+  </body></html>`;
+
+  const win = window.open("", "_blank", "width=900,height=700");
+  if (!win) { toast.error("Please allow pop-ups to download PDF"); return; }
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); }, 500);
+}
+
 export default function TimesheetDetailPage() {
   const { id } = Route.useParams();
   const [sub, setSub] = useState<Submission | null>(null);
@@ -92,7 +171,6 @@ export default function TimesheetDetailPage() {
 
     const { error } = await supabase.from("timesheet_submissions").update(patch).eq("id", id);
     if (error) { toast.error("Update failed"); setApproving(false); return; }
-
     await supabase.from("timesheet_status_log").insert({
       submission_id: id, previous_status: prev, new_status: newStatus,
       changed_by: "crm_staff", note: note ?? null,
@@ -104,8 +182,8 @@ export default function TimesheetDetailPage() {
 
   const sendApprovalEmail = async () => {
     const { error } = await supabase.functions.invoke("send-manager-approval-email", { body: { submission_id: id } });
-    if (error) { toast.error("Failed to send approval email"); return; }
-    toast.success("Approval email sent to manager");
+    if (error) { toast.error("Failed to send follow up"); return; }
+    toast.success("Manager approval follow up sent");
     load();
   };
 
@@ -116,9 +194,9 @@ export default function TimesheetDetailPage() {
   const weekLabel = new Date(sub.week_ending).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pt-2">
+    <div className="max-w-4xl mx-auto space-y-5 pt-2">
       {/* Back */}
-      <Link to="/timesheets/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+      <Link to="/timesheets/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
         <ChevronLeft className="h-4 w-4" /> Timesheets
       </Link>
 
@@ -126,10 +204,10 @@ export default function TimesheetDetailPage() {
       <div className="rounded-2xl border border-border shadow-[var(--shadow-card)] bg-card p-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1.5">
               <StatusBadge status={sub.status} />
               {sub.hours_discrepancy && (
-                <span className="inline-flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+                <span className="inline-flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
                   <AlertTriangle className="h-3 w-3" /> Hours discrepancy
                 </span>
               )}
@@ -143,15 +221,9 @@ export default function TimesheetDetailPage() {
           <div className="flex flex-col items-end gap-2">
             {sub.total_submitted_hours && (
               <div className="text-right">
-                <p className="text-2xl font-bold">{sub.total_submitted_hours}h</p>
+                <p className="text-3xl font-bold tracking-tight">{sub.total_submitted_hours}h</p>
                 <p className="text-xs text-muted-foreground">Total hours</p>
               </div>
-            )}
-            {sub.pdf_url && (
-              <a href={sub.pdf_url} target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-xs text-teal-600 hover:underline">
-                <Download className="h-3.5 w-3.5" /> Download PDF
-              </a>
             )}
           </div>
         </div>
@@ -160,28 +232,34 @@ export default function TimesheetDetailPage() {
         <div className="mt-5 pt-4 border-t flex flex-wrap gap-2">
           {sub.status === "submitted_to_soar" && (
             <button onClick={() => updateStatus("approved")} disabled={approving}
-              className="h-9 px-4 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 disabled:opacity-60 inline-flex items-center gap-1.5">
+              className="h-9 px-4 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 disabled:opacity-60 inline-flex items-center gap-1.5 transition-opacity">
               <CheckCircle2 className="h-4 w-4" /> Approve
             </button>
           )}
           {sub.status === "approved" && (
             <button onClick={() => updateStatus("paid")} disabled={approving}
-              className="h-9 px-4 rounded-full bg-green-600 text-white text-sm font-medium hover:opacity-90 disabled:opacity-60 inline-flex items-center gap-1.5">
+              className="h-9 px-4 rounded-full bg-green-600 text-white text-sm font-medium hover:opacity-90 disabled:opacity-60 inline-flex items-center gap-1.5 transition-opacity">
               Mark as Paid
             </button>
           )}
           {sub.status === "awaiting_manager" && !sub.manager_signed_at && (
             <button onClick={sendApprovalEmail}
-              className="h-9 px-4 rounded-full border text-sm font-medium hover:bg-muted inline-flex items-center gap-1.5">
-              <FileText className="h-4 w-4" /> Send manager approval email
+              className="h-9 px-4 rounded-full border text-sm font-medium hover:bg-muted inline-flex items-center gap-1.5 transition-colors">
+              <FileText className="h-4 w-4" /> Send manager approval follow up
             </button>
           )}
+          {/* Download PDF — always visible */}
+          <button
+            onClick={() => printTimesheetPDF(sub, shifts)}
+            className="h-9 px-4 rounded-full border text-sm font-medium hover:bg-muted inline-flex items-center gap-1.5 transition-colors ml-auto">
+            <Download className="h-4 w-4" /> Download PDF
+          </button>
         </div>
       </div>
 
       {/* Shifts */}
       <div className="rounded-2xl border border-border shadow-[var(--shadow-card)] bg-card overflow-hidden">
-        <div className="px-6 py-4 border-b">
+        <div className="px-6 py-4 border-b bg-muted/20">
           <h2 className="font-semibold text-sm">Shift Breakdown</h2>
         </div>
         <table className="w-full text-sm">
@@ -198,7 +276,7 @@ export default function TimesheetDetailPage() {
           </thead>
           <tbody className="divide-y divide-border">
             {shifts.map(s => (
-              <tr key={s.id} className={s.hours_discrepancy_flagged ? "bg-amber-50/50" : ""}>
+              <tr key={s.id} className={s.hours_discrepancy_flagged ? "bg-amber-50/50" : "hover:bg-muted/20 transition-colors"}>
                 <td className="py-3 px-4 font-medium">{fmtDate(s.shift_date)}</td>
                 <td className="py-3 px-3 text-muted-foreground">{fmtTime(s.scheduled_start)}–{fmtTime(s.scheduled_end)}</td>
                 <td className="py-3 px-3">
@@ -209,7 +287,7 @@ export default function TimesheetDetailPage() {
                 </td>
                 <td className="py-3 px-3 text-muted-foreground text-xs">{fmtTime(s.check_in)} / {fmtTime(s.check_out)}</td>
                 <td className="py-3 px-3 text-muted-foreground">{s.break_minutes}m</td>
-                <td className="py-3 px-3 font-medium">{calcHours(s.submitted_start, s.submitted_end, s.break_minutes)}h</td>
+                <td className="py-3 px-3 font-semibold">{calcHours(s.submitted_start, s.submitted_end, s.break_minutes) ?? "—"}h</td>
                 <td className="py-3 px-3">
                   <span className="text-xs capitalize text-muted-foreground">{s.shift_status?.replace(/_/g, " ")}</span>
                 </td>
@@ -244,34 +322,43 @@ export default function TimesheetDetailPage() {
       <div className="rounded-2xl border border-border shadow-[var(--shadow-card)] bg-card p-6">
         <h2 className="font-semibold text-sm mb-4">Status History</h2>
         <div className="space-y-3">
-          {log.map(l => (
+          {log.map((l, i) => (
             <div key={l.id} className="flex items-start gap-3 text-sm">
-              <div className="w-2 h-2 rounded-full bg-teal mt-1.5 shrink-0" />
-              <div>
-                <span className="font-medium capitalize">{l.new_status.replace(/_/g, " ")}</span>
+              <div className="flex flex-col items-center shrink-0">
+                <div className="w-2 h-2 rounded-full bg-teal mt-1.5" />
+                {i < log.length - 1 && <div className="w-px flex-1 bg-border mt-1 mb-0 min-h-[16px]" />}
+              </div>
+              <div className="pb-3">
+                <span className="font-medium capitalize">{STATUS_CONFIG[l.new_status]?.label ?? l.new_status.replace(/_/g, " ")}</span>
                 {l.changed_by && <span className="text-muted-foreground"> · {l.changed_by.replace(/_/g, " ")}</span>}
-                {l.note && <p className="text-xs text-muted-foreground">{l.note}</p>}
-                <p className="text-xs text-muted-foreground">{new Date(l.created_at).toLocaleString("en-GB")}</p>
+                {l.note && <p className="text-xs text-muted-foreground mt-0.5">{l.note}</p>}
+                <p className="text-xs text-muted-foreground mt-0.5">{new Date(l.created_at).toLocaleString("en-GB")}</p>
               </div>
             </div>
           ))}
           {log.length === 0 && <p className="text-sm text-muted-foreground">No history yet</p>}
         </div>
 
-        {/* Add note */}
         <div className="mt-5 pt-4 border-t flex gap-2">
           <input className="flex-1 h-9 px-3 rounded-lg border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-teal/40"
-            placeholder="Add a note…" value={noteText} onChange={e => setNoteText(e.target.value)} />
+            placeholder="Add a note…" value={noteText} onChange={e => setNoteText(e.target.value)}
+            onKeyDown={async e => {
+              if (e.key === "Enter" && noteText.trim()) {
+                await supabase.from("timesheet_status_log").insert({
+                  submission_id: id, new_status: sub.status, changed_by: "crm_staff", note: noteText.trim(),
+                });
+                setNoteText(""); load();
+              }
+            }} />
           <button
             onClick={async () => {
               if (!noteText.trim()) return;
               await supabase.from("timesheet_status_log").insert({
                 submission_id: id, new_status: sub.status, changed_by: "crm_staff", note: noteText.trim(),
               });
-              setNoteText("");
-              load();
+              setNoteText(""); load();
             }}
-            className="h-9 px-4 rounded-lg border text-xs font-medium hover:bg-muted">
+            className="h-9 px-4 rounded-lg bg-navy text-white text-xs font-medium hover:opacity-90 transition-opacity">
             Save note
           </button>
         </div>
