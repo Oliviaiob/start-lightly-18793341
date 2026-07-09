@@ -893,6 +893,7 @@ function Page() {
         <Tabs defaultValue="personal">
           <TabsList className="bg-muted/50 rounded-full h-10 p-1 flex-wrap">
             <TabTrig value="personal" icon={UserRound}>Personal</TabTrig>
+            {isPerm && <TabTrig value="permnotes" icon={ClipboardCheck}>Preferences</TabTrig>}
             <TabTrig value="quals" icon={ClipboardCheck}>Qualifications</TabTrig>
             <TabTrig value="cv" icon={FileText}>CV</TabTrig>
             <TabTrig value="pipeline" icon={Briefcase}>Jobs/Pipeline</TabTrig>
@@ -901,7 +902,6 @@ function Page() {
             <TabTrig value="docs" icon={FolderOpen}>Documents</TabTrig>
             <TabTrig value="refs" icon={UserRound}>References</TabTrig>
             {isTemp && <TabTrig value="availability" icon={Clock}>Availability</TabTrig>}
-            {isPerm && <TabTrig value="permnotes" icon={ClipboardCheck}>Perm Notes</TabTrig>}
             <TabTrig value="messages" icon={MessageCircle}>Messages</TabTrig>
           </TabsList>
 
