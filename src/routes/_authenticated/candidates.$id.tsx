@@ -601,19 +601,23 @@ function Page() {
             </HeaderBtn>
             <HeaderBtn icon={Plus}>Add to Shortlist</HeaderBtn>
             {isPerm ? (
-              <button onClick={() => setChatOpen(true)} title="Message candidate" className="h-9 w-9 rounded-full border hover:bg-muted transition-colors inline-flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground">
-                <MessageCircle className="h-4 w-4" />
-              </button>
-              <button onClick={() => setCvOpen(true)} className="h-9 px-3.5 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5" /> Generate SOAR CV
-              </button>
+              <>
+                <button onClick={() => setChatOpen(true)} title="Message candidate" className="h-9 w-9 rounded-full border hover:bg-muted transition-colors inline-flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground">
+                  <MessageCircle className="h-4 w-4" />
+                </button>
+                <button onClick={() => setCvOpen(true)} className="h-9 px-3.5 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5" /> Generate SOAR CV
+                </button>
+              </>
             ) : (
-              <button onClick={() => setChatOpen(true)} title="Message candidate" className="h-9 w-9 rounded-full border hover:bg-muted transition-colors inline-flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground">
-                <MessageCircle className="h-4 w-4" />
-              </button>
-              <button onClick={() => setWpOpen(true)} className="h-9 px-3.5 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-1.5">
-                <FileText className="h-3.5 w-3.5" /> Generate Worker Profile
-              </button>
+              <>
+                <button onClick={() => setChatOpen(true)} title="Message candidate" className="h-9 w-9 rounded-full border hover:bg-muted transition-colors inline-flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground">
+                  <MessageCircle className="h-4 w-4" />
+                </button>
+                <button onClick={() => setWpOpen(true)} className="h-9 px-3.5 rounded-full bg-teal text-teal-foreground text-sm font-medium hover:opacity-90 transition-opacity inline-flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5" /> Generate Worker Profile
+                </button>
+              </>
             )}
             {cvOpen && c && isPerm && (
               <GenerateCVModal open={cvOpen} onClose={() => setCvOpen(false)} candidate={c} />
