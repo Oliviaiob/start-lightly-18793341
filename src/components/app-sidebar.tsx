@@ -18,6 +18,7 @@ import {
   Building,
   Sparkles,
   MessageSquare,
+  ClipboardList,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -56,6 +57,7 @@ const recruitment: NavItem[] = [
 ];
 const operations: NavItem[] = [
   { title: "Booking Board", url: "/bookings", icon: CalendarRange },
+  { title: "Timesheets", url: "/timesheets", icon: ClipboardList },
   { title: "Compliance", url: "/compliance", icon: ShieldCheck },
   { title: "Map", url: "/map", icon: MapIcon },
 ];
