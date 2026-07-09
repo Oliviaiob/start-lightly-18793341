@@ -38,7 +38,7 @@ type InterviewRow = {
   interview_type: string | null;
   pipeline?: {
     candidate?: { id: string; first_name: string | null; last_name: string | null } | null;
-    job?: { id: string; title: string | null; client?: { name: string | null } | null } | null;
+    job?: { id: string; title: string | null; client?: { company_name: string | null } | null } | null;
   } | null;
 };
 
@@ -334,7 +334,7 @@ function Dashboard() {
                     <div className="min-w-0 flex-1">
                       <div className="font-medium text-sm truncate">
                         {cand ? `${cand.first_name ?? ""} ${cand.last_name ?? ""}`.trim() || "Candidate" : "Candidate"}
-                        <span className="text-muted-foreground font-normal"> · {job?.client?.name || "—"}</span>
+                        <span className="text-muted-foreground font-normal"> · {job?.client?.company_name || "—"}</span>
                       </div>
                       <div className="text-xs text-muted-foreground truncate">
                         {job?.title || "—"}{i.interview_type ? ` · ${i.interview_type}` : ""}
