@@ -8,10 +8,10 @@ export const Route = createFileRoute("/_authenticated/inbox")({ component: Inbox
 
 interface Candidate { id: string; first_name: string | null; last_name: string | null; phone: string | null; email: string | null; }
 interface Message { id: string; candidate_id: string; content: string; direction: "inbound" | "outbound"; channel: string; status: string; created_at: string; }
-interface Thread { candidate: Candidate; lastMessage: Message | null; unread: number; }
+interface Thread { candidate: Candidate; lastMessage: Message | null; unread: number; assignedRecruiter: string | null; }
 
-const channelIcon = (ch: string) => ch === "whatsapp" ? <MessageCircle className="h-3.5 w-3.5 text-green-500" /> : ch === "sms" ? <Phone className="h-3.5 w-3.5 text-blue-500" /> : ch === "email" ? <Mail className="h-3.5 w-3.5 text-orange-400" /> : <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />;
-const channelLabel = (ch: string) => ({ whatsapp: "WhatsApp", sms: "SMS", email: "Email", internal: "CRM" }[ch] ?? ch);
+const channelIcon = (ch: string) => ch === "whatsapp" ? <MessageCircle className="h-3.5 w-3.5 text-green-500" /> : ch === "sms" ? <Phone className="h-3.5 w-3.5 text-blue-500" /> : ch === "email" ? <Mail className="h-3.5 w-3.5 text-orange-400" /> : ch === "app" ? <MessageSquare className="h-3.5 w-3.5 text-teal" /> : <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />;
+const channelLabel = (ch: string) => ({ whatsapp: "WhatsApp", sms: "SMS", email: "Email", internal: "CRM", app: "App" }[ch] ?? ch);
 const fmtTime = (iso: string) => { const d = new Date(iso); const now = new Date(); const diff = (now.getTime() - d.getTime()) / 86400000; return diff < 1 ? d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : diff < 7 ? d.toLocaleDateString("en-GB", { weekday: "short" }) : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" }); };
 
 function InboxPage() {
@@ -20,7 +20,8 @@ function InboxPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [channel, setChannel] = useState<"internal" | "whatsapp" | "sms">("internal");
+  const [channel, setChannel] = useState<"app" | "internal" | "whatsapp" | "sms">("app");
+  const [inboxFilter, setInboxFilter] = useState<"all" | "mine">("all");
   const [sending, setSending] = useState(false);
   const [search, setSearch] = useState("");
   const [userId, setUserId] = useState<string | null>(null);
@@ -44,7 +45,7 @@ function InboxPage() {
   // Load threads
   const loadThreads = useCallback(async () => {
     const { data: msgs } = await (supabase as any).from("messages")
-      .select("id,candidate_id,content,direction,channel,status,created_at")
+      .select("id,candidate_id,content,direction,channel,status,created_at,recruiter_id")
       .order("created_at", { ascending: false });
 
     const { data: cands } = await supabase.from("candidates")
@@ -60,7 +61,10 @@ function InboxPage() {
       if (!cand) return null;
       const candMsgs = byCandidate[cid as string] ?? [];
       const unread = candMsgs.filter((m: Message) => m.direction === "inbound" && m.status !== "read").length;
-      return { candidate: cand, lastMessage: candMsgs[0] ?? null, unread };
+      // Find assigned recruiter: most recent outbound message's recruiter
+      const lastOutbound = candMsgs.find((m: Message) => m.direction === "outbound");
+      const assignedRecruiter = (lastOutbound as any)?.recruiter_id ?? null;
+      return { candidate: cand, lastMessage: candMsgs[0] ?? null, unread, assignedRecruiter };
     }).filter(Boolean) as Thread[];
 
     // Sort: unread first, then by most recent message
@@ -141,7 +145,9 @@ function InboxPage() {
 
   const filtered = threads.filter(t => {
     const name = `${t.candidate.first_name ?? ""} ${t.candidate.last_name ?? ""}`.toLowerCase();
-    return !search || name.includes(search.toLowerCase());
+    if (search && !name.includes(search.toLowerCase())) return false;
+    if (inboxFilter === "mine" && userId && t.assignedRecruiter !== userId) return false;
+    return true;
   });
 
   const composeFiltered = composeSearch.trim()
@@ -155,7 +161,10 @@ function InboxPage() {
       <div className="w-80 shrink-0 flex flex-col border-r border-border/40 bg-card/30 relative">
         <div className="px-4 py-4 border-b border-border/40">
           <div className="flex items-center justify-between mb-3">
-            <h1 className="text-sm font-semibold">Inbox</h1>
+            <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
+              <button onClick={() => setInboxFilter("all")} className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${inboxFilter === "all" ? "bg-card shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>All</button>
+              <button onClick={() => setInboxFilter("mine")} className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${inboxFilter === "mine" ? "bg-card shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>Mine</button>
+            </div>
             <button
               onClick={() => setComposeOpen(v => !v)}
               title="New conversation"
@@ -296,7 +305,7 @@ function InboxPage() {
           <div className="px-5 py-4 border-t border-border/40 bg-card/50 shrink-0 space-y-2">
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-muted-foreground font-medium">Send via:</span>
-              {(["internal", "whatsapp", "sms"] as const).map(ch => (
+              {(["app", "whatsapp", "sms", "internal"] as const).map(ch => (
                 <button key={ch} onClick={() => setChannel(ch)}
                   className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11px] font-medium transition-colors ${channel === ch ? "bg-navy text-white" : "border hover:bg-muted"}`}>
                   {channelIcon(ch)}{channelLabel(ch)}
