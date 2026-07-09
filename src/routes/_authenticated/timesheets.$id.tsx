@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ChevronLeft, AlertTriangle, CheckCircle2, Download, Clock, FileText } from "lucide-react";
+import { ChevronLeft, AlertTriangle, CheckCircle2, Download, FileText, User, Building2 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/timesheets/$id")({
   component: TimesheetDetailPage,
@@ -297,24 +297,55 @@ export default function TimesheetDetailPage() {
         </table>
       </div>
 
-      {/* Signatures */}
-      {(sub.candidate_signature || sub.manager_signature) && (
-        <div className="grid grid-cols-2 gap-4">
-          {sub.candidate_signature && (
-            <div className="rounded-2xl border border-border shadow-[var(--shadow-card)] bg-card p-5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Candidate Signature</p>
-              <img src={sub.candidate_signature} alt="Candidate signature" className="max-h-20 border rounded-lg p-2 bg-white" />
-              {sub.candidate_signed_at && <p className="text-xs text-muted-foreground mt-2">{new Date(sub.candidate_signed_at).toLocaleString("en-GB")}</p>}
+      {/* Signatures — both panels shown when submitted_to_soar or approved/paid */}
+      {(["submitted_to_soar", "approved", "paid"].includes(sub.status) || !!sub.candidate_signature || !!sub.manager_signature) && (
+        <div className="rounded-2xl border border-border shadow-[var(--shadow-card)] bg-card p-6">
+          <h2 className="font-semibold text-sm mb-4">Signatures</h2>
+          <div className="grid grid-cols-2 gap-4">
+            {/* Candidate */}
+            <div className="border border-border rounded-xl p-4">
+              <div className="flex items-center gap-1.5 mb-3">
+                <User className="h-3.5 w-3.5 text-muted-foreground" />
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Candidate</p>
+                {sub.candidate_confirmed && (
+                  <span className="ml-auto text-[10px] bg-teal-50 text-teal-600 font-semibold px-1.5 py-0.5 rounded">✓ Signed</span>
+                )}
+              </div>
+              {sub.candidate_signature ? (
+                <img src={sub.candidate_signature} alt="Candidate signature" className="max-h-20 border rounded-lg p-2 bg-white" />
+              ) : (
+                <div className="h-16 border border-dashed rounded-lg flex items-center justify-center text-xs text-muted-foreground bg-muted/20">
+                  Awaiting signature
+                </div>
+              )}
+              {sub.candidate_signed_at && (
+                <p className="text-xs text-muted-foreground mt-2">{new Date(sub.candidate_signed_at).toLocaleString("en-GB")}</p>
+              )}
             </div>
-          )}
-          {sub.manager_signature && (
-            <div className="rounded-2xl border border-border shadow-[var(--shadow-card)] bg-card p-5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Manager Signature</p>
-              <img src={sub.manager_signature} alt="Manager signature" className="max-h-20 border rounded-lg p-2 bg-white" />
-              <p className="text-xs font-medium mt-2">{sub.manager_name}{sub.manager_position ? ` · ${sub.manager_position}` : ""}</p>
-              {sub.manager_signed_at && <p className="text-xs text-muted-foreground">{new Date(sub.manager_signed_at).toLocaleString("en-GB")}</p>}
+            {/* Manager */}
+            <div className="border border-border rounded-xl p-4">
+              <div className="flex items-center gap-1.5 mb-3">
+                <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Manager</p>
+                {sub.manager_signed_at && (
+                  <span className="ml-auto text-[10px] bg-teal-50 text-teal-600 font-semibold px-1.5 py-0.5 rounded">✓ Signed</span>
+                )}
+              </div>
+              {sub.manager_signature ? (
+                <img src={sub.manager_signature} alt="Manager signature" className="max-h-20 border rounded-lg p-2 bg-white" />
+              ) : (
+                <div className="h-16 border border-dashed rounded-lg flex items-center justify-center text-xs text-muted-foreground bg-muted/20">
+                  Awaiting signature
+                </div>
+              )}
+              {sub.manager_name && (
+                <p className="text-xs font-medium mt-2">{sub.manager_name}{sub.manager_position ? ` · ${sub.manager_position}` : ""}</p>
+              )}
+              {sub.manager_signed_at && (
+                <p className="text-xs text-muted-foreground mt-0.5">{new Date(sub.manager_signed_at).toLocaleString("en-GB")}</p>
+              )}
             </div>
-          )}
+          </div>
         </div>
       )}
 
