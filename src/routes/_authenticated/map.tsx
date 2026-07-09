@@ -176,90 +176,7 @@ function CandidateDrawer({ candidate, onClose }: { candidate: MapCandidate; onCl
 
 // ── Route Checker ─────────────────────────────────────────────────────────────
 
-type RouteResult = {
-  driving: any;
-  transit: any;
-  walking: any;
-};
-
-function parseDuration(route: any): string | null {
-  const leg = route?.routes?.[0]?.legs?.[0];
-  if (!leg) return null;
-  return leg.duration?.text ?? null;
-}
-
-function parseTransitModes(transit: any): { buses: string[]; trains: string[] } {
-  const steps = transit?.routes?.[0]?.legs?.[0]?.steps ?? [];
-  const buses: string[] = [];
-  const trains: string[] = [];
-  for (const step of steps) {
-    if (step.travel_mode === "TRANSIT") {
-      const vtype = step.transit_details?.line?.vehicle?.type ?? "";
-      const lineName = step.transit_details?.line?.short_name || step.transit_details?.line?.name || "";
-      const dur = step.duration?.text ?? "";
-      if (["BUS", "TROLLEYBUS", "INTERCITY_BUS"].includes(vtype)) buses.push(`${lineName} (${dur})`);
-      else if (["RAIL", "HEAVY_RAIL", "COMMUTER_TRAIN", "LONG_DISTANCE_TRAIN", "HIGH_SPEED_TRAIN", "SUBWAY", "TRAM", "METRO_RAIL"].includes(vtype)) trains.push(`${lineName} (${dur})`);
-    }
-  }
-  return { buses, trains };
-}
-
-function gmapsUrl(origin: string, destination: string, mode: string) {
-  const m = mode === "driving" ? "driving" : mode === "transit" ? "transit" : "walking";
-  return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=${m}`;
-}
-
-function RouteChecker({
-  allCandidates,
-  allClients,
-  onClose,
-}: {
-  allCandidates: MapCandidate[];
-  allClients: MapClient[];
-  onClose: () => void;
-}) {
-  const [candidateId, setCandidateId] = React.useState("");
-  const [clientId, setClientId] = React.useState("");
-  const [loading, setLoading] = React.useState(false);
-  const [result, setResult] = React.useState<RouteResult | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
-
-  const candidate = allCandidates.find(c => c.id === candidateId);
-  const client = allClients.find(c => c.id === clientId);
-
-  const canCheck = !!(candidate?.postcode && client?.postcode);
-
-  async function checkRoutes() {
-    if (!candidate?.postcode || !client?.postcode) return;
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    try {
-      const res = await fetch(
-        `https://ltpsljknjenpomsxixlx.supabase.co/functions/v1/google-directions`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ origin: candidate.postcode, destination: client.postcode }),
-        }
-      );
-      const data = await res.json();
-      if (data.error) { setError(data.error); setLoading(false); return; }
-      setResult(data);
-    } catch (e: any) {
-      setError(e.message ?? "Failed to fetch routes");
-    }
-    setLoading(false);
-  }
-
-  const candName = (c: MapCandidate) => `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "Candidate";
-  const drivingTime = result ? parseDuration(result.driving) : null;
-  const transitTime = result ? parseDuration(result.transit) : null;
-  const walkingTime = result ? parseDuration(result.walking) : null;
-  const { buses, trains } = result ? parseTransitModes(result.transit) : { buses: [], trains: [] };
-  const origin = candidate?.postcode ?? "";
-  const dest = client?.postcode ?? "";
-
+function RouteChecker({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-[1001] flex justify-end pointer-events-none">
       <div className="absolute inset-0 bg-black/20 pointer-events-auto" onClick={onClose} />
@@ -267,131 +184,28 @@ function RouteChecker({
         <div className="flex items-center justify-between p-4 border-b">
           <div>
             <h2 className="font-semibold text-base">Route Checker</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">Check travel times between candidate and client</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Travel times between candidate and client</p>
           </div>
           <button onClick={onClose} className="p-1 rounded hover:bg-muted transition-colors">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {/* Candidate select */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Candidate</label>
-            <select
-              value={candidateId}
-              onChange={e => { setCandidateId(e.target.value); setResult(null); }}
-              className="w-full h-9 rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal/30"
-            >
-              <option value="">Select a candidate…</option>
-              {allCandidates.filter(c => c.postcode).map(c => (
-                <option key={c.id} value={c.id}>
-                  {candName(c)} — {c.postcode}
-                </option>
-              ))}
-            </select>
+        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center text-3xl">🗺️</div>
+          <div>
+            <div className="font-semibold text-base mb-1">Coming Soon</div>
+            <p className="text-sm text-muted-foreground">
+              Route Checker will show car, bus and train travel times between any candidate and client — directly from the map.
+            </p>
           </div>
-
-          {/* Client select */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Client</label>
-            <select
-              value={clientId}
-              onChange={e => { setClientId(e.target.value); setResult(null); }}
-              className="w-full h-9 rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal/30"
-            >
-              <option value="">Select a client…</option>
-              {allClients.filter(c => c.postcode).map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.company_name} — {c.postcode}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Check button */}
-          <button
-            onClick={checkRoutes}
-            disabled={!canCheck || loading}
-            className="w-full h-9 rounded-lg bg-navy text-navy-foreground text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-40"
-          >
-            {loading ? "Checking routes…" : "Check Routes"}
-          </button>
-
-          {/* Error */}
-          {error && (
-            <div className="rounded-lg bg-destructive/10 text-destructive text-sm p-3">
-              {error === "GOOGLE_MAPS_API_KEY not configured"
-                ? "Google Maps API key not yet configured. Add GOOGLE_MAPS_API_KEY to Supabase secrets to enable this feature."
-                : error}
-            </div>
-          )}
-
-          {/* Results */}
-          {result && (
-            <div className="space-y-3">
-              <div className="text-xs text-muted-foreground">
-                {candidate?.postcode} → {client?.postcode}
-              </div>
-
-              {/* Car */}
-              <div className="rounded-xl border p-3.5 space-y-1">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm font-semibold">
-                    <span className="text-lg">🚗</span> By car
-                  </div>
-                  <span className="text-sm font-bold">{drivingTime ?? "No route"}</span>
-                </div>
-                {drivingTime && (
-                  <a href={gmapsUrl(origin, dest, "driving")} target="_blank" rel="noopener noreferrer"
-                    className="text-xs text-teal hover:underline">Open in Google Maps →</a>
-                )}
-              </div>
-
-              {/* Transit */}
-              <div className="rounded-xl border p-3.5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm font-semibold">
-                    <span className="text-lg">🚌</span> By public transport
-                  </div>
-                  <span className="text-sm font-bold">{transitTime ?? "No route"}</span>
-                </div>
-                {trains.length > 0 && (
-                  <div className="flex items-start gap-2 text-xs text-muted-foreground">
-                    <span>🚂</span>
-                    <span>Train: {trains.join(", ")}</span>
-                  </div>
-                )}
-                {buses.length > 0 && (
-                  <div className="flex items-start gap-2 text-xs text-muted-foreground">
-                    <span>🚌</span>
-                    <span>Bus: {buses.join(", ")}</span>
-                  </div>
-                )}
-                {transitTime && (
-                  <a href={gmapsUrl(origin, dest, "transit")} target="_blank" rel="noopener noreferrer"
-                    className="text-xs text-teal hover:underline">Open in Google Maps →</a>
-                )}
-              </div>
-
-              {/* Walking */}
-              {walkingTime && (
-                <div className="rounded-xl border p-3.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-sm font-semibold">
-                      <span className="text-lg">🚶</span> Walking
-                    </div>
-                    <span className="text-sm font-bold">{walkingTime}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          <span className="inline-block px-3 py-1 rounded-full bg-teal/10 text-teal-foreground text-xs font-semibold">In development</span>
         </div>
       </div>
     </div>
   );
 }
+
 
 function Page() {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -411,7 +225,7 @@ function Page() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [candRes, clientRes, allCandRes] = await Promise.all([
+    const [candRes, clientRes] = await Promise.all([
       supabase
         .from("candidates")
         .select("id,first_name,last_name,phone,postcode,town,qualification_level,status_temp,dbs_verified,right_to_work_verified,latitude,longitude")
@@ -419,16 +233,10 @@ function Page() {
         .in("status_temp", ["active", "pending_compliance"]),
       supabase
         .from("clients")
-        .select("id,company_name,postcode,address,client_type,status,latitude,longitude"),
-      supabase
-        .from("candidates")
-        .select("id,first_name,last_name,phone,postcode,town,qualification_level,status_temp,dbs_verified,right_to_work_verified,latitude,longitude")
-        .eq("candidate_type", "temp")
-        .not("postcode", "is", null),
-    ]);
+        .select("id,company_name,postcode,address,client_type,status,latitude,longitude")]);
     setCandidates((candRes.data as MapCandidate[]) || []);
     setClients((clientRes.data as MapClient[]) || []);
-    setAllCandidates((allCandRes.data as MapCandidate[]) || []);
+
     setLoading(false);
   }, []);
 
@@ -538,11 +346,7 @@ function Page() {
         <CandidateDrawer candidate={selectedCandidate} onClose={() => setSelectedCandidate(null)} />
       )}
       {showRouteChecker && (
-        <RouteChecker
-          allCandidates={allCandidates}
-          allClients={clients}
-          onClose={() => setShowRouteChecker(false)}
-        />
+        <RouteChecker onClose={() => setShowRouteChecker(false)} />
       )}
 
       <div className="max-w-[1400px] mx-auto space-y-4 pt-2">
