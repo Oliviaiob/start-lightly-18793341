@@ -519,7 +519,7 @@ function Page() {
     setLoading(true);
     let query = supabase
       .from("jobs")
-      .select("id,title,client_id,status,qualification_required,salary_min,salary_max,posted_at,clients(company_name)")
+      .select("id,title,job_reference,client_id,status,qualification_required,salary_min,salary_max,posted_at,clients(company_name)")
       .order("posted_at", { ascending: false })
       .limit(500);
     if (scope === "mine") query = query.eq("created_by", userId);
@@ -543,7 +543,7 @@ function Page() {
         client_name: j.clients?.company_name ?? null,
         status: j.status, qualification_required: j.qualification_required,
         salary_min: j.salary_min, salary_max: j.salary_max,
-        posted_at: j.posted_at, pipeline_count: countMap[j.id] ?? 0,
+        posted_at: j.posted_at, job_reference: j.job_reference ?? null, pipeline_count: countMap[j.id] ?? 0,
       })),
     );
     setLoading(false);
@@ -638,6 +638,7 @@ function Page() {
                           <Briefcase className="h-4 w-4 text-navy" />
                         </div>
                         <div className="font-medium">{r.title}</div>
+                        {r.job_reference && <div className="text-[10px] font-mono text-muted-foreground">{r.job_reference}</div>}
                       </div>
                     </td>
                     <td className="py-3 px-3 text-xs text-foreground">{r.client_name ?? "—"}</td>
