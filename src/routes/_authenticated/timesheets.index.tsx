@@ -32,6 +32,7 @@ type Submission = {
 
 const STATUS_CONFIG: Record<string, { label: string; colour: string; dot: string; border: string }> = {
   in_progress:       { label: "Not Complete",      colour: "bg-slate-100 text-slate-600",   dot: "bg-slate-400",   border: "border-l-slate-300" },
+  ready_to_review:   { label: "Ready to review",   colour: "bg-orange-50 text-orange-700",  dot: "bg-orange-400",  border: "border-l-orange-400" },
   awaiting_manager:  { label: "Awaiting Manager",  colour: "bg-amber-50 text-amber-700",    dot: "bg-amber-400",   border: "border-l-amber-400" },
   submitted_to_soar: { label: "Submitted to SOAR", colour: "bg-purple-50 text-purple-700",  dot: "bg-purple-500",  border: "border-l-purple-500" },
   approved:          { label: "Approved",           colour: "bg-teal-50 text-teal-700",      dot: "bg-teal-500",    border: "border-l-teal-500" },

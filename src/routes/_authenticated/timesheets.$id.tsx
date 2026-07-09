@@ -31,10 +31,22 @@ type Submission = {
 
 const STATUS_CONFIG: Record<string, { label: string; colour: string }> = {
   in_progress:       { label: "Not Complete",      colour: "bg-slate-100 text-slate-600" },
+  ready_to_review:   { label: "Ready to review",   colour: "bg-orange-50 text-orange-700" },
   awaiting_manager:  { label: "Awaiting Manager",  colour: "bg-amber-50 text-amber-700" },
   submitted_to_soar: { label: "Submitted to SOAR", colour: "bg-purple-50 text-purple-700" },
   approved:          { label: "Approved",           colour: "bg-teal-50 text-teal-700" },
   paid:              { label: "Paid",               colour: "bg-green-50 text-green-700" },
+};
+
+const SHIFT_STATUS_CONFIG: Record<string, { label: string; colour: string }> = {
+  confirmed:         { label: "Checked in",        colour: "bg-teal-50 text-teal-700" },
+  submitted_to_soar: { label: "Submitted to SOAR", colour: "bg-purple-50 text-purple-700" },
+  awaiting_manager:  { label: "Awaiting Manager",  colour: "bg-amber-50 text-amber-700" },
+  approved:          { label: "Approved",           colour: "bg-teal-50 text-teal-700" },
+  paid:              { label: "Paid",               colour: "bg-green-50 text-green-700" },
+  cancelled:         { label: "Cancelled",          colour: "bg-slate-100 text-slate-500" },
+  not_worked:        { label: "Not worked",         colour: "bg-slate-100 text-slate-500" },
+  unfilled:          { label: "Unfilled",           colour: "bg-slate-100 text-slate-400" },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -289,7 +301,10 @@ export default function TimesheetDetailPage() {
                 <td className="py-3 px-3 text-muted-foreground">{s.break_minutes}m</td>
                 <td className="py-3 px-3 font-semibold">{calcHours(s.submitted_start, s.submitted_end, s.break_minutes) ?? "—"}h</td>
                 <td className="py-3 px-3">
-                  <span className="text-xs capitalize text-muted-foreground">{s.shift_status?.replace(/_/g, " ")}</span>
+                  {(() => {
+                    const cfg = SHIFT_STATUS_CONFIG[s.shift_status] ?? { label: s.shift_status?.replace(/_/g, " ") ?? "—", colour: "bg-slate-100 text-slate-500" };
+                    return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cfg.colour}`}>{cfg.label}</span>;
+                  })()}
                 </td>
               </tr>
             ))}
