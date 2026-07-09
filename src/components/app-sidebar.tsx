@@ -149,12 +149,13 @@ export function AppSidebar() {
       <SidebarHeader className="pt-4 pb-3">
         <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between"} gap-2 px-2`}>
           <div className={`flex items-center gap-3 ${collapsed ? "" : "px-1"}`}>
-            <img
-              src="https://ltpsljknjenpomsxixlx.supabase.co/storage/v1/object/public/brand/favicon-icon.png"
-              alt="Soar"
-              className="w-9 h-9 rounded-xl shrink-0 object-contain bg-navy shadow-sm"
-            />
-            {!collapsed && (
+            {collapsed ? (
+              <img
+                src="https://ltpsljknjenpomsxixlx.supabase.co/storage/v1/object/public/brand/favicon-icon.png"
+                alt="Soar"
+                className="w-9 h-9 rounded-xl shrink-0 object-contain bg-navy shadow-sm"
+              />
+            ) : (
               <img
                 src="https://ltpsljknjenpomsxixlx.supabase.co/storage/v1/object/public/brand/Logo-white.png"
                 alt="Soar Recruitment"
