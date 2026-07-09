@@ -158,7 +158,7 @@ export function AppSidebar() {
               <img
                 src="https://ltpsljknjenpomsxixlx.supabase.co/storage/v1/object/public/brand/Logo-white.png"
                 alt="Soar Recruitment"
-                className="h-7 object-contain object-left max-w-[100px]"
+                className="h-9 object-contain object-left max-w-[140px]"
               />
             )}
           </div>
