@@ -30,8 +30,7 @@ type Submission = {
 };
 
 const STATUS_CONFIG: Record<string, { label: string; colour: string }> = {
-  in_progress:       { label: "In Progress",       colour: "bg-slate-100 text-slate-600" },
-  ready_to_review:   { label: "Ready to Review",   colour: "bg-blue-50 text-blue-700" },
+  in_progress:       { label: "Not Complete",      colour: "bg-slate-100 text-slate-600" },
   awaiting_manager:  { label: "Awaiting Manager",  colour: "bg-amber-50 text-amber-700" },
   submitted_to_soar: { label: "Submitted to SOAR", colour: "bg-purple-50 text-purple-700" },
   approved:          { label: "Approved",           colour: "bg-teal-50 text-teal-700" },
@@ -171,7 +170,7 @@ export default function TimesheetDetailPage() {
               Mark as Paid
             </button>
           )}
-          {(sub.status === "ready_to_review" || sub.status === "awaiting_manager") && !sub.manager_signed_at && (
+          {sub.status === "awaiting_manager" && !sub.manager_signed_at && (
             <button onClick={sendApprovalEmail}
               className="h-9 px-4 rounded-full border text-sm font-medium hover:bg-muted inline-flex items-center gap-1.5">
               <FileText className="h-4 w-4" /> Send manager approval email
