@@ -1,7 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { AlertTriangle, CheckCircle2, Clock, ChevronRight, Filter, Search } from "lucide-react";
+import { AlertTriangle, Clock, ChevronRight, Search, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/timesheets/")({
@@ -24,15 +24,21 @@ type Submission = {
 };
 
 const STATUS_CONFIG: Record<string, { label: string; colour: string }> = {
-  in_progress:      { label: "In Progress",       colour: "bg-slate-100 text-slate-600" },
-  ready_to_review:  { label: "Ready to Review",   colour: "bg-blue-50 text-blue-700" },
-  awaiting_manager: { label: "Awaiting Manager",  colour: "bg-amber-50 text-amber-700" },
-  submitted_to_soar:{ label: "Submitted to SOAR", colour: "bg-purple-50 text-purple-700" },
-  approved:         { label: "Approved",           colour: "bg-teal-50 text-teal-700" },
-  paid:             { label: "Paid",               colour: "bg-green-50 text-green-700" },
+  in_progress:       { label: "In Progress",       colour: "bg-slate-100 text-slate-600" },
+  ready_to_review:   { label: "Ready to Review",   colour: "bg-blue-50 text-blue-700" },
+  awaiting_manager:  { label: "Awaiting Manager",  colour: "bg-amber-50 text-amber-700" },
+  submitted_to_soar: { label: "Submitted to SOAR", colour: "bg-purple-50 text-purple-700" },
+  submitted:         { label: "Submitted",          colour: "bg-purple-50 text-purple-700" },
+  approved:          { label: "Approved",           colour: "bg-teal-50 text-teal-700" },
+  paid:              { label: "Paid",               colour: "bg-green-50 text-green-700" },
 };
 
 const ALL = "__all__";
+
+// Two weeks ago threshold for "past" section
+const TWO_WEEKS_AGO = new Date();
+TWO_WEEKS_AGO.setDate(TWO_WEEKS_AGO.getDate() - 14);
+const TWO_WEEKS_AGO_STR = TWO_WEEKS_AGO.toISOString().slice(0, 10);
 
 function StatusBadge({ status }: { status: string }) {
   const cfg = STATUS_CONFIG[status] ?? { label: status, colour: "bg-slate-100 text-slate-600" };
@@ -43,12 +49,58 @@ function fmtWeek(iso: string) {
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
+function TimesheetRow({ r, onClick }: { r: Submission; onClick: () => void }) {
+  return (
+    <tr
+      onClick={onClick}
+      className="hover:bg-muted/40 transition-colors cursor-pointer"
+    >
+      <td className="py-3 px-4 font-medium">
+        {r.candidates ? `${r.candidates.first_name ?? ""} ${r.candidates.last_name ?? ""}`.trim() : "—"}
+      </td>
+      <td className="py-3 px-3 text-muted-foreground">{r.clients?.company_name ?? "—"}</td>
+      <td className="py-3 px-3 text-muted-foreground">{fmtWeek(r.week_ending)}</td>
+      <td className="py-3 px-3 text-muted-foreground text-xs">{r.role ?? "—"}</td>
+      <td className="py-3 px-3 text-center">{r.shift_count}</td>
+      <td className="py-3 px-3">{r.total_submitted_hours ? `${r.total_submitted_hours}h` : "—"}</td>
+      <td className="py-3 px-3"><StatusBadge status={r.status} /></td>
+      <td className="py-3 px-3">
+        {r.hours_discrepancy && (
+          <span className="inline-flex items-center gap-1 text-xs text-amber-600">
+            <AlertTriangle className="h-3.5 w-3.5" /> Review
+          </span>
+        )}
+      </td>
+      <td className="py-3 px-4">
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-teal-600">
+          View <ChevronRight className="h-3.5 w-3.5" />
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+function TimesheetTable({ rows, navigate, emptyText }: { rows: Submission[]; navigate: (id: string) => void; emptyText: string }) {
+  if (rows.length === 0) {
+    return <tr><td colSpan={9} className="py-10 text-center text-sm text-muted-foreground">{emptyText}</td></tr>;
+  }
+  return (
+    <>
+      {rows.map(r => (
+        <TimesheetRow key={r.id} r={r} onClick={() => navigate(r.id)} />
+      ))}
+    </>
+  );
+}
+
 export default function TimesheetsPage() {
+  const navigate = useNavigate();
   const [rows, setRows] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState(ALL);
   const [discrepancyOnly, setDiscrepancyOnly] = useState(false);
+  const [pastExpanded, setPastExpanded] = useState(false);
 
   useEffect(() => {
     supabase
@@ -72,6 +124,8 @@ export default function TimesheetsPage() {
       });
   }, []);
 
+  const goTo = (id: string) => navigate({ to: "/timesheets/$id", params: { id } });
+
   const filtered = useMemo(() => {
     return rows.filter(r => {
       if (statusFilter !== ALL && r.status !== statusFilter) return false;
@@ -86,11 +140,31 @@ export default function TimesheetsPage() {
     });
   }, [rows, statusFilter, discrepancyOnly, q]);
 
+  // Split into recent (< 2 weeks) and past (>= 2 weeks)
+  const recent = useMemo(() => filtered.filter(r => r.week_ending >= TWO_WEEKS_AGO_STR), [filtered]);
+  const past   = useMemo(() => filtered.filter(r => r.week_ending < TWO_WEEKS_AGO_STR),  [filtered]);
+
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
     rows.forEach(r => { c[r.status] = (c[r.status] ?? 0) + 1; });
     return c;
   }, [rows]);
+
+  const tableHead = (
+    <thead>
+      <tr className="bg-muted/50 border-b">
+        <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Candidate</th>
+        <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Client</th>
+        <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Week ending</th>
+        <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Role</th>
+        <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Shifts</th>
+        <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Hours</th>
+        <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Status</th>
+        <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Flag</th>
+        <th className="py-3 px-4"></th>
+      </tr>
+    </thead>
+  );
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-6 pt-2">
@@ -114,7 +188,7 @@ export default function TimesheetsPage() {
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${statusFilter === ALL ? "bg-navy text-white" : "bg-muted hover:bg-muted/80 text-foreground"}`}>
           All ({rows.length})
         </button>
-        {Object.entries(STATUS_CONFIG).map(([key, cfg]) => counts[key] ? (
+        {Object.entries(STATUS_CONFIG).filter(([key]) => key !== "submitted").map(([key, cfg]) => counts[key] ? (
           <button key={key} onClick={() => setStatusFilter(statusFilter === key ? ALL : key)}
             className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${statusFilter === key ? "bg-navy text-white" : "bg-muted hover:bg-muted/80 text-foreground"}`}>
             {cfg.label} ({counts[key]})
@@ -135,56 +209,56 @@ export default function TimesheetsPage() {
         </button>
       </div>
 
-      {/* Table */}
-      <div className="rounded-2xl border border-border overflow-hidden shadow-[var(--shadow-card)]">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-muted/50 border-b">
-              <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Candidate</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Client</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Week ending</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Role</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Shifts</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Hours</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Status</th>
-              <th className="text-left py-3 px-3 text-xs font-medium text-muted-foreground">Flag</th>
-              <th className="py-3 px-4"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {loading ? (
-              <tr><td colSpan={9} className="py-16 text-center text-muted-foreground">Loading timesheets…</td></tr>
-            ) : filtered.length === 0 ? (
-              <tr><td colSpan={9} className="py-16 text-center text-muted-foreground">No timesheets found</td></tr>
-            ) : filtered.map(r => (
-              <tr key={r.id} className="hover:bg-muted/30 transition-colors">
-                <td className="py-3 px-4 font-medium">
-                  {r.candidates ? `${r.candidates.first_name ?? ""} ${r.candidates.last_name ?? ""}`.trim() : "—"}
-                </td>
-                <td className="py-3 px-3 text-muted-foreground">{r.clients?.company_name ?? "—"}</td>
-                <td className="py-3 px-3 text-muted-foreground">{fmtWeek(r.week_ending)}</td>
-                <td className="py-3 px-3 text-muted-foreground text-xs">{r.role ?? "—"}</td>
-                <td className="py-3 px-3 text-center">{r.shift_count}</td>
-                <td className="py-3 px-3">{r.total_submitted_hours ? `${r.total_submitted_hours}h` : "—"}</td>
-                <td className="py-3 px-3"><StatusBadge status={r.status} /></td>
-                <td className="py-3 px-3">
-                  {r.hours_discrepancy && (
-                    <span className="inline-flex items-center gap-1 text-xs text-amber-600">
-                      <AlertTriangle className="h-3.5 w-3.5" /> Review
-                    </span>
-                  )}
-                </td>
-                <td className="py-3 px-4">
-                  <Link to="/timesheets/$id" params={{ id: r.id }}
-                    className="inline-flex items-center gap-1 text-xs font-medium text-teal-600 hover:underline">
-                    View <ChevronRight className="h-3.5 w-3.5" />
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {/* Recent timesheets */}
+      {loading ? (
+        <div className="rounded-2xl border border-border overflow-hidden shadow-[var(--shadow-card)]">
+          <table className="w-full text-sm">
+            {tableHead}
+            <tbody><tr><td colSpan={9} className="py-16 text-center text-muted-foreground">Loading timesheets…</td></tr></tbody>
+          </table>
+        </div>
+      ) : (
+        <>
+          <div className="rounded-2xl border border-border overflow-hidden shadow-[var(--shadow-card)]">
+            <table className="w-full text-sm">
+              {tableHead}
+              <tbody className="divide-y divide-border">
+                <TimesheetTable
+                  rows={recent}
+                  navigate={goTo}
+                  emptyText={q || statusFilter !== ALL || discrepancyOnly ? "No timesheets match your filters" : "No recent timesheets"}
+                />
+              </tbody>
+            </table>
+          </div>
+
+          {/* Past timesheets (2+ weeks ago) */}
+          {past.length > 0 && (
+            <div className="rounded-2xl border border-border overflow-hidden shadow-[var(--shadow-card)]">
+              {/* Collapsible header */}
+              <button
+                onClick={() => setPastExpanded(e => !e)}
+                className="w-full flex items-center justify-between px-5 py-3.5 bg-muted/40 hover:bg-muted/60 transition-colors text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-muted-foreground">Past timesheets</span>
+                  <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{past.length}</span>
+                </div>
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${pastExpanded ? "rotate-180" : ""}`} />
+              </button>
+
+              {pastExpanded && (
+                <table className="w-full text-sm">
+                  {tableHead}
+                  <tbody className="divide-y divide-border">
+                    <TimesheetTable rows={past} navigate={goTo} emptyText="No past timesheets" />
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
