@@ -349,7 +349,7 @@ export default function TimesheetsPage() {
           </button>
           {(counts["submitted_to_soar"] ?? 0) > 0 && (
             <button onClick={() => setStatusFilter("submitted_to_soar")}
-              className="inline-flex items-center gap-2 h-9 px-4 rounded-full bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 transition-colors">
+              className="inline-flex items-center gap-2 h-9 px-4 rounded-full bg-teal text-white text-sm font-medium hover:bg-teal/90 transition-colors">
               <Clock className="h-4 w-4" /> {counts["submitted_to_soar"]} to approve
             </button>
           )}
