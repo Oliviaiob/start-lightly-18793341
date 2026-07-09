@@ -176,6 +176,7 @@ function Dashboard() {
       const endOfWeek = new Date(startOfWeek);
       endOfWeek.setDate(startOfWeek.getDate() + 7);
       const today = now.toISOString().slice(0, 10);
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       const startMonthDate = startOfMonth.toISOString().slice(0, 10);
       const endMonthDate = endOfMonth.toISOString().slice(0, 10);
       const weekStartDate = startOfWeek.toISOString().slice(0, 10);
@@ -228,9 +229,9 @@ function Dashboard() {
             .select(
               "id, interview_date, interview_time, interview_type, pipeline:job_pipeline!pipeline_id(candidate:candidates(id, first_name, last_name), job:jobs(id, title, client:clients(company_name)))",
             )
-            .gte("interview_date", today)
-            .order("interview_date", { ascending: true })
-            .order("interview_time", { ascending: true })
+            .gte("interview_date", sevenDaysAgo)
+            .order("interview_date", { ascending: false })
+            .order("interview_time", { ascending: false })
             .limit(5),
         ),
         withScope(
@@ -313,11 +314,11 @@ function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="p-5 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold">Upcoming Interviews</h2>
+            <h2 className="font-semibold">Recent & Upcoming Interviews</h2>
             <Link to="/interviews" className="text-xs text-muted-foreground hover:text-foreground">View all</Link>
           </div>
           {interviews.length === 0 ? (
-            <div className="text-sm text-muted-foreground py-6 text-center">No upcoming interviews</div>
+            <div className="text-sm text-muted-foreground py-6 text-center">No interviews in the last 7 days</div>
           ) : (
             <ul className="divide-y">
               {interviews.map((i) => {
