@@ -21,7 +21,7 @@ function InboxPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [channel, setChannel] = useState<"app" | "internal" | "whatsapp" | "sms">("app");
-  const [inboxFilter, setInboxFilter] = useState<"all" | "mine">("all");
+  const [inboxFilter, setInboxFilter] = useState<"all" | "mine">("mine");
   const [sending, setSending] = useState(false);
   const [search, setSearch] = useState("");
   const [userId, setUserId] = useState<string | null>(null);
@@ -169,8 +169,10 @@ function InboxPage() {
         <div className="px-4 py-4 border-b border-border/40">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
-              <button onClick={() => setInboxFilter("all")} className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${inboxFilter === "all" ? "bg-card shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>All</button>
-              <button onClick={() => setInboxFilter("mine")} className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${inboxFilter === "mine" ? "bg-card shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>Mine</button>
+              <div className="flex items-center gap-0.5 bg-muted/60 rounded-full p-0.5">
+                <button onClick={() => setInboxFilter("mine")} className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${inboxFilter === "mine" ? "bg-teal text-white shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>Mine</button>
+                <button onClick={() => setInboxFilter("all")} className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${inboxFilter === "all" ? "bg-teal text-white shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>All</button>
+              </div>
             </div>
             <button
               onClick={() => setComposeOpen(v => !v)}

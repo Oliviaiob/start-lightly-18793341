@@ -218,6 +218,7 @@ function Page() {
   const [showClients, setShowClients] = useState(true);
   const [mapReady, setMapReady] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<MapCandidate | null>(null);
+  const [showRouteChecker, setShowRouteChecker] = useState(false);
   // Keep a ref to setSelectedCandidate for use inside Leaflet callbacks
   const setSelectedRef = useRef(setSelectedCandidate);
   useEffect(() => { setSelectedRef.current = setSelectedCandidate; }, []);
