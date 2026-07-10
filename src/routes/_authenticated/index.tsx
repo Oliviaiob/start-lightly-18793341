@@ -11,6 +11,7 @@ import {
   CalendarRange,
   Trophy,
   ShieldAlert,
+  Inbox,
   ArrowUpRight,
   Star,
   Activity as ActivityIcon,
@@ -29,6 +30,7 @@ type Stats = {
   tempBookedThisWeek: number;
   placementsThisMonth: number;
   pendingCompliance: number;
+  applicationsToday: number;
 };
 
 type InterviewRow = {
@@ -139,6 +141,7 @@ function Dashboard() {
     tempBookedThisWeek: 0,
     placementsThisMonth: 0,
     pendingCompliance: 0,
+    applicationsToday: 0,
   });
   const [interviews, setInterviews] = useState<InterviewRow[]>([]);
   const [shifts, setShifts] = useState<ShiftRow[]>([]);
@@ -193,6 +196,7 @@ function Dashboard() {
         upcomingShiftsRes,
         starredRes,
         activityRes,
+        applicationsRes,
       ] = await Promise.all([
         withScope(supabase.from("candidates").select("id", { count: "exact", head: true })),
         withScope(supabase.from("jobs").select("id", { count: "exact", head: true }).in("status", ["Live", "Interviewing"])),
@@ -256,6 +260,10 @@ function Dashboard() {
           .select("id, activity_type, description, entity_type, created_at")
           .order("created_at", { ascending: false })
           .limit(10),
+        supabase
+          .from("job_site_applications")
+          .select("id", { count: "exact", head: true })
+          .gte("submitted_at", new Date().toISOString().slice(0, 10)),
       ]);
 
       setStats({
@@ -265,6 +273,7 @@ function Dashboard() {
         tempBookedThisWeek: shiftsWeekRes.count || 0,
         placementsThisMonth: placementsMonthRes.count || 0,
         pendingCompliance: pendingComplianceRes.count || 0,
+        applicationsToday: applicationsRes.count || 0,
       });
       setInterviews((upcomingInterviewsRes.data as unknown as InterviewRow[]) || []);
       setShifts((upcomingShiftsRes.data as unknown as ShiftRow[]) || []);
@@ -302,13 +311,14 @@ function Dashboard() {
         </div>
       </Card>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
         <StatCard to="/candidates" label="Active Candidates" value={loading ? "…" : stats.activeCandidates} icon={Users} accent="navy" />
         <StatCard to="/jobs" label="Open Jobs" value={loading ? "…" : stats.openJobs} icon={Briefcase} accent="navy" />
         <StatCard to="/interviews" label="Interviews / Month" value={loading ? "…" : stats.interviewsThisMonth} icon={CalendarCheck} accent="teal" />
         <StatCard to="/bookings" label="Temp / Week" value={loading ? "…" : stats.tempBookedThisWeek} icon={CalendarRange} accent="teal" />
         <StatCard to="/placements" label="Placements / Month" value={loading ? "…" : stats.placementsThisMonth} icon={Trophy} accent="success" />
         <StatCard to="/compliance" label="Pending Compliance" value={loading ? "…" : stats.pendingCompliance} icon={ShieldAlert} accent="warning" />
+        <StatCard to="/applications" label="Applications Today" value={loading ? "…" : stats.applicationsToday} icon={Inbox} accent="teal" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -29,6 +29,7 @@ import { Route as AuthenticatedComplianceRouteImport } from './routes/_authentic
 import { Route as AuthenticatedClientsRouteImport } from './routes/_authenticated/clients'
 import { Route as AuthenticatedCandidatesRouteImport } from './routes/_authenticated/candidates'
 import { Route as AuthenticatedBookingsRouteImport } from './routes/_authenticated/bookings'
+import { Route as AuthenticatedApplicationsRouteImport } from './routes/_authenticated/applications'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
 import { Route as AuthenticatedTimesheetsIndexRouteImport } from './routes/_authenticated/timesheets.index'
 import { Route as AuthenticatedJobsIndexRouteImport } from './routes/_authenticated/jobs.index'
@@ -143,6 +144,12 @@ const AuthenticatedBookingsRoute = AuthenticatedBookingsRouteImport.update({
   path: '/bookings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedApplicationsRoute =
+  AuthenticatedApplicationsRouteImport.update({
+    id: '/applications',
+    path: '/applications',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedAccountRoute = AuthenticatedAccountRouteImport.update({
   id: '/account',
   path: '/account',
@@ -228,6 +235,7 @@ export interface FileRoutesByFullPath {
   '/apply': typeof ApplyRouteWithChildren
   '/auth': typeof AuthRoute
   '/account': typeof AuthenticatedAccountRoute
+  '/applications': typeof AuthenticatedApplicationsRoute
   '/bookings': typeof AuthenticatedBookingsRouteWithChildren
   '/candidates': typeof AuthenticatedCandidatesRouteWithChildren
   '/clients': typeof AuthenticatedClientsRouteWithChildren
@@ -261,6 +269,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/account': typeof AuthenticatedAccountRoute
+  '/applications': typeof AuthenticatedApplicationsRoute
   '/inbox': typeof AuthenticatedInboxRoute
   '/interviews': typeof AuthenticatedInterviewsRoute
   '/map': typeof AuthenticatedMapRoute
@@ -292,6 +301,7 @@ export interface FileRoutesById {
   '/apply': typeof ApplyRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/account': typeof AuthenticatedAccountRoute
+  '/_authenticated/applications': typeof AuthenticatedApplicationsRoute
   '/_authenticated/bookings': typeof AuthenticatedBookingsRouteWithChildren
   '/_authenticated/candidates': typeof AuthenticatedCandidatesRouteWithChildren
   '/_authenticated/clients': typeof AuthenticatedClientsRouteWithChildren
@@ -330,6 +340,7 @@ export interface FileRouteTypes {
     | '/apply'
     | '/auth'
     | '/account'
+    | '/applications'
     | '/bookings'
     | '/candidates'
     | '/clients'
@@ -363,6 +374,7 @@ export interface FileRouteTypes {
   to:
     | '/auth'
     | '/account'
+    | '/applications'
     | '/inbox'
     | '/interviews'
     | '/map'
@@ -393,6 +405,7 @@ export interface FileRouteTypes {
     | '/apply'
     | '/auth'
     | '/_authenticated/account'
+    | '/_authenticated/applications'
     | '/_authenticated/bookings'
     | '/_authenticated/candidates'
     | '/_authenticated/clients'
@@ -573,6 +586,13 @@ declare module '@tanstack/react-router' {
       path: '/bookings'
       fullPath: '/bookings'
       preLoaderRoute: typeof AuthenticatedBookingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/applications': {
+      id: '/_authenticated/applications'
+      path: '/applications'
+      fullPath: '/applications'
+      preLoaderRoute: typeof AuthenticatedApplicationsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/account': {
@@ -769,6 +789,7 @@ const AuthenticatedTimesheetsRouteWithChildren =
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAccountRoute: typeof AuthenticatedAccountRoute
+  AuthenticatedApplicationsRoute: typeof AuthenticatedApplicationsRoute
   AuthenticatedBookingsRoute: typeof AuthenticatedBookingsRouteWithChildren
   AuthenticatedCandidatesRoute: typeof AuthenticatedCandidatesRouteWithChildren
   AuthenticatedClientsRoute: typeof AuthenticatedClientsRouteWithChildren
@@ -786,6 +807,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAccountRoute: AuthenticatedAccountRoute,
+  AuthenticatedApplicationsRoute: AuthenticatedApplicationsRoute,
   AuthenticatedBookingsRoute: AuthenticatedBookingsRouteWithChildren,
   AuthenticatedCandidatesRoute: AuthenticatedCandidatesRouteWithChildren,
   AuthenticatedClientsRoute: AuthenticatedClientsRouteWithChildren,

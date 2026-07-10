@@ -18,6 +18,7 @@ import {
   Building,
   Sparkles,
   MessageSquare,
+  FileStack,
   ClipboardList,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -54,6 +55,7 @@ const recruitment: NavItem[] = [
   { title: "Clients", url: "/clients", icon: Building2 },
   { title: "Jobs", url: "/jobs", icon: Briefcase },
   { title: "Interviews", url: "/interviews", icon: CalendarCheck },
+  { title: "Applications", url: "/applications", icon: FileStack },
 ];
 const operations: NavItem[] = [
   { title: "Booking Board", url: "/bookings", icon: CalendarRange },
