@@ -127,11 +127,18 @@ function InboxPage() {
   const sendMsg = async () => {
     if (!input.trim() || !selected || !userId) return;
     setSending(true);
+    const content = input.trim();
     try {
       const { error } = await supabase.functions.invoke("send-message", {
-        body: { candidate_id: selected, recruiter_id: userId, content: input.trim(), channel, candidate_phone: selectedCandidate?.phone },
+        body: { candidate_id: selected, recruiter_id: userId, content, channel, candidate_phone: selectedCandidate?.phone },
       });
       if (error) throw error;
+      // Fire push notification for app channel (non-blocking)
+      if (channel === "app") {
+        supabase.functions.invoke("send-push-notification", {
+          body: { candidate_id: selected, title: "New message from SOAR", body: content },
+        }).catch(console.error);
+      }
       setInput("");
       loadMessages(selected);
     } catch { toast.error("Failed to send message"); }
