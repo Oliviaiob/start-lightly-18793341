@@ -91,6 +91,7 @@ type Candidate = {
   expected_salary: number | null;
   created_by: string | null;
   created_at: string | null;
+  assigned_recruiter_id: string | null;
 };
 
 type Note = {
@@ -244,6 +245,7 @@ function Page() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [recruiters, setRecruiters] = useState<{id: string; display_name: string | null; first_name: string | null; last_name: string | null}[]>([]);
   const [placements, setPlacements] = useState<Placement[]>([]);
   const [pipeline, setPipeline] = useState<PipelineRow[]>([]);
   const [docs, setDocs] = useState<Doc[]>([]);
@@ -417,6 +419,14 @@ function Page() {
           .limit(500);
         setClients((cs as Client[]) || []);
       }
+
+      // Load all recruiter profiles for the dropdown
+      const { data: recProfs } = await supabase
+        .from("profiles")
+        .select("id, display_name, first_name, last_name")
+        .eq("is_active", true)
+        .order("first_name");
+      setRecruiters((recProfs as any[]) || []);
 
       setLoading(false);
     })();
@@ -598,6 +608,24 @@ function Page() {
               {creatorName && (
                 <div className="mt-2 text-[11px] text-navy-foreground/60">Created by {creatorName}</div>
               )}
+              <div className="mt-2.5 flex items-center gap-2">
+                <span className="text-[11px] text-navy-foreground/60 shrink-0">Assigned to</span>
+                <select
+                  className="h-6 text-[11px] font-medium rounded-full bg-white/10 border border-white/15 text-navy-foreground px-2 pr-6 focus:outline-none focus:ring-1 focus:ring-white/30 cursor-pointer appearance-none"
+                  value={(c as any).assigned_recruiter_id ?? ""}
+                  onChange={async e => {
+                    const val = e.target.value || null;
+                    await patch({ assigned_recruiter_id: val } as any);
+                  }}
+                >
+                  <option value="">Unassigned</option>
+                  {recruiters.map(r => (
+                    <option key={r.id} value={r.id}>
+                      {r.display_name ?? `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || "Unnamed"}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 

@@ -12,7 +12,8 @@ import { Card } from "@/components/ui/card";
 export const Route = createFileRoute("/_authenticated/settings")({ component: SettingsPage });
 
 interface Profile { id: string; first_name: string | null; last_name: string | null; display_name: string | null; job_title: string | null; phone: string | null; email: string | null; is_active: boolean | null; }
-interface AgencySettings { id: string; agency_name: string | null; address_line1: string | null; address_line2: string | null; city: string | null; postcode: string | null; phone: string | null; email: string | null; logo_url: string | null; }
+interface AgencySettings { id: string; agency_name: string | null; address_line1: string | null; address_line2: string | null; city: string | null; postcode: string | null; phone: string | null; email: string | null; logo_url: string | null; default_placement_recruiter_id: string | null; }
+interface RecruiterOption { id: string; display_name: string | null; first_name: string | null; last_name: string | null; is_ai: boolean | null; }
 interface TeamMember { id: string; first_name: string | null; last_name: string | null; display_name: string | null; email: string | null; job_title: string | null; is_active: boolean | null; role: string; }
 
 const INPUT = "flex h-10 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-teal/50 focus:border-teal disabled:opacity-50 disabled:cursor-not-allowed transition-colors";
@@ -35,6 +36,9 @@ function SettingsPage() {
 
   // Agency
   const [agency, setAgency] = useState<AgencySettings | null>(null);
+  const [recruiterOptions, setRecruiterOptions] = useState<RecruiterOption[]>([]);
+  const [defaultRecruiterId, setDefaultRecruiterId] = useState<string>("");
+  const [savingDefaultRecruiter, setSavingDefaultRecruiter] = useState(false);
   const [ag, setAg] = useState({ agency_name: "", address_line1: "", address_line2: "", city: "", postcode: "", phone: "", email: "" });
   const [savingAgency, setSavingAgency] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -73,8 +77,17 @@ function SettingsPage() {
   };
 
   const loadAgency = async () => {
-    const { data } = await supabase.from("agency_settings").select("*").maybeSingle();
-    if (data) { setAgency(data as AgencySettings); setAg({ agency_name: data.agency_name ?? "", address_line1: data.address_line1 ?? "", address_line2: data.address_line2 ?? "", city: data.city ?? "", postcode: data.postcode ?? "", phone: data.phone ?? "", email: data.email ?? "" }); if (data.logo_url) setLogoPreview(data.logo_url); }
+    const [{ data }, { data: recProfs }] = await Promise.all([
+      supabase.from("agency_settings").select("*").maybeSingle(),
+      supabase.from("profiles").select("id, display_name, first_name, last_name, is_ai").eq("is_active", true).order("first_name"),
+    ]);
+    if (data) {
+      setAgency(data as AgencySettings);
+      setAg({ agency_name: data.agency_name ?? "", address_line1: data.address_line1 ?? "", address_line2: data.address_line2 ?? "", city: data.city ?? "", postcode: data.postcode ?? "", phone: data.phone ?? "", email: data.email ?? "" });
+      if (data.logo_url) setLogoPreview(data.logo_url);
+      setDefaultRecruiterId((data as any).default_placement_recruiter_id ?? "");
+    }
+    setRecruiterOptions((recProfs as RecruiterOption[]) || []);
   };
 
   const loadTeam = async () => {
@@ -160,6 +173,14 @@ function SettingsPage() {
     setTogglingId(null);
     toast.success(action === "reactivate" ? "User reactivated" : "User deactivated");
     loadTeam();
+  };
+
+  const saveDefaultRecruiter = async () => {
+    if (!agency) return;
+    setSavingDefaultRecruiter(true);
+    await supabase.from("agency_settings").update({ default_placement_recruiter_id: defaultRecruiterId || null }).eq("id", agency.id);
+    setSavingDefaultRecruiter(false);
+    toast.success("Default placement recruiter saved");
   };
 
   if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
@@ -249,6 +270,31 @@ function SettingsPage() {
             <button className={SAVE_BTN} onClick={saveAgency} disabled={savingAgency}>
               {savingAgency && <Loader2 className="h-4 w-4 animate-spin" />} Save Agency Details
             </button>
+          </div>
+
+          <div className="border-t border-border pt-5">
+            <h3 className="text-sm font-semibold text-foreground mb-1">Default Placement Recruiter</h3>
+            <p className="text-xs text-muted-foreground mb-3">Automatically assigned to candidates when compliance is completed.</p>
+            <div className="flex items-end gap-3">
+              <div className="flex-1">
+                <select
+                  className={INPUT}
+                  value={defaultRecruiterId}
+                  onChange={e => setDefaultRecruiterId(e.target.value)}
+                >
+                  <option value="">— None —</option>
+                  {recruiterOptions.map(r => (
+                    <option key={r.id} value={r.id}>
+                      {r.display_name ?? `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || "Unnamed"}
+                      {r.is_ai ? " (AI)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button className={SAVE_BTN} onClick={saveDefaultRecruiter} disabled={savingDefaultRecruiter}>
+                {savingDefaultRecruiter && <Loader2 className="h-4 w-4 animate-spin" />} Save
+              </button>
+            </div>
           </div>
         </Card>
       )}
