@@ -621,7 +621,7 @@ function Page() {
                   <option value="">Unassigned</option>
                   {recruiters.map(r => (
                     <option key={r.id} value={r.id}>
-                      {r.display_name ?? `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || "Unnamed"}
+                      {r.display_name ?? (`${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || "Unnamed")}
                     </option>
                   ))}
                 </select>
