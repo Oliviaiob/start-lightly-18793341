@@ -273,7 +273,7 @@ function SettingsPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">
-                        {m.display_name ?? `${m.first_name ?? ""} ${m.last_name ?? ""}`.trim() || "Unnamed"}
+                        {m.display_name ?? (`${m.first_name ?? ""} ${m.last_name ?? ""}`.trim() || "Unnamed")}
                         {m.id === userId && <span className="ml-1.5 text-xs text-muted-foreground font-normal">(you)</span>}
                       </div>
                       <div className="text-xs text-muted-foreground truncate">{m.email}</div>
