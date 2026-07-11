@@ -285,6 +285,7 @@ function SammiePage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [attachedFile, setAttachedFile] = useState<{ name: string; content: string } | null>(null);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
@@ -342,12 +343,21 @@ function SammiePage() {
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || loading) return;
+    const fileCtx = attachedFile
+      ? `\n\n[Attached file: ${attachedFile.name}]\n${attachedFile.content}`
+      : "";
+    const fullText = text + fileCtx;
     const userMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", content: text, timestamp: new Date() };
     setMessages(prev => [...prev, userMsg]);
     setInput("");
+    setAttachedFile(null);
     setLoading(true);
 
-    const history = [...messages, userMsg].map(m => ({ role: m.role === "sammie" ? "assistant" : "user", content: m.content }));
+    const history = [...messages, userMsg].map((m, i, arr) =>
+      i === arr.length - 1 && fileCtx
+        ? { role: "user", content: fullText }
+        : { role: m.role === "sammie" ? "assistant" : "user", content: m.content }
+    );
 
     try {
       const { data, error } = await supabase.functions.invoke("sammie-chat", { body: { messages: history } });
@@ -393,6 +403,14 @@ function SammiePage() {
         };
         setMessages(prev => [...prev, sammieMsg]);
         setDrawer({ type: "draft", candidates: [], jobs: [], boolean: null, draft: { subject: data.params.subject, body: data.params.draft_body }, searchBullets: [], title: "Draft" });
+      } else if (data.type === "create_candidate") {
+        const sammieMsg: ChatMessage = {
+          id: crypto.randomUUID(), role: "sammie",
+          content: data.params.summary ?? `Done! I've added ${data.params.first_name} ${data.params.last_name} to the CRM.`,
+          timestamp: new Date(),
+          pills: data.candidate_id ? [{ label: "Open profile", sendText: `__nav:/candidates/${data.candidate_id}` }] : undefined,
+        };
+        setMessages(prev => [...prev, sammieMsg]);
       } else {
         setMessages(prev => [...prev, { id: crypto.randomUUID(), role: "sammie", content: data.content ?? "...", timestamp: new Date() }]);
       }
@@ -503,7 +521,13 @@ function SammiePage() {
                     {msg.pills.map(pill => (
                       <button
                         key={pill.label}
-                        onClick={() => sendMessage(pill.sendText)}
+                        onClick={() => {
+                          if (pill.sendText.startsWith("__nav:")) {
+                            navigate({ to: pill.sendText.replace("__nav:", "") });
+                          } else {
+                            sendMessage(pill.sendText);
+                          }
+                        }}
                         className="inline-flex items-center h-8 px-3 rounded-full border border-teal/40 bg-teal/5 text-xs font-medium text-foreground hover:bg-teal/15 hover:border-teal/60 transition-all"
                       >
                         {pill.label}
@@ -547,8 +571,30 @@ function SammiePage() {
               onInput={e => { const t = e.target as HTMLTextAreaElement; t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 128) + "px"; }}
               disabled={loading}
             />
+            {attachedFile && (
+              <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-border/40">
+                <span className="inline-flex items-center gap-1.5 bg-teal/15 text-teal text-[11px] font-medium px-2.5 py-1 rounded-full max-w-[320px] min-w-0">
+                  <Paperclip className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{attachedFile.name}</span>
+                  <button onClick={() => setAttachedFile(null)} className="ml-0.5 shrink-0 hover:text-destructive transition-colors">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              </div>
+            )}
             <div className="flex items-center gap-1.5 shrink-0">
-              <input ref={fileRef} type="file" className="hidden" accept=".pdf,.doc,.docx,.txt" onChange={() => toast.info("File attached — mention it in your message")} />
+              <input ref={fileRef} type="file" className="hidden" accept=".pdf,.doc,.docx,.txt" onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                  const text = typeof ev.target?.result === "string" ? ev.target.result : "";
+                  setAttachedFile({ name: file.name, content: text.slice(0, 8000) });
+                };
+                reader.readAsText(file);
+                // reset so same file can be re-selected
+                e.target.value = "";
+              }} />
               <button onClick={() => fileRef.current?.click()} className="h-8 w-8 rounded-lg hover:bg-muted transition-colors grid place-items-center text-muted-foreground" title="Attach file">
                 <Paperclip className="h-4 w-4" />
               </button>
