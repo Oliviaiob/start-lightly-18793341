@@ -659,7 +659,7 @@ function Page() {
               <GenerateCVModal open={cvOpen} onClose={() => setCvOpen(false)} candidate={c} />
             )}
             {chatOpen && c && (
-              <ChatDrawer candidateId={c.id} candidateName={`${c.first_name ?? ""} ${c.last_name ?? ""}`.trim()} candidatePhone={c.phone ?? null} onClose={() => setChatOpen(false)} />
+              <ChatDrawer candidateId={c.id} candidateName={`${c.first_name ?? ""} ${c.last_name ?? ""}`.trim()} candidatePhone={c.phone ?? null} isTemp={isTemp} onClose={() => setChatOpen(false)} />
             )}
             {wpOpen && c && isTemp && (
               <GenerateWorkerProfileModal open={wpOpen} onClose={() => setWpOpen(false)} candidate={c} />
@@ -2265,18 +2265,6 @@ function MessagesTab({ candidateId, candidatePhone, isTemp }: { candidateId: str
 
   return (
     <div className="flex flex-col h-full">
-      {/* Channel selector */}
-      <div className="flex items-center gap-2 flex-wrap px-5 pt-4 pb-3 shrink-0">
-        <span className="text-[11px] font-medium text-gray-500">Reply via:</span>
-        {channels.map(ch => (
-          <button key={ch} onClick={() => setChannel(ch)}
-            className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11px] font-medium border transition-colors ${channel === ch ? "bg-navy border-navy text-white" : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"}`}>
-            <ChannelIcon ch={ch} size={14} />
-            {ch === "app" ? "App" : ch === "sms" ? "SMS" : "WhatsApp"}
-          </button>
-        ))}
-      </div>
-
       {/* Message thread — scrollable */}
       <div className="flex-1 overflow-y-auto flex flex-col gap-2 px-5 py-2 min-h-0">
         {messages.length === 0 && (
@@ -2300,8 +2288,18 @@ function MessagesTab({ candidateId, candidatePhone, isTemp }: { candidateId: str
         <div ref={bottomRef} />
       </div>
 
-      {/* Compose — pinned to bottom */}
-      <div className="shrink-0 border-t border-gray-100 px-5 py-4">
+      {/* Channel selector + Compose — pinned to bottom */}
+      <div className="shrink-0 border-t border-gray-100 px-5 pt-3 pb-4 space-y-2.5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] font-medium text-gray-500">Reply via:</span>
+          {channels.map(ch => (
+            <button key={ch} onClick={() => setChannel(ch)}
+              className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11px] font-medium border transition-colors ${channel === ch ? "bg-navy border-navy text-white" : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"}`}>
+              <ChannelIcon ch={ch} size={14} />
+              {ch === "app" ? "App" : ch === "sms" ? "SMS" : "WhatsApp"}
+            </button>
+          ))}
+        </div>
         <div className="flex items-end gap-2 bg-white rounded-xl border border-gray-200 focus-within:border-teal focus-within:ring-2 focus-within:ring-teal/10 transition-all px-4 py-2.5">
           <textarea value={input} onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
