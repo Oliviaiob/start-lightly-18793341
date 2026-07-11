@@ -1029,11 +1029,37 @@ const EMPTY_FORM: AddRefereeForm = {
   reason_for_leaving: "", relationship_to_candidate: "", known_duration: "",
 };
 
-const CHASE_STAGE_LABELS = [
-  "Request sent",
-  "Day 2 reminder sent", "Day 4 reminder sent", "Day 5 reminder sent",
-  "Day 7 reminder sent", "Day 10 reminder sent", "Day 14 final reminder sent",
+// Chase schedule offsets in days from requested_at
+const CHASE_DAYS = [0, 2, 4, 5, 7, 10, 14];
+const CHASE_LABELS = [
+  "Initial request",
+  "1st chase", "2nd chase", "3rd chase", "4th chase", "5th chase", "Final chase",
 ];
+
+function addDays(date: Date, days: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function buildEmailTimeline(ref: ReferenceRecord): { label: string; date: Date }[] {
+  if (!ref.requested_at) return [];
+  const base = new Date(ref.requested_at);
+  const stage = ref.reminder_stage ?? 0;
+  const stages = stage === 99 ? CHASE_DAYS.length : Math.min(stage + 1, CHASE_DAYS.length);
+  const timeline: { label: string; date: Date }[] = [];
+  for (let i = 0; i < stages; i++) {
+    timeline.push({ label: CHASE_LABELS[i], date: addDays(base, CHASE_DAYS[i]) });
+  }
+  if (ref.received_at) {
+    timeline.push({ label: "Reference received", date: new Date(ref.received_at) });
+  }
+  return timeline;
+}
+
+function fmtShort(d: Date) {
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
 
 function RefField({ label, value, onChange, type = "text", disabled = false, placeholder = "" }: {
   label: string; value: string; onChange: (v: string) => void;
@@ -1041,10 +1067,10 @@ function RefField({ label, value, onChange, type = "text", disabled = false, pla
 }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
+      <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)}
         disabled={disabled} placeholder={placeholder}
-        className="w-full h-8 px-3 rounded-lg border border-border text-sm bg-background focus:outline-none focus:ring-1 focus:ring-teal/40 disabled:opacity-40" />
+        className="w-full h-8 px-3 rounded-lg border border-gray-300 text-sm text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-teal-400 disabled:opacity-40" />
     </div>
   );
 }
@@ -1058,20 +1084,21 @@ function ReferencesTracker({ candidateId, references, onRefresh }: {
   const [form, setForm] = useState<AddRefereeForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
 
-  // Per-row edit state
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<Partial<AddRefereeForm & { referee_email: string }>>({});
+  const [editForm, setEditForm] = useState<Partial<AddRefereeForm>>({});
   const [editSaving, setEditSaving] = useState(false);
 
-  // Per-row email update state
   const [emailRowId, setEmailRowId] = useState<string | null>(null);
   const [newEmail, setNewEmail] = useState("");
   const [emailSending, setEmailSending] = useState(false);
 
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [sendingId, setSendingId] = useState<string | null>(null);
+
   const set = (k: keyof AddRefereeForm, v: string | boolean) =>
     setForm(prev => ({ ...prev, [k]: v }));
 
-  const setEdit = (k: keyof typeof editForm, v: string | boolean) =>
+  const setEdit = (k: keyof AddRefereeForm, v: string | boolean) =>
     setEditForm(prev => ({ ...prev, [k]: v }));
 
   const startEdit = (ref: ReferenceRecord) => {
@@ -1097,8 +1124,8 @@ function ReferencesTracker({ candidateId, references, onRefresh }: {
     if (!editForm.referee_name?.trim()) { toast.error("Referee name is required"); return; }
     setEditSaving(true);
     try {
-      const payload: Record<string, unknown> = {
-        referee_name:              editForm.referee_name ?? ref.referee_name,
+      const { error } = await supabase.from("references" as any).update({
+        referee_name:              editForm.referee_name,
         referee_phone:             editForm.referee_phone || null,
         referee_job_title:         editForm.referee_job_title || null,
         company_name:              editForm.company_name || null,
@@ -1109,8 +1136,7 @@ function ReferencesTracker({ candidateId, references, onRefresh }: {
         reason_for_leaving:        editForm.reason_for_leaving || null,
         relationship_to_candidate: editForm.relationship_to_candidate || null,
         known_duration:            editForm.known_duration || null,
-      };
-      const { error } = await supabase.from("references").update(payload).eq("id", ref.id);
+      }).eq("id", ref.id);
       if (error) throw error;
       toast.success("Referee details updated");
       setEditingId(null);
@@ -1138,6 +1164,21 @@ function ReferencesTracker({ candidateId, references, onRefresh }: {
       toast.error("Failed: " + (e instanceof Error ? e.message : String(e)));
     } finally {
       setEmailSending(false);
+    }
+  };
+
+  const sendRequest = async (ref: ReferenceRecord) => {
+    if (!ref.referee_email) { toast.error("No email address on this reference."); return; }
+    setSendingId(ref.id);
+    try {
+      const { error } = await supabase.functions.invoke("send-reference-request", { body: { reference_id: ref.id } });
+      if (error) throw error;
+      toast.success(`Request sent to ${ref.referee_name ?? ref.referee_email}`);
+      await onRefresh();
+    } catch (e: unknown) {
+      toast.error("Failed: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setSendingId(null);
     }
   };
 
@@ -1181,13 +1222,15 @@ function ReferencesTracker({ candidateId, references, onRefresh }: {
   };
 
   return (
-    <div className="bg-card rounded-2xl shadow-[var(--shadow-card)] overflow-hidden">
-      <div className="px-6 py-4 border-b bg-muted/10 flex items-center justify-between">
-        <h2 className="font-semibold text-sm">References Tracker</h2>
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+        <h2 className="font-semibold text-sm text-gray-900">References Tracker</h2>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground">{references.length} referee{references.length !== 1 ? "s" : ""}</span>
-          <button onClick={() => { setShowForm(v => !v); setEditingId(null); setEmailRowId(null); }}
-            className="inline-flex items-center gap-1 h-7 px-3 rounded-lg border text-xs font-medium hover:bg-muted/40 transition-colors">
+          <span className="text-xs text-gray-500">{references.length} referee{references.length !== 1 ? "s" : ""}</span>
+          <button
+            onClick={() => { setShowForm(v => !v); setEditingId(null); setEmailRowId(null); }}
+            className="inline-flex items-center gap-1.5 h-7 px-3 rounded-lg border border-gray-300 bg-white text-gray-700 text-xs font-medium hover:bg-gray-50 transition-colors">
             {showForm ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
             {showForm ? "Cancel" : "Add Referee"}
           </button>
@@ -1196,14 +1239,15 @@ function ReferencesTracker({ candidateId, references, onRefresh }: {
 
       {/* Add Referee Form */}
       {showForm && (
-        <div className="px-6 py-5 border-b bg-muted/5 space-y-4">
+        <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50 space-y-4">
+          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">New referee</p>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <label className="block text-xs font-medium text-muted-foreground mb-1">Reference Type</label>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Reference Type</label>
               <div className="flex gap-2">
                 {(["work", "character"] as const).map(t => (
                   <button key={t} onClick={() => set("ref_type", t)}
-                    className={`h-7 px-3 rounded-lg border text-xs font-medium transition-colors ${form.ref_type === t ? "bg-navy text-white border-navy" : "border-border hover:bg-muted/40"}`}>
+                    className={`h-7 px-3 rounded-lg border text-xs font-medium transition-colors ${form.ref_type === t ? "bg-[#1B2B4B] text-white border-[#1B2B4B]" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}>
                     {t === "work" ? "Work / Professional" : "Character"}
                   </button>
                 ))}
@@ -1221,8 +1265,8 @@ function ReferencesTracker({ candidateId, references, onRefresh }: {
               <div className="flex items-center gap-2 pt-1">
                 <input type="checkbox" id="add_current_role" checked={form.is_current_role}
                   onChange={e => { set("is_current_role", e.target.checked); if (e.target.checked) set("employment_end_date", ""); }}
-                  className="h-4 w-4 rounded border-border" />
-                <label htmlFor="add_current_role" className="text-xs text-muted-foreground">Current role</label>
+                  className="h-4 w-4 rounded border-gray-300" />
+                <label htmlFor="add_current_role" className="text-xs text-gray-500">Current role</label>
               </div>
               <div className="col-span-2">
                 <RefField label="Reason for Leaving" value={form.reason_for_leaving} onChange={v => set("reason_for_leaving", v)} />
@@ -1234,7 +1278,7 @@ function ReferencesTracker({ candidateId, references, onRefresh }: {
           </div>
           <div className="flex justify-end">
             <button onClick={save} disabled={saving}
-              className="h-8 px-4 rounded-lg bg-teal text-teal-foreground text-xs font-medium hover:opacity-90 disabled:opacity-50 transition-opacity">
+              className="h-8 px-4 rounded-lg bg-[#2DD4BF] text-[#1B2B4B] text-xs font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity">
               {saving ? "Saving…" : "Save Referee"}
             </button>
           </div>
@@ -1243,63 +1287,101 @@ function ReferencesTracker({ candidateId, references, onRefresh }: {
 
       {/* Reference rows */}
       {references.length === 0 && !showForm ? (
-        <div className="px-6 py-8 text-center text-sm text-muted-foreground">
+        <div className="px-6 py-8 text-center text-sm text-gray-400">
           No referees added yet. Click &ldquo;Add Referee&rdquo; to add one manually, or they will be imported automatically when the candidate submits their registration form.
         </div>
       ) : (
-        <div className="divide-y divide-border/40">
+        <div className="divide-y divide-gray-100">
           {references.map((ref) => {
             const typeLabel = ref.ref_type === "character" ? "Character" : "Work";
             const slotLabel = ref.ref_number != null ? `#${ref.ref_number}` : "";
             const isReceived = ref.status === "received" || !!ref.received_at;
-            const isPending = ref.status === "pending" || !ref.status;
+            const isPending = !ref.requested_at || ref.status === "pending";
+            const isChasing = !isReceived && !isPending;
             const stage = ref.reminder_stage ?? 0;
-            const stageLabel = CHASE_STAGE_LABELS[Math.min(stage, 6)];
             const nextChase = ref.next_reminder_at ? new Date(ref.next_reminder_at) : null;
-            const nextChaseStr = nextChase
+            const nextChaseStr = nextChase && stage < 6
               ? nextChase.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
               : null;
+            const timeline = buildEmailTimeline(ref);
+            const isExpanded = expandedId === ref.id;
             const isEditing = editingId === ref.id;
             const isEmailRow = emailRowId === ref.id;
 
+            // Compact history string for collapsed row
+            const historyStr = timeline.length > 0
+              ? timeline.map(t => `${t.label} ${fmtShort(t.date)}`).join(" · ")
+              : null;
+
             return (
               <div key={ref.id} className="px-6 py-4">
-                {/* Main row */}
-                <div className="flex items-start gap-4">
+                {/* Clickable row header */}
+                <div
+                  className="flex items-start gap-4 cursor-pointer select-none"
+                  onClick={() => setExpandedId(isExpanded ? null : ref.id)}
+                >
+                  {/* Chevron */}
+                  <div className="mt-0.5 text-gray-400 shrink-0">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"
+                      style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>
+                      <path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-medium truncate">
+                      <span className="text-sm font-medium text-gray-900">
                         {ref.referee_name ?? "—"}
-                        {ref.company_name && <span className="text-muted-foreground font-normal"> — {ref.company_name}</span>}
-                      </p>
+                      </span>
+                      {ref.company_name && (
+                        <span className="text-sm text-gray-400 font-normal">— {ref.company_name}</span>
+                      )}
                       {ref.short_code && (
                         <span
-                          title="Short code for phone/verbal reference submission"
-                          className="inline-flex items-center h-5 px-2 rounded font-mono text-[10px] tracking-widest bg-slate-100 text-slate-600 border border-slate-200 cursor-default select-all"
-                          onClick={() => { navigator.clipboard.writeText(ref.short_code!); toast.success("Code copied"); }}
-                        >
+                          title="Short code — click to copy"
+                          onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(ref.short_code!); toast.success("Code copied"); }}
+                          className="inline-flex items-center h-5 px-1.5 rounded font-mono text-[10px] tracking-widest bg-slate-100 text-slate-500 border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors">
                           {ref.short_code}
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+
+                    <p className="text-xs text-gray-400 mt-0.5">
                       {typeLabel} Reference {slotLabel}
-                      {ref.referee_email && <> · {ref.referee_email}</>}
-                      {ref.requested_at && <> · Requested {fmtDate(ref.requested_at)}</>}
-                      {ref.received_at && <> · Received {fmtDate(ref.received_at)}</>}
                     </p>
-                    {!isReceived && !isPending && (
-                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
-                        <Bell className="h-3 w-3 text-amber-500" />
-                        <span>{stageLabel}</span>
-                        {nextChaseStr && stage < 6 && (
-                          <span className="text-amber-600">· Next chase {nextChaseStr}</span>
-                        )}
-                        {stage >= 6 && <span className="text-red-500">· Chase sequence complete — no response</span>}
+
+                    {/* History / chase progress line */}
+                    {!isPending && historyStr && (
+                      <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+                        {isReceived ? (
+                          <span className="text-green-600">{historyStr}</span>
+                        ) : isChasing ? (
+                          <>
+                            {timeline.map((t, i) => (
+                              <span key={i}>
+                                {i > 0 && " · "}
+                                <span className={i === timeline.length - 1 ? "text-amber-600 font-medium" : "text-gray-400"}>
+                                  {t.label} {fmtShort(t.date)}
+                                </span>
+                              </span>
+                            ))}
+                            {nextChaseStr && stage < 6 && (
+                              <span className="text-amber-500"> · Next chase due {nextChaseStr}</span>
+                            )}
+                            {stage >= 6 && (
+                              <span className="text-red-500"> · Chase sequence complete — no response</span>
+                            )}
+                          </>
+                        ) : null}
                       </p>
                     )}
+                    {isPending && (
+                      <p className="text-xs text-blue-500 mt-1">Not yet sent — click Send to issue the first request</p>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+
+                  {/* Status badge + action buttons */}
+                  <div className="flex items-center gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
                     {isReceived ? (
                       <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">Received</span>
                     ) : isPending ? (
@@ -1307,37 +1389,37 @@ function ReferencesTracker({ candidateId, references, onRefresh }: {
                     ) : (
                       <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">Chasing</span>
                     )}
-                    {/* Edit button */}
-                    <button
-                      onClick={() => {
-                        if (isEditing) { setEditingId(null); } else { startEdit(ref); }
-                        setEmailRowId(null);
-                      }}
-                      className={`inline-flex items-center gap-1 h-7 px-3 rounded-lg border text-xs font-medium transition-colors ${isEditing ? "bg-muted/60" : "hover:bg-muted/40"}`}>
-                      {isEditing ? <X className="h-3 w-3" /> : null}
-                      {isEditing ? "Cancel" : "Edit"}
-                    </button>
+
                     {/* Send / Resend */}
                     {!isReceived && (
                       <button
-                        onClick={async () => {
-                          if (!ref.referee_email) { toast.error("No email address on this reference."); return; }
-                          const { error } = await supabase.functions.invoke("send-reference-request", { body: { reference_id: ref.id } });
-                          if (error) { toast.error("Failed to send: " + error.message); }
-                          else { toast.success(`Request sent to ${ref.referee_name ?? ref.referee_email}`); await onRefresh(); }
-                        }}
-                        className="inline-flex items-center gap-1 h-7 px-3 rounded-lg border text-xs font-medium hover:bg-muted/40 transition-colors">
-                        <Mail className="h-3 w-3" /> {isPending ? "Send" : "Resend"}
+                        onClick={() => sendRequest(ref)}
+                        disabled={sendingId === ref.id}
+                        className="inline-flex items-center gap-1.5 h-7 px-3 rounded-lg border border-gray-300 bg-white text-gray-700 text-xs font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors">
+                        <Mail className="h-3 w-3" />
+                        {sendingId === ref.id ? "Sending…" : isPending ? "Send" : "Resend"}
                       </button>
                     )}
-                    {/* Update email button (only if not received) */}
+
+                    {/* Edit */}
+                    <button
+                      onClick={() => {
+                        if (isEditing) { setEditingId(null); } else { startEdit(ref); setExpandedId(ref.id); }
+                        setEmailRowId(null);
+                      }}
+                      className={`inline-flex items-center gap-1.5 h-7 px-3 rounded-lg border text-xs font-medium transition-colors ${isEditing ? "border-gray-400 bg-gray-100 text-gray-700" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}>
+                      {isEditing ? <X className="h-3 w-3" /> : null}
+                      {isEditing ? "Cancel" : "Edit"}
+                    </button>
+
+                    {/* Update Email (not received) */}
                     {!isReceived && (
                       <button
                         onClick={() => {
                           if (isEmailRow) { setEmailRowId(null); setNewEmail(""); }
-                          else { setEmailRowId(ref.id); setNewEmail(ref.referee_email ?? ""); setEditingId(null); }
+                          else { setEmailRowId(ref.id); setNewEmail(ref.referee_email ?? ""); setEditingId(null); setExpandedId(ref.id); }
                         }}
-                        className={`inline-flex items-center gap-1 h-7 px-3 rounded-lg border text-xs font-medium transition-colors ${isEmailRow ? "bg-muted/60" : "hover:bg-muted/40"}`}>
+                        className={`inline-flex items-center gap-1.5 h-7 px-3 rounded-lg border text-xs font-medium transition-colors ${isEmailRow ? "border-gray-400 bg-gray-100 text-gray-700" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}>
                         {isEmailRow ? <X className="h-3 w-3" /> : <Mail className="h-3 w-3" />}
                         {isEmailRow ? "Cancel" : "Update Email"}
                       </button>
@@ -1345,35 +1427,91 @@ function ReferencesTracker({ candidateId, references, onRefresh }: {
                   </div>
                 </div>
 
+                {/* Expanded details panel */}
+                {isExpanded && !isEditing && !isEmailRow && (
+                  <div className="mt-4 ml-5 space-y-4">
+                    {/* Contact info */}
+                    <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 grid grid-cols-2 gap-x-6 gap-y-2">
+                      <p className="col-span-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Contact Information</p>
+                      {[
+                        { label: "Name", value: ref.referee_name },
+                        { label: "Email", value: ref.referee_email },
+                        { label: "Phone", value: ref.referee_phone },
+                        { label: "Job Title", value: ref.referee_job_title },
+                        { label: "Company", value: ref.company_name },
+                        { label: "Candidate's role", value: ref.candidate_position },
+                        { label: "Employment", value: ref.employment_start_date
+                          ? `${fmtDate(ref.employment_start_date)} – ${ref.is_current_role ? "present" : (fmtDate(ref.employment_end_date) ?? "—")}`
+                          : null },
+                        { label: "Reason for leaving", value: ref.reason_for_leaving },
+                        { label: "Relationship", value: ref.relationship_to_candidate },
+                        { label: "Known duration", value: ref.known_duration },
+                      ].filter(r => r.value).map(({ label, value }) => (
+                        <div key={label}>
+                          <p className="text-[10px] text-gray-400">{label}</p>
+                          <p className="text-xs text-gray-700 font-medium">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Email timeline */}
+                    {timeline.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Email history</p>
+                        <div className="space-y-1.5">
+                          {timeline.map((t, i) => {
+                            const isLast = i === timeline.length - 1;
+                            const isReceivedEntry = t.label === "Reference received";
+                            return (
+                              <div key={i} className="flex items-center gap-3">
+                                <div className={`h-5 w-5 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold
+                                  ${isReceivedEntry ? "bg-green-100 text-green-600" : isLast && isChasing ? "bg-amber-100 text-amber-600" : "bg-slate-100 text-slate-500"}`}>
+                                  {isReceivedEntry ? "✓" : i + 1}
+                                </div>
+                                <div className="flex-1 flex items-center justify-between">
+                                  <span className={`text-xs ${isReceivedEntry ? "text-green-700 font-medium" : isLast && isChasing ? "text-amber-700 font-medium" : "text-gray-600"}`}>
+                                    {t.label}
+                                  </span>
+                                  <span className="text-[11px] text-gray-400">{fmtShort(t.date)}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Update Email panel */}
                 {isEmailRow && (
-                  <div className="mt-3 p-3 rounded-lg bg-muted/10 border border-border/60 flex items-center gap-3">
+                  <div className="mt-3 ml-5 p-3 rounded-xl bg-gray-50 border border-gray-200 flex items-end gap-3">
                     <div className="flex-1">
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">New Email Address</label>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">New Email Address</label>
                       <input
                         type="email"
                         value={newEmail}
                         onChange={e => setNewEmail(e.target.value)}
                         placeholder="referee@example.com"
-                        className="w-full h-8 px-3 rounded-lg border border-border text-sm bg-background focus:outline-none focus:ring-1 focus:ring-teal/40"
+                        className="w-full h-8 px-3 rounded-lg border border-gray-300 text-sm text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-teal-400"
                       />
                     </div>
                     <button
                       onClick={() => sendUpdateEmail(ref.id)}
                       disabled={emailSending}
-                      className="mt-4 h-8 px-4 rounded-lg bg-teal text-teal-foreground text-xs font-medium hover:opacity-90 disabled:opacity-50 transition-opacity shrink-0">
+                      className="h-8 px-4 rounded-lg bg-[#2DD4BF] text-[#1B2B4B] text-xs font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity shrink-0">
                       {emailSending ? "Sending…" : "Update & Resend"}
                     </button>
-                    <p className="mt-4 text-[10px] text-muted-foreground max-w-[180px] leading-tight shrink-0">
-                      Old link and short code will be invalidated. A fresh request is sent to the new address.
+                    <p className="text-[10px] text-gray-400 max-w-[160px] leading-tight shrink-0">
+                      Old link and short code will be invalidated.
                     </p>
                   </div>
                 )}
 
                 {/* Edit details panel */}
                 {isEditing && (
-                  <div className="mt-3 p-4 rounded-lg bg-muted/10 border border-border/60 space-y-3">
-                    <p className="text-xs font-medium text-muted-foreground">Edit referee details</p>
+                  <div className="mt-3 ml-5 p-4 rounded-xl bg-gray-50 border border-gray-200 space-y-3">
+                    <p className="text-xs font-semibold text-gray-600">Edit referee details</p>
                     <div className="grid grid-cols-2 gap-3">
                       <RefField label="Referee Name *" value={editForm.referee_name ?? ""} onChange={v => setEdit("referee_name", v)} />
                       <RefField label="Referee Phone" value={editForm.referee_phone ?? ""} onChange={v => setEdit("referee_phone", v)} />
@@ -1386,8 +1524,8 @@ function ReferencesTracker({ candidateId, references, onRefresh }: {
                         <div className="flex items-center gap-2 pt-1">
                           <input type="checkbox" id={`edit_current_${ref.id}`} checked={editForm.is_current_role ?? false}
                             onChange={e => { setEdit("is_current_role", e.target.checked); if (e.target.checked) setEdit("employment_end_date", ""); }}
-                            className="h-4 w-4 rounded border-border" />
-                          <label htmlFor={`edit_current_${ref.id}`} className="text-xs text-muted-foreground">Current role</label>
+                            className="h-4 w-4 rounded border-gray-300" />
+                          <label htmlFor={`edit_current_${ref.id}`} className="text-xs text-gray-500">Current role</label>
                         </div>
                         <div className="col-span-2">
                           <RefField label="Reason for Leaving" value={editForm.reason_for_leaving ?? ""} onChange={v => setEdit("reason_for_leaving", v)} />
@@ -1397,10 +1535,10 @@ function ReferencesTracker({ candidateId, references, onRefresh }: {
                         <RefField label="How Long Known" value={editForm.known_duration ?? ""} onChange={v => setEdit("known_duration", v)} placeholder="e.g. 3 years" />
                       </>)}
                     </div>
-                    <div className="flex items-center gap-2 justify-between pt-1">
-                      <p className="text-[10px] text-muted-foreground">To change the email address, use &ldquo;Update Email&rdquo; — this generates a fresh link and short code.</p>
+                    <div className="flex items-center justify-between pt-1">
+                      <p className="text-[10px] text-gray-400">To change the email address, use &ldquo;Update Email&rdquo; — this generates a fresh link and short code.</p>
                       <button onClick={() => saveEdit(ref)} disabled={editSaving}
-                        className="h-8 px-4 rounded-lg bg-teal text-teal-foreground text-xs font-medium hover:opacity-90 disabled:opacity-50 transition-opacity shrink-0">
+                        className="h-8 px-4 rounded-lg bg-[#2DD4BF] text-[#1B2B4B] text-xs font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity shrink-0">
                         {editSaving ? "Saving…" : "Save Changes"}
                       </button>
                     </div>
