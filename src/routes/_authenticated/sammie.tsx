@@ -411,6 +411,24 @@ function SammiePage() {
           pills: data.candidate_id ? [{ label: "Open profile", sendText: `__nav:/candidates/${data.candidate_id}` }] : undefined,
         };
         setMessages(prev => [...prev, sammieMsg]);
+      } else if (data.type === "update_candidate" || data.type === "update_client" || data.type === "update_job") {
+        const navMap: Record<string, string> = {
+          update_candidate: `/candidates/${data.record_id}`,
+          update_client: `/clients/${data.record_id}`,
+          update_job: `/jobs/${data.record_id}`,
+        };
+        const labelMap: Record<string, string> = {
+          update_candidate: "Open candidate",
+          update_client: "Open client",
+          update_job: "Open job",
+        };
+        const sammieMsg: ChatMessage = {
+          id: crypto.randomUUID(), role: "sammie",
+          content: data.params.summary ?? "Done — record updated.",
+          timestamp: new Date(),
+          pills: data.record_id ? [{ label: labelMap[data.type], sendText: `__nav:${navMap[data.type]}` }] : undefined,
+        };
+        setMessages(prev => [...prev, sammieMsg]);
       } else {
         setMessages(prev => [...prev, { id: crypto.randomUUID(), role: "sammie", content: data.content ?? "...", timestamp: new Date() }]);
       }
