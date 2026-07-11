@@ -2181,19 +2181,29 @@ function CvSection({ title, children }: { title: string; children: React.ReactNo
 // ── MessagesTab ───────────────────────────────────────────────────────────────
 type MsgChannel = "whatsapp" | "sms" | "app";
 
-const CHANNEL_META: Record<string, { label: string; textColor: string; bgColor: string }> = {
-  whatsapp: { label: "WhatsApp", textColor: "text-green-700", bgColor: "bg-green-50"  },
-  sms:      { label: "SMS",      textColor: "text-blue-700",  bgColor: "bg-blue-50"   },
-  app:      { label: "App",      textColor: "text-teal-700",  bgColor: "bg-teal-50"   },
-  email:    { label: "Email",    textColor: "text-orange-700",bgColor: "bg-orange-50" },
+const CHANNEL_META: Record<string, { label: string; bg: string; icon: React.ReactNode }> = {
+  whatsapp: { label: "WhatsApp", bg: "#25D366", icon: <MessageCircle className="h-2.5 w-2.5 text-white" /> },
+  sms:      { label: "SMS",      bg: "#3B82F6", icon: <Phone className="h-2.5 w-2.5 text-white" /> },
+  app:      { label: "App",      bg: "#0AB5A3", icon: <Smartphone className="h-2.5 w-2.5 text-white" /> },
+  email:    { label: "Email",    bg: "#F97316", icon: <Mail className="h-2.5 w-2.5 text-white" /> },
 };
 
-function ChannelBadge({ ch, dir }: { ch: string; dir: string }) {
-  const meta = CHANNEL_META[ch] ?? { label: ch, textColor: "text-gray-500", bgColor: "bg-gray-100" };
-  const prefix = dir === "inbound" ? "via " : "";
+function ChannelIcon({ ch, size = 16 }: { ch: string; size?: number }) {
+  const meta = CHANNEL_META[ch];
+  if (!meta) return null;
   return (
-    <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full ${meta.bgColor} ${meta.textColor}`}>
-      {prefix}{meta.label}
+    <span style={{ width: size, height: size, background: meta.bg }} className="rounded-full inline-flex items-center justify-center shrink-0">
+      {meta.icon}
+    </span>
+  );
+}
+
+function ChannelBadge({ ch, dir }: { ch: string; dir: string }) {
+  const meta = CHANNEL_META[ch];
+  if (!meta) return null;
+  return (
+    <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: meta.bg + "20", color: meta.bg }}>
+      {dir === "inbound" ? "via " : ""}{meta.label}
     </span>
   );
 }
@@ -2214,7 +2224,6 @@ function MessagesTab({ candidateId, candidatePhone, isTemp }: { candidateId: str
       .select("*").eq("candidate_id", candidateId).order("created_at", { ascending: true });
     const msgs = data ?? [];
     setMessages(msgs);
-    // Auto-select channel from candidate's last inbound message (first load only)
     if (!channelLocked && msgs.length > 0) {
       const lastInbound = [...msgs].reverse().find((m: any) => m.direction === "inbound");
       if (lastInbound && ["whatsapp", "sms", "app"].includes(lastInbound.channel)) {
@@ -2252,27 +2261,25 @@ function MessagesTab({ candidateId, candidatePhone, isTemp }: { candidateId: str
   };
 
   const channels: MsgChannel[] = isTemp ? ["whatsapp", "sms", "app"] : ["whatsapp", "sms"];
-  const chIcon = (ch: MsgChannel) => ch === "app" ? <Smartphone className="h-3 w-3" /> : ch === "sms" ? <Phone className="h-3 w-3" /> : <MessageCircle className="h-3 w-3" />;
-  const chLabel = (ch: MsgChannel) => ch === "app" ? "App" : ch === "sms" ? "SMS" : "WhatsApp";
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col h-full">
       {/* Channel selector */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap px-5 pt-4 pb-3 shrink-0">
         <span className="text-[11px] font-medium text-gray-500">Reply via:</span>
         {channels.map(ch => (
           <button key={ch} onClick={() => setChannel(ch)}
             className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11px] font-medium border transition-colors ${channel === ch ? "bg-navy border-navy text-white" : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"}`}>
-            {chIcon(ch)}
-            {chLabel(ch)}
+            <ChannelIcon ch={ch} size={12} />
+            {ch === "app" ? "App" : ch === "sms" ? "SMS" : "WhatsApp"}
           </button>
         ))}
       </div>
 
-      {/* Message thread */}
-      <div className="min-h-[200px] max-h-[400px] overflow-y-auto flex flex-col gap-2 px-1">
+      {/* Message thread — scrollable */}
+      <div className="flex-1 overflow-y-auto flex flex-col gap-2 px-5 py-2 min-h-0">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-40 text-sm text-gray-400 gap-2">
+          <div className="flex flex-col items-center justify-center h-full text-sm text-gray-400 gap-2">
             <MessageCircle className="h-8 w-8 text-gray-200" />
             No messages yet
           </div>
@@ -2292,17 +2299,20 @@ function MessagesTab({ candidateId, candidatePhone, isTemp }: { candidateId: str
         <div ref={bottomRef} />
       </div>
 
-      {/* Compose */}
-      <div className="flex items-end gap-2 bg-white rounded-xl border border-gray-200 focus-within:border-teal focus-within:ring-2 focus-within:ring-teal/10 transition-all px-4 py-2.5">
-        <textarea value={input} onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder={`Message via ${chLabel(channel)}…`} rows={1} disabled={sending}
-          className="flex-1 resize-none bg-transparent text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none leading-relaxed max-h-28 overflow-y-auto"
-          onInput={e => { const t = e.target as HTMLTextAreaElement; t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 112) + "px"; }} />
-        <button onClick={send} disabled={!input.trim() || sending}
-          className="h-8 w-8 rounded-full bg-teal grid place-items-center hover:opacity-90 disabled:opacity-40 transition-opacity shrink-0 text-white">
-          <Send className="h-3.5 w-3.5 text-white" />
-        </button>
+      {/* Compose — pinned to bottom */}
+      <div className="shrink-0 border-t border-gray-100 px-5 py-4">
+        <div className="flex items-end gap-2 bg-white rounded-xl border border-gray-200 focus-within:border-teal focus-within:ring-2 focus-within:ring-teal/10 transition-all px-4 py-2.5">
+          <textarea value={input} onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+            placeholder={channel === "app" ? "Message via App…" : channel === "sms" ? "Message via SMS…" : "Message via WhatsApp…"}
+            rows={1} disabled={sending}
+            className="flex-1 resize-none bg-transparent text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none leading-relaxed max-h-28 overflow-y-auto"
+            onInput={e => { const t = e.target as HTMLTextAreaElement; t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 112) + "px"; }} />
+          <button onClick={send} disabled={!input.trim() || sending}
+            className="h-8 w-8 rounded-full bg-teal grid place-items-center hover:opacity-90 disabled:opacity-40 transition-opacity shrink-0 text-white">
+            <Send className="h-3.5 w-3.5 text-white" />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -2320,7 +2330,7 @@ function ChatDrawer({ candidateId, candidateName, candidatePhone, isTemp, onClos
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/20" onClick={onClose} />
-      <div className="fixed inset-y-0 right-0 z-50 w-[420px] bg-card shadow-2xl flex flex-col">
+      <div className="fixed inset-y-0 right-0 z-50 w-[420px] bg-white shadow-2xl flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b bg-navy shrink-0">
           <div className="flex items-center gap-3">
@@ -2336,8 +2346,8 @@ function ChatDrawer({ candidateId, candidateName, candidatePhone, isTemp, onClos
             <X className="h-4 w-4 text-white" />
           </button>
         </div>
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+        {/* Messages — fills remaining height, compose pinned inside */}
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <MessagesTab candidateId={candidateId} candidatePhone={candidatePhone} isTemp={isTemp} />
         </div>
       </div>
