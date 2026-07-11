@@ -2179,10 +2179,30 @@ function CvSection({ title, children }: { title: string; children: React.ReactNo
 
 
 // ── MessagesTab ───────────────────────────────────────────────────────────────
-function MessagesTab({ candidateId, candidatePhone }: { candidateId: string; candidatePhone: string | null }) {
+type MsgChannel = "whatsapp" | "sms" | "app";
+
+const CHANNEL_META: Record<string, { label: string; textColor: string; bgColor: string }> = {
+  whatsapp: { label: "WhatsApp", textColor: "text-green-700", bgColor: "bg-green-50"  },
+  sms:      { label: "SMS",      textColor: "text-blue-700",  bgColor: "bg-blue-50"   },
+  app:      { label: "App",      textColor: "text-teal-700",  bgColor: "bg-teal-50"   },
+  email:    { label: "Email",    textColor: "text-orange-700",bgColor: "bg-orange-50" },
+};
+
+function ChannelBadge({ ch, dir }: { ch: string; dir: string }) {
+  const meta = CHANNEL_META[ch] ?? { label: ch, textColor: "text-gray-500", bgColor: "bg-gray-100" };
+  const prefix = dir === "inbound" ? "via " : "";
+  return (
+    <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full ${meta.bgColor} ${meta.textColor}`}>
+      {prefix}{meta.label}
+    </span>
+  );
+}
+
+function MessagesTab({ candidateId, candidatePhone, isTemp }: { candidateId: string; candidatePhone: string | null; isTemp: boolean }) {
   const [messages, setMessages] = useState<{ id: string; content: string; direction: string; channel: string; status: string; created_at: string }[]>([]);
   const [input, setInput] = useState("");
-  const [channel, setChannel] = useState<"internal" | "whatsapp" | "sms">("internal");
+  const [channel, setChannel] = useState<MsgChannel>("whatsapp");
+  const [channelLocked, setChannelLocked] = useState(false);
   const [sending, setSending] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -2192,7 +2212,16 @@ function MessagesTab({ candidateId, candidatePhone }: { candidateId: string; can
   const load = async () => {
     const { data } = await (supabase as any).from("messages")
       .select("*").eq("candidate_id", candidateId).order("created_at", { ascending: true });
-    setMessages(data ?? []);
+    const msgs = data ?? [];
+    setMessages(msgs);
+    // Auto-select channel from candidate's last inbound message (first load only)
+    if (!channelLocked && msgs.length > 0) {
+      const lastInbound = [...msgs].reverse().find((m: any) => m.direction === "inbound");
+      if (lastInbound && ["whatsapp", "sms", "app"].includes(lastInbound.channel)) {
+        setChannel(lastInbound.channel as MsgChannel);
+      }
+      setChannelLocked(true);
+    }
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
     await (supabase as any).from("messages").update({ status: "read" }).eq("candidate_id", candidateId).eq("direction", "inbound").neq("status", "read");
   };
@@ -2209,7 +2238,6 @@ function MessagesTab({ candidateId, candidatePhone }: { candidateId: string; can
   }, [candidateId]);
 
   const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-  const channelIcon = (ch: string) => ch === "whatsapp" ? <MessageCircle className="h-3 w-3 text-green-500" /> : ch === "sms" ? <Phone className="h-3 w-3 text-blue-500" /> : ch === "email" ? <Mail className="h-3 w-3 text-orange-400" /> : null;
 
   const send = async () => {
     if (!input.trim() || !userId) return;
@@ -2219,44 +2247,44 @@ function MessagesTab({ candidateId, candidatePhone }: { candidateId: string; can
         body: { candidate_id: candidateId, recruiter_id: userId, content: input.trim(), channel, candidate_phone: candidatePhone },
       });
       setInput("");
-      // realtime subscription will add the new message — no need to load()
     } catch { toast.error("Failed to send message"); }
     finally { setSending(false); }
   };
+
+  const channels: MsgChannel[] = isTemp ? ["whatsapp", "sms", "app"] : ["whatsapp", "sms"];
+  const chIcon = (ch: MsgChannel) => ch === "app" ? <Smartphone className="h-3 w-3" /> : ch === "sms" ? <Phone className="h-3 w-3" /> : <MessageCircle className="h-3 w-3" />;
+  const chLabel = (ch: MsgChannel) => ch === "app" ? "App" : ch === "sms" ? "SMS" : "WhatsApp";
 
   return (
     <div className="flex flex-col gap-4">
       {/* Channel selector */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[11px] font-medium text-gray-500">Send via:</span>
-        {(["internal", "whatsapp", "sms"] as const).map(ch => (
+        <span className="text-[11px] font-medium text-gray-500">Reply via:</span>
+        {channels.map(ch => (
           <button key={ch} onClick={() => setChannel(ch)}
             className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11px] font-medium border transition-colors ${channel === ch ? "bg-navy border-navy text-white" : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"}`}>
-            {ch === "whatsapp" ? <MessageCircle className="h-3 w-3" /> : ch === "sms" ? <Phone className="h-3 w-3" /> : <StickyNote className="h-3 w-3" />}
-            {ch === "whatsapp" ? "WhatsApp" : ch === "sms" ? "SMS" : "Note"}
+            {chIcon(ch)}
+            {chLabel(ch)}
           </button>
         ))}
-        {channel === "internal" && (
-          <span className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">Private — candidate won't see this</span>
-        )}
       </div>
 
       {/* Message thread */}
-      <div className="min-h-[200px] max-h-[400px] overflow-y-auto flex flex-col gap-2.5 px-1">
+      <div className="min-h-[200px] max-h-[400px] overflow-y-auto flex flex-col gap-2 px-1">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-40 text-sm text-muted-foreground gap-2">
-            <MessageCircle className="h-8 w-8 text-muted-foreground/30" />
+          <div className="flex flex-col items-center justify-center h-40 text-sm text-gray-400 gap-2">
+            <MessageCircle className="h-8 w-8 text-gray-200" />
             No messages yet
           </div>
         )}
         {messages.map(msg => (
           <div key={msg.id} className={`flex ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm ${msg.direction === "outbound" ? "bg-navy text-white rounded-br-sm" : "bg-muted text-foreground rounded-bl-sm"}`}>
+            <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm ${msg.direction === "outbound" ? "bg-navy text-white rounded-br-sm" : "bg-white border border-gray-100 text-gray-900 rounded-bl-sm shadow-sm"}`}>
               <p className="leading-relaxed">{msg.content}</p>
-              <div className={`flex items-center gap-1 mt-1 ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}>
-                <span className="text-[10px] opacity-60">{fmtTime(msg.created_at)}</span>
-                {channelIcon(msg.channel)}
-                {msg.direction === "outbound" && msg.status === "read" && <CheckCheck className="h-3 w-3 text-teal opacity-80" />}
+              <div className={`flex items-center gap-1.5 mt-1.5 ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}>
+                <span className={`text-[10px] ${msg.direction === "outbound" ? "text-white/50" : "text-gray-400"}`}>{fmtTime(msg.created_at)}</span>
+                <ChannelBadge ch={msg.channel} dir={msg.direction} />
+                {msg.direction === "outbound" && msg.status === "read" && <CheckCheck className="h-3 w-3 text-teal-300" />}
               </div>
             </div>
           </div>
@@ -2268,12 +2296,12 @@ function MessagesTab({ candidateId, candidatePhone }: { candidateId: string; can
       <div className="flex items-end gap-2 bg-white rounded-xl border border-gray-200 focus-within:border-teal focus-within:ring-2 focus-within:ring-teal/10 transition-all px-4 py-2.5">
         <textarea value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder="Type a message…" rows={1} disabled={sending}
+          placeholder={`Message via ${chLabel(channel)}…`} rows={1} disabled={sending}
           className="flex-1 resize-none bg-transparent text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none leading-relaxed max-h-28 overflow-y-auto"
           onInput={e => { const t = e.target as HTMLTextAreaElement; t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 112) + "px"; }} />
         <button onClick={send} disabled={!input.trim() || sending}
           className="h-8 w-8 rounded-full bg-teal grid place-items-center hover:opacity-90 disabled:opacity-40 transition-opacity shrink-0 text-white">
-          <Send className="h-3.5 w-3.5" />
+          <Send className="h-3.5 w-3.5 text-white" />
         </button>
       </div>
     </div>
@@ -2281,10 +2309,11 @@ function MessagesTab({ candidateId, candidatePhone }: { candidateId: string; can
 }
 
 // ── ChatDrawer ────────────────────────────────────────────────────────────────
-function ChatDrawer({ candidateId, candidateName, candidatePhone, onClose }: {
+function ChatDrawer({ candidateId, candidateName, candidatePhone, isTemp, onClose }: {
   candidateId: string;
   candidateName: string;
   candidatePhone: string | null;
+  isTemp: boolean;
   onClose: () => void;
 }) {
   const initials = candidateName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
@@ -2309,7 +2338,7 @@ function ChatDrawer({ candidateId, candidateName, candidatePhone, onClose }: {
         </div>
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          <MessagesTab candidateId={candidateId} candidatePhone={candidatePhone} />
+          <MessagesTab candidateId={candidateId} candidatePhone={candidatePhone} isTemp={isTemp} />
         </div>
       </div>
     </>
