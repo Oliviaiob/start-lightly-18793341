@@ -2227,15 +2227,18 @@ function MessagesTab({ candidateId, candidatePhone }: { candidateId: string; can
   return (
     <div className="flex flex-col gap-4">
       {/* Channel selector */}
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] text-muted-foreground font-medium">Send via:</span>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[11px] font-medium text-gray-500">Send via:</span>
         {(["internal", "whatsapp", "sms"] as const).map(ch => (
           <button key={ch} onClick={() => setChannel(ch)}
-            className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11px] font-medium transition-colors ${channel === ch ? "bg-navy text-white" : "border hover:bg-muted"}`}>
-            {ch === "whatsapp" ? <MessageCircle className="h-3 w-3" /> : ch === "sms" ? <Phone className="h-3 w-3" /> : <Mail className="h-3 w-3" />}
-            {ch === "whatsapp" ? "WhatsApp" : ch === "sms" ? "SMS" : "CRM"}
+            className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11px] font-medium border transition-colors ${channel === ch ? "bg-navy border-navy text-white" : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"}`}>
+            {ch === "whatsapp" ? <MessageCircle className="h-3 w-3" /> : ch === "sms" ? <Phone className="h-3 w-3" /> : <StickyNote className="h-3 w-3" />}
+            {ch === "whatsapp" ? "WhatsApp" : ch === "sms" ? "SMS" : "Note"}
           </button>
         ))}
+        {channel === "internal" && (
+          <span className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">Private — candidate won't see this</span>
+        )}
       </div>
 
       {/* Message thread */}
@@ -2262,14 +2265,14 @@ function MessagesTab({ candidateId, candidatePhone }: { candidateId: string; can
       </div>
 
       {/* Compose */}
-      <div className="flex items-end gap-2 bg-background rounded-xl border border-border/60 focus-within:border-teal/40 focus-within:ring-2 focus-within:ring-teal/10 transition-all px-4 py-2.5">
+      <div className="flex items-end gap-2 bg-white rounded-xl border border-gray-200 focus-within:border-teal focus-within:ring-2 focus-within:ring-teal/10 transition-all px-4 py-2.5">
         <textarea value={input} onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
           placeholder="Type a message…" rows={1} disabled={sending}
-          className="flex-1 resize-none bg-transparent text-sm focus:outline-none leading-relaxed max-h-28 overflow-y-auto"
+          className="flex-1 resize-none bg-transparent text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none leading-relaxed max-h-28 overflow-y-auto"
           onInput={e => { const t = e.target as HTMLTextAreaElement; t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 112) + "px"; }} />
         <button onClick={send} disabled={!input.trim() || sending}
-          className="h-8 w-8 rounded-full bg-teal text-teal-foreground grid place-items-center hover:opacity-90 disabled:opacity-40 transition-opacity shrink-0">
+          className="h-8 w-8 rounded-full bg-teal grid place-items-center hover:opacity-90 disabled:opacity-40 transition-opacity shrink-0 text-white">
           <Send className="h-3.5 w-3.5" />
         </button>
       </div>
