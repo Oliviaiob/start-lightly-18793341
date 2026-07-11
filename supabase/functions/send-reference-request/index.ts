@@ -20,7 +20,6 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Fetch reference + candidate name
     const { data: ref, error: refErr } = await supabase
       .from("references")
       .select("*, candidates!candidate_id(first_name, last_name)")
@@ -33,8 +32,10 @@ serve(async (req) => {
     const cand = ref.candidates as { first_name: string | null; last_name: string | null } | null;
     const candidateName = `${cand?.first_name ?? ""} ${cand?.last_name ?? ""}`.trim() || "our candidate";
     const refTypeLabel = ref.ref_type === "character" ? "Character Reference" : "Work Reference";
-    const formUrl = `https://soar-recruitment.lovable.app/reference/${ref.unique_token}`;
-    const fromEmail = Deno.env.get("FROM_EMAIL") ?? "noreply@placeholder.com";
+    const refTypePath = ref.ref_type === "character" ? "character" : "work";
+    const formUrl = `https://jobs.soarrecruitment.co.uk/references/${refTypePath}/${ref.unique_token}`;
+    const codeEntryUrl = `https://jobs.soarrecruitment.co.uk/references/code`;
+    const fromEmail = Deno.env.get("FROM_EMAIL") ?? "noreply@soarrecruitment.co.uk";
 
     const emailBody = `
 <!DOCTYPE html>
@@ -63,9 +64,14 @@ serve(async (req) => {
           Complete Reference Form →
         </a>
       </div>
-      <p style="color:#6b7280; font-size:12px; word-break:break-all;">
+      <p style="color:#6b7280; font-size:12px; word-break:break-all; text-align:center;">
         Or paste this link into your browser:<br>${formUrl}
       </p>
+      ${ref.short_code ? `
+      <div style="margin:24px 0; padding:16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; text-align:center;">
+        <p style="margin:0 0 6px; color:#6b7280; font-size:12px;">Alternatively, visit <a href="${codeEntryUrl}" style="color:#2DD4BF;">${codeEntryUrl}</a> and enter your reference code:</p>
+        <p style="margin:0; font-family:monospace; font-size:26px; font-weight:700; letter-spacing:6px; color:#1B2B4B;">${ref.short_code}</p>
+      </div>` : ""}
       <hr style="border:none; border-top:1px solid #e5e7eb; margin:24px 0;">
       <p style="color:#9ca3af; font-size:12px; margin:0;">
         This request was sent on behalf of SOAR Recruitment. If you have any questions please reply to this email.
@@ -76,7 +82,6 @@ serve(async (req) => {
 </body>
 </html>`;
 
-    // Send via Resend
     const resendRes = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -96,10 +101,19 @@ serve(async (req) => {
       throw new Error(`Resend API error: ${errText}`);
     }
 
-    // Mark as requested
+    // Mark as requested, set reminder tracking
+    const now = new Date();
+    const nextReminder = new Date(now);
+    nextReminder.setDate(nextReminder.getDate() + 2);
+
     await supabase
       .from("references")
-      .update({ status: "requested", requested_at: new Date().toISOString() })
+      .update({
+        status: "requested",
+        requested_at: ref.requested_at ?? now.toISOString(), // don't overwrite on resend
+        reminder_stage: 0,
+        next_reminder_at: nextReminder.toISOString(),
+      })
       .eq("id", reference_id);
 
     return new Response(JSON.stringify({ success: true }), {
