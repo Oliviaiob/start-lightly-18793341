@@ -43,6 +43,7 @@ import {
   Copy,
   Upload,
   MessageCircle,
+  Smartphone,
   Send,
   CheckCheck,
 } from "lucide-react";
@@ -2182,13 +2183,13 @@ function CvSection({ title, children }: { title: string; children: React.ReactNo
 type MsgChannel = "whatsapp" | "sms" | "app";
 
 const CHANNEL_META: Record<string, { label: string; bg: string; icon: React.ReactNode }> = {
-  whatsapp: { label: "WhatsApp", bg: "#25D366", icon: <MessageCircle className="h-2.5 w-2.5 text-white" /> },
-  sms:      { label: "SMS",      bg: "#3B82F6", icon: <Phone className="h-2.5 w-2.5 text-white" /> },
-  app:      { label: "App",      bg: "#0AB5A3", icon: <Smartphone className="h-2.5 w-2.5 text-white" /> },
-  email:    { label: "Email",    bg: "#F97316", icon: <Mail className="h-2.5 w-2.5 text-white" /> },
+  whatsapp: { label: "WhatsApp", bg: "#25D366", icon: <MessageCircle className="h-3 w-3 text-white" /> },
+  sms:      { label: "SMS",      bg: "#3B82F6", icon: <Phone className="h-3 w-3 text-white" /> },
+  app:      { label: "App",      bg: "#0AB5A3", icon: <Smartphone className="h-3 w-3 text-white" /> },
+  email:    { label: "Email",    bg: "#F97316", icon: <Mail className="h-3 w-3 text-white" /> },
 };
 
-function ChannelIcon({ ch, size = 16 }: { ch: string; size?: number }) {
+function ChannelIcon({ ch, size = 20 }: { ch: string; size?: number }) {
   const meta = CHANNEL_META[ch];
   if (!meta) return null;
   return (
@@ -2270,7 +2271,7 @@ function MessagesTab({ candidateId, candidatePhone, isTemp }: { candidateId: str
         {channels.map(ch => (
           <button key={ch} onClick={() => setChannel(ch)}
             className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11px] font-medium border transition-colors ${channel === ch ? "bg-navy border-navy text-white" : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"}`}>
-            <ChannelIcon ch={ch} size={12} />
+            <ChannelIcon ch={ch} size={14} />
             {ch === "app" ? "App" : ch === "sms" ? "SMS" : "WhatsApp"}
           </button>
         ))}

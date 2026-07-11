@@ -11,12 +11,12 @@ interface Message { id: string; candidate_id: string; content: string; direction
 interface Thread { candidate: Candidate; lastMessage: Message | null; unread: number; assignedRecruiter: string | null; }
 
 const CHANNEL_META: Record<string, { label: string; bg: string; icon: React.ReactNode }> = {
-  whatsapp: { label: "WhatsApp", bg: "#25D366", icon: <MessageCircle className="h-2.5 w-2.5 text-white" /> },
-  sms:      { label: "SMS",      bg: "#3B82F6", icon: <Phone className="h-2.5 w-2.5 text-white" /> },
-  app:      { label: "App",      bg: "#0AB5A3", icon: <Smartphone className="h-2.5 w-2.5 text-white" /> },
-  email:    { label: "Email",    bg: "#F97316", icon: <Mail className="h-2.5 w-2.5 text-white" /> },
+  whatsapp: { label: "WhatsApp", bg: "#25D366", icon: <MessageCircle className="h-3 w-3 text-white" /> },
+  sms:      { label: "SMS",      bg: "#3B82F6", icon: <Phone className="h-3 w-3 text-white" /> },
+  app:      { label: "App",      bg: "#0AB5A3", icon: <Smartphone className="h-3 w-3 text-white" /> },
+  email:    { label: "Email",    bg: "#F97316", icon: <Mail className="h-3 w-3 text-white" /> },
 };
-const ChannelIcon = ({ ch, size = 14 }: { ch: string; size?: number }) => {
+const ChannelIcon = ({ ch, size = 18 }: { ch: string; size?: number }) => {
   const meta = CHANNEL_META[ch];
   if (!meta) return <MessageSquare style={{ width: size, height: size }} className="text-gray-400" />;
   return (
@@ -115,7 +115,7 @@ function InboxPage() {
     const ch = supabase.channel("messages-realtime")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
         const msg = payload.new as Message;
-        if (msg.candidate_id === selected) setMessages(prev => [...prev, msg]);
+        if (msg.candidate_id === selected) setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
         loadThreads();
       }).subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -159,7 +159,7 @@ function InboxPage() {
         }).catch(console.error);
       }
       setInput("");
-      loadMessages(selected);
+      // realtime subscription adds the message — no loadMessages() needed
     } catch { toast.error("Failed to send message"); }
     finally { setSending(false); }
   };
@@ -274,7 +274,7 @@ function InboxPage() {
                   </div>
                   {t.lastMessage && (
                     <div className="flex items-center gap-1 mt-0.5">
-                      <ChannelIcon ch={t.lastMessage.channel} size={12} />
+                      <ChannelIcon ch={t.lastMessage.channel} size={14} />
                       <span className="text-[11px] text-muted-foreground truncate">{t.lastMessage.direction === "outbound" ? "You: " : ""}{t.lastMessage.content}</span>
                     </div>
                   )}
@@ -339,7 +339,7 @@ function InboxPage() {
               ).map(ch => (
                 <button key={ch} onClick={() => setChannel(ch as any)}
                   className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11px] font-medium border transition-colors ${channel === ch ? "bg-navy border-navy text-white" : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"}`}>
-                  <ChannelIcon ch={ch} size={12} />{channelLabel(ch)}
+                  <ChannelIcon ch={ch} size={14} />{channelLabel(ch)}
                 </button>
               ))}
             </div>
