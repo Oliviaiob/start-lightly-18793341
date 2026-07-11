@@ -2202,7 +2202,7 @@ function MessagesTab({ candidateId, candidatePhone }: { candidateId: string; can
   useEffect(() => {
     const ch = supabase.channel(`messages-candidate-${candidateId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `candidate_id=eq.${candidateId}` }, (payload) => {
-        setMessages(prev => [...prev, payload.new as any]);
+        setMessages(prev => prev.some(m => m.id === (payload.new as any).id) ? prev : [...prev, payload.new as any]);
         setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
       }).subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -2219,7 +2219,7 @@ function MessagesTab({ candidateId, candidatePhone }: { candidateId: string; can
         body: { candidate_id: candidateId, recruiter_id: userId, content: input.trim(), channel, candidate_phone: candidatePhone },
       });
       setInput("");
-      load();
+      // realtime subscription will add the new message — no need to load()
     } catch { toast.error("Failed to send message"); }
     finally { setSending(false); }
   };
