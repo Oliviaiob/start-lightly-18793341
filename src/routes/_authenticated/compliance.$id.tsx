@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   ArrowLeft, CheckCircle, AlertTriangle, Clock, Minus, Circle,
   Upload, FileText, RefreshCw, ExternalLink, Smartphone, Sparkles,
-  Copy, Mail, Link2, BanIcon, PartyPopper, ChevronRight, Trash2,
+  Copy, Mail, Link2, BanIcon, PartyPopper, ChevronRight, Trash2, Plus, X, Bell,
 } from "lucide-react";
 import { toast } from "sonner";
 import { WorkflowPanel, type WorkflowStateData, type WorkflowActivityData, type ActionOwner, type DerivedWorkflowState } from "@/components/workflow-panel";
@@ -85,8 +85,13 @@ type ChecklistRecord = Record<ChecklistKey, string | null> & {
 
 type ReferenceRecord = {
   id: string; referee_name: string | null; referee_email: string | null; company_name: string | null;
-  ref_type: string | null; ref_number: number | null;
+  ref_type: string | null; ref_number: number | null; referee_job_title: string | null;
+  relationship_to_candidate: string | null; known_duration: string | null;
+  is_current_role: boolean | null; candidate_position: string | null;
+  employment_start_date: string | null; employment_end_date: string | null;
+  reason_for_leaving: string | null; referee_phone: string | null;
   status: string | null; requested_at: string | null; received_at: string | null;
+  reminder_stage: number | null; next_reminder_at: string | null;
 };
 
 type DocumentRecord = {
@@ -394,7 +399,7 @@ function Page() {
       supabase.from("candidates").select("id,first_name,last_name,email,phone,qualification_level,status_temp,source,dbs_next_check_due,paediatric_first_aid_expiry,onboarding_email_sent_at,bank_details_token").eq("id", id).maybeSingle(),
       supabase.from("compliance_checklists").select("*").eq("candidate_id", id).maybeSingle(),
       supabase.from("candidate_documents").select("id,document_type,file_name,file_url,status,uploaded_at,file_size").eq("candidate_id", id).order("uploaded_at", { ascending: false }),
-      supabase.from("references").select("id,referee_name,referee_email,company_name,ref_type,ref_number,status,requested_at,received_at").eq("candidate_id", id).order("ref_number", { ascending: true }),
+      supabase.from("references").select("id,referee_name,referee_email,referee_phone,referee_job_title,company_name,ref_type,ref_number,candidate_position,employment_start_date,employment_end_date,is_current_role,reason_for_leaving,relationship_to_candidate,known_duration,status,requested_at,received_at,reminder_stage,next_reminder_at").eq("candidate_id", id).order("ref_number", { ascending: true }),
       (supabase as any).from("messages").select("content,direction,created_at").eq("candidate_id", id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
     // Load workflow engine data (graceful fallback if migration not yet run)
@@ -716,70 +721,7 @@ function Page() {
       })}
 
       {/* ── References Tracker ─────────────────────────────── */}
-      <div className="bg-card rounded-2xl shadow-[var(--shadow-card)] overflow-hidden">
-        <div className="px-6 py-4 border-b bg-muted/10 flex items-center justify-between">
-          <h2 className="font-semibold text-sm">References Tracker</h2>
-          <span className="text-xs text-muted-foreground">{references.length} referee{references.length !== 1 ? "s" : ""}</span>
-        </div>
-        {references.length === 0 ? (
-          <div className="px-6 py-8 text-center text-sm text-muted-foreground">
-            No references requested yet.
-          </div>
-        ) : (
-          <div className="divide-y divide-border/40">
-            {references.map((ref) => {
-              const typeLabel = ref.ref_type === "character" ? "Character" : "Work";
-              const slotLabel = ref.ref_number != null ? `#${ref.ref_number}` : "";
-              const isReceived = ref.status === "received" || !!ref.received_at;
-              return (
-                <div key={ref.id} className="px-6 py-4 flex items-center gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {ref.referee_name ?? "—"}
-                      {ref.company_name && <span className="text-muted-foreground font-normal"> — {ref.company_name}</span>}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {typeLabel} Reference {slotLabel}
-                      {ref.requested_at && <> · Requested {fmtDate(ref.requested_at)}</>}
-                      {ref.received_at && <> · Received {fmtDate(ref.received_at)}</>}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {isReceived ? (
-                      <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">
-                        Received
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">
-                        Requested
-                      </span>
-                    )}
-                    <button
-                      onClick={async () => {
-                        if (!ref.referee_email) {
-                          toast.error("No email address on this reference.");
-                          return;
-                        }
-                        const { error } = await supabase.functions.invoke("send-reference-request", {
-                          body: { reference_id: ref.id },
-                        });
-                        if (error) {
-                          toast.error("Failed to send: " + error.message);
-                        } else {
-                          toast.success(`Reference request sent to ${ref.referee_name ?? ref.referee_email}`);
-                          await loadAll();
-                        }
-                      }}
-                      className="inline-flex items-center gap-1 h-7 px-3 rounded-lg border text-xs font-medium hover:bg-muted/40 transition-colors">
-                      <Mail className="h-3 w-3" /> {ref.status === "requested" || ref.status === "received" ? "Resend" : "Send"}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      <ReferencesTracker candidateId={id} references={references} onRefresh={loadAll} />
 
       {/* ── Onboarding ──────────────────────────────────────── */}
       <div className="bg-card rounded-2xl shadow-[var(--shadow-card)] overflow-hidden">
@@ -1061,3 +1003,265 @@ function ComplianceSummary({ candidate, checklist, docs, references, lastMessage
     </div>
   );
 }
+
+// ── ReferencesTracker ────────────────────────────────────────────────────────
+type AddRefereeForm = {
+  ref_type: "work" | "character";
+  referee_name: string;
+  referee_email: string;
+  referee_phone: string;
+  referee_job_title: string;
+  company_name: string;
+  candidate_position: string;
+  employment_start_date: string;
+  employment_end_date: string;
+  is_current_role: boolean;
+  reason_for_leaving: string;
+  relationship_to_candidate: string;
+  known_duration: string;
+};
+
+const EMPTY_FORM: AddRefereeForm = {
+  ref_type: "work", referee_name: "", referee_email: "", referee_phone: "",
+  referee_job_title: "", company_name: "", candidate_position: "",
+  employment_start_date: "", employment_end_date: "", is_current_role: false,
+  reason_for_leaving: "", relationship_to_candidate: "", known_duration: "",
+};
+
+const CHASE_STAGE_LABELS = [
+  "Request sent",
+  "Day 2 reminder sent", "Day 4 reminder sent", "Day 5 reminder sent",
+  "Day 7 reminder sent", "Day 10 reminder sent", "Day 14 final reminder sent",
+];
+
+function ReferencesTracker({ candidateId, references, onRefresh }: {
+  candidateId: string;
+  references: ReferenceRecord[];
+  onRefresh: () => Promise<void>;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState<AddRefereeForm>(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+
+  const set = (k: keyof AddRefereeForm, v: string | boolean) =>
+    setForm(prev => ({ ...prev, [k]: v }));
+
+  const save = async () => {
+    if (!form.referee_name.trim() || !form.referee_email.trim()) {
+      toast.error("Referee name and email are required");
+      return;
+    }
+    setSaving(true);
+    try {
+      const { error } = await supabase.functions.invoke("create-reference-rows", {
+        body: {
+          candidate_id: candidateId,
+          referees: [{
+            ref_type:                  form.ref_type,
+            referee_name:              form.referee_name,
+            referee_email:             form.referee_email,
+            referee_phone:             form.referee_phone || null,
+            referee_job_title:         form.referee_job_title || null,
+            company_name:              form.company_name || null,
+            candidate_position:        form.candidate_position || null,
+            employment_start_date:     form.employment_start_date || null,
+            employment_end_date:       form.employment_end_date || null,
+            is_current_role:           form.is_current_role,
+            reason_for_leaving:        form.reason_for_leaving || null,
+            relationship_to_candidate: form.relationship_to_candidate || null,
+            known_duration:            form.known_duration || null,
+          }],
+        },
+      });
+      if (error) throw error;
+      toast.success(`Referee added: ${form.referee_name}`);
+      setForm(EMPTY_FORM);
+      setShowForm(false);
+      await onRefresh();
+    } catch (e: unknown) {
+      toast.error("Failed to add referee: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-card rounded-2xl shadow-[var(--shadow-card)] overflow-hidden">
+      <div className="px-6 py-4 border-b bg-muted/10 flex items-center justify-between">
+        <h2 className="font-semibold text-sm">References Tracker</h2>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted-foreground">{references.length} referee{references.length !== 1 ? "s" : ""}</span>
+          <button onClick={() => setShowForm(v => !v)}
+            className="inline-flex items-center gap-1 h-7 px-3 rounded-lg border text-xs font-medium hover:bg-muted/40 transition-colors">
+            {showForm ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+            {showForm ? "Cancel" : "Add Referee"}
+          </button>
+        </div>
+      </div>
+
+      {/* Add Referee Form */}
+      {showForm && (
+        <div className="px-6 py-5 border-b bg-muted/5 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Reference Type</label>
+              <div className="flex gap-2">
+                {(["work", "character"] as const).map(t => (
+                  <button key={t} onClick={() => set("ref_type", t)}
+                    className={`h-7 px-3 rounded-lg border text-xs font-medium transition-colors ${form.ref_type === t ? "bg-navy text-white border-navy" : "border-border hover:bg-muted/40"}`}>
+                    {t === "work" ? "Work / Professional" : "Character"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Referee Name *</label>
+              <input value={form.referee_name} onChange={e => set("referee_name", e.target.value)}
+                className="w-full h-8 px-3 rounded-lg border border-border text-sm bg-background focus:outline-none focus:ring-1 focus:ring-teal/40" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Referee Email *</label>
+              <input type="email" value={form.referee_email} onChange={e => set("referee_email", e.target.value)}
+                className="w-full h-8 px-3 rounded-lg border border-border text-sm bg-background focus:outline-none focus:ring-1 focus:ring-teal/40" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Referee Phone</label>
+              <input value={form.referee_phone} onChange={e => set("referee_phone", e.target.value)}
+                className="w-full h-8 px-3 rounded-lg border border-border text-sm bg-background focus:outline-none focus:ring-1 focus:ring-teal/40" />
+            </div>
+            {form.ref_type === "work" ? (<>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Their Job Title</label>
+                <input value={form.referee_job_title} onChange={e => set("referee_job_title", e.target.value)}
+                  className="w-full h-8 px-3 rounded-lg border border-border text-sm bg-background focus:outline-none focus:ring-1 focus:ring-teal/40" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Company Name</label>
+                <input value={form.company_name} onChange={e => set("company_name", e.target.value)}
+                  className="w-full h-8 px-3 rounded-lg border border-border text-sm bg-background focus:outline-none focus:ring-1 focus:ring-teal/40" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Candidate&apos;s Job Title There</label>
+                <input value={form.candidate_position} onChange={e => set("candidate_position", e.target.value)}
+                  className="w-full h-8 px-3 rounded-lg border border-border text-sm bg-background focus:outline-none focus:ring-1 focus:ring-teal/40" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Start Date</label>
+                <input type="date" value={form.employment_start_date} onChange={e => set("employment_start_date", e.target.value)}
+                  className="w-full h-8 px-3 rounded-lg border border-border text-sm bg-background focus:outline-none focus:ring-1 focus:ring-teal/40" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">End Date</label>
+                <input type="date" value={form.employment_end_date} onChange={e => set("employment_end_date", e.target.value)}
+                  disabled={form.is_current_role}
+                  className="w-full h-8 px-3 rounded-lg border border-border text-sm bg-background focus:outline-none focus:ring-1 focus:ring-teal/40 disabled:opacity-40" />
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <input type="checkbox" id="current_role" checked={form.is_current_role}
+                  onChange={e => { set("is_current_role", e.target.checked); if (e.target.checked) set("employment_end_date", ""); }}
+                  className="h-4 w-4 rounded border-border" />
+                <label htmlFor="current_role" className="text-xs text-muted-foreground">Current role</label>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Reason for Leaving</label>
+                <input value={form.reason_for_leaving} onChange={e => set("reason_for_leaving", e.target.value)}
+                  className="w-full h-8 px-3 rounded-lg border border-border text-sm bg-background focus:outline-none focus:ring-1 focus:ring-teal/40" />
+              </div>
+            </>) : (<>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Relationship to Candidate</label>
+                <input value={form.relationship_to_candidate} onChange={e => set("relationship_to_candidate", e.target.value)}
+                  placeholder="e.g. Friend, Mentor, Colleague"
+                  className="w-full h-8 px-3 rounded-lg border border-border text-sm bg-background focus:outline-none focus:ring-1 focus:ring-teal/40" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">How Long Known</label>
+                <input value={form.known_duration} onChange={e => set("known_duration", e.target.value)}
+                  placeholder="e.g. 3 years"
+                  className="w-full h-8 px-3 rounded-lg border border-border text-sm bg-background focus:outline-none focus:ring-1 focus:ring-teal/40" />
+              </div>
+            </>)}
+          </div>
+          <div className="flex justify-end">
+            <button onClick={save} disabled={saving}
+              className="h-8 px-4 rounded-lg bg-teal text-teal-foreground text-xs font-medium hover:opacity-90 disabled:opacity-50 transition-opacity">
+              {saving ? "Saving…" : "Save Referee"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Reference rows */}
+      {references.length === 0 && !showForm ? (
+        <div className="px-6 py-8 text-center text-sm text-muted-foreground">
+          No referees added yet. Click &ldquo;Add Referee&rdquo; to add one manually, or they will be imported automatically when the candidate submits their registration form.
+        </div>
+      ) : (
+        <div className="divide-y divide-border/40">
+          {references.map((ref) => {
+            const typeLabel = ref.ref_type === "character" ? "Character" : "Work";
+            const slotLabel = ref.ref_number != null ? `#${ref.ref_number}` : "";
+            const isReceived = ref.status === "received" || !!ref.received_at;
+            const isPending = ref.status === "pending" || !ref.status;
+            const stage = ref.reminder_stage ?? 0;
+            const stageLabel = CHASE_STAGE_LABELS[Math.min(stage, 6)];
+            const nextChase = ref.next_reminder_at ? new Date(ref.next_reminder_at) : null;
+            const nextChaseStr = nextChase
+              ? nextChase.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
+              : null;
+            return (
+              <div key={ref.id} className="px-6 py-4">
+                <div className="flex items-start gap-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">
+                      {ref.referee_name ?? "—"}
+                      {ref.company_name && <span className="text-muted-foreground font-normal"> — {ref.company_name}</span>}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {typeLabel} Reference {slotLabel}
+                      {ref.referee_email && <> · {ref.referee_email}</>}
+                      {ref.requested_at && <> · Requested {fmtDate(ref.requested_at)}</>}
+                      {ref.received_at && <> · Received {fmtDate(ref.received_at)}</>}
+                    </p>
+                    {!isReceived && !isPending && (
+                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
+                        <Bell className="h-3 w-3 text-amber-500" />
+                        <span>{stageLabel}</span>
+                        {nextChaseStr && stage < 6 && (
+                          <span className="text-amber-600">· Next chase {nextChaseStr}</span>
+                        )}
+                        {stage >= 6 && <span className="text-red-500">· Chase sequence complete — no response</span>}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {isReceived ? (
+                      <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">Received</span>
+                    ) : isPending ? (
+                      <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700">Pending Send</span>
+                    ) : (
+                      <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">Chasing</span>
+                    )}
+                    {!isReceived && (
+                      <button
+                        onClick={async () => {
+                          if (!ref.referee_email) { toast.error("No email address on this reference."); return; }
+                          const { error } = await supabase.functions.invoke("send-reference-request", { body: { reference_id: ref.id } });
+                          if (error) { toast.error("Failed to send: " + error.message); }
+                          else { toast.success(`Request sent to ${ref.referee_name ?? ref.referee_email}`); await onRefresh(); }
+                        }}
+                        className="inline-flex items-center gap-1 h-7 px-3 rounded-lg border text-xs font-medium hover:bg-muted/40 transition-colors">
+                        <Mail className="h-3 w-3" /> {isPending ? "Send" : "Resend"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
