@@ -88,6 +88,7 @@ export default function ApplicationsCentre() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [acting, setActing] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [jobClientMap, setJobClientMap] = useState<Record<string, string>>({});
 
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok });
@@ -100,7 +101,25 @@ export default function ApplicationsCentre() {
       .from("job_site_applications")
       .select("*")
       .order("submitted_at", { ascending: false });
-    setApps((data as Application[]) || []);
+    const apps = (data as Application[]) || [];
+    setApps(apps);
+
+    // Fetch client names for all unique job references
+    const refs = [...new Set(apps.map((a) => a.job_reference).filter(Boolean))] as string[];
+    if (refs.length > 0) {
+      const { data: jobs } = await supabase
+        .from("jobs")
+        .select("job_reference, clients(company_name)")
+        .in("job_reference", refs);
+      const map: Record<string, string> = {};
+      for (const job of (jobs ?? []) as any[]) {
+        if (job.job_reference && job.clients?.company_name) {
+          map[job.job_reference] = job.clients.company_name;
+        }
+      }
+      setJobClientMap(map);
+    }
+
     setLoading(false);
   };
 
@@ -365,6 +384,11 @@ export default function ApplicationsCentre() {
                       {app.job_reference && (
                         <span className="text-[11px] bg-navy/8 text-navy px-1.5 py-0.5 rounded-full font-medium">
                           {app.job_reference}
+                        </span>
+                      )}
+                      {app.job_reference && jobClientMap[app.job_reference] && (
+                        <span className="text-[11px] text-muted-foreground font-medium">
+                          {jobClientMap[app.job_reference]}
                         </span>
                       )}
                       {app.preferred_location && (
