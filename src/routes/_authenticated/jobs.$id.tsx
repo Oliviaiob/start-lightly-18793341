@@ -1118,12 +1118,13 @@ function Page() {
                 <SelectTrigger className="h-10"><SelectValue placeholder="— Select —" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">— None —</SelectItem>
-                  <SelectItem value="Private nursery">Private nursery</SelectItem>
-                  <SelectItem value="School">School</SelectItem>
-                  <SelectItem value="Private family">Private family</SelectItem>
+                  <SelectItem value="Nurseries">Nurseries</SelectItem>
+                  <SelectItem value="Pre-schools">Pre-schools</SelectItem>
+                  <SelectItem value="Schools & Education">Schools &amp; Education</SelectItem>
                   <SelectItem value="SEND">SEND</SelectItem>
-                  <SelectItem value="After school / holiday club">After school / holiday club</SelectItem>
-                  <SelectItem value="Hospital / healthcare">Hospital / healthcare</SelectItem>
+                  <SelectItem value="Children's support">Children&#39;s support</SelectItem>
+                  <SelectItem value="Private families">Private families</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
