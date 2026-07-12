@@ -173,7 +173,7 @@ export function AddTempCandidateModal({ open, onClose, onCreated }: {
               {full.has_dbs&&<F label="DBS Certificate Number"><Input value={full.dbs_certificate_number} onChange={e=>setF("dbs_certificate_number",e.target.value)} className="h-9"/></F>}
             </div>
             <div className="space-y-3"><h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Availability</h3>
-              <F label="Preferred fields"><ChipGroup options={["Early Years (Nursery)","Education (Schools)","Private Nanny","SEND"]} field="preferred_fields"/></F>
+              <F label="Preferred fields"><ChipGroup options={["Nurseries","Pre-schools","Schools & Education","SEND","Children's support","Private families","Other"]} field="preferred_fields"/></F>
               <F label="Available days"><ChipGroup options={["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]} field="available_days"/></F>
               <F label="Shift types"><ChipGroup options={["Full days","Overnight stays","Term-time only","Lunch cover only","Evening shifts","Weekends","School hours only"]} field="shift_types_available"/></F>
             </div>
