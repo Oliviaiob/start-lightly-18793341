@@ -50,6 +50,10 @@ type Job = {
   posted_at: string | null;
   boolean_searches: { broad: string; standard: string; perfect: string } | null;
   description_soar: string | null;
+  location_text: string | null;
+  sector: string | null;
+  employment_type: string | null;
+  contract_type: string | null;
 };
 
 type PipelineEntry = {
@@ -770,7 +774,7 @@ function Page() {
 
   const loadAll = async () => {
     const [jRes, pRes, aRes] = await Promise.all([
-      supabase.from("jobs").select("id,title,client_id,status,qualification_required,salary_min,salary_max,location_postcode,description,notes,hours,room,advertising_notes,source_boards,branch_id,posted_at,boolean_searches,description_soar,clients(company_name)").eq("id", id).maybeSingle(),
+      supabase.from("jobs").select("id,title,client_id,status,qualification_required,salary_min,salary_max,location_postcode,location_text,sector,employment_type,contract_type,description,notes,hours,room,advertising_notes,source_boards,branch_id,posted_at,boolean_searches,description_soar,clients(company_name)").eq("id", id).maybeSingle(),
       supabase.from("job_pipeline").select("id,stage,stage_changed_at,candidates(id,first_name,last_name,qualification_level,postcode,phone)").eq("job_id", id).order("stage_changed_at", { ascending: false }),
       supabase.from("activity_log").select("id,activity_type,description,created_by,created_at").eq("entity_id", id).eq("entity_type", "job").order("created_at", { ascending: false }).limit(30),
     ]);
@@ -801,6 +805,10 @@ function Page() {
       salary_min: draft.salary_min ?? null,
       salary_max: draft.salary_max ?? null,
       location_postcode: draft.location_postcode || null,
+      location_text: draft.location_text || null,
+      sector: draft.sector || null,
+      employment_type: draft.employment_type || null,
+      contract_type: draft.contract_type || null,
       branch_id: draft.branch_id || null,
       room: draft.room || null,
       hours: draft.hours || null,
@@ -1045,7 +1053,10 @@ function Page() {
               const branchName = branches.find((b) => b.id === job.branch_id)?.branch_name;
               return branchName ? <><span>·</span><span>{branchName}</span></> : null;
             })()}
-            {job.location_postcode && <><span>·</span><span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.location_postcode}</span></>}
+            {(job.location_text || job.location_postcode) && <><span>·</span><span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.location_text || job.location_postcode}</span></>}
+            {job.sector && <><span>·</span><span className="px-2 py-0.5 rounded-full text-xs bg-purple-100 text-purple-700">{job.sector}</span></>}
+            {job.employment_type && <><span>·</span><span className="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700">{{ full_time: "Full time", part_time: "Part time", either: "Full or part time" }[job.employment_type] ?? job.employment_type}</span></>}
+            {job.contract_type && <><span>·</span><span className="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-700">{{ permanent: "Permanent", flexible: "Flexible", temporary: "Temporary" }[job.contract_type] ?? job.contract_type}</span></>}
             <span>·</span>
             <span>Posted {relTime(job.posted_at)}</span>
             <span>·</span>
@@ -1094,6 +1105,49 @@ function Page() {
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Postcode</label>
               <Input value={draft.location_postcode ?? ""} onChange={(e) => setD("location_postcode", e.target.value)} placeholder="SW1A 1AA" className="h-10" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Location (display name)</label>
+              <Input value={draft.location_text ?? ""} onChange={(e) => setD("location_text", e.target.value)} placeholder="e.g. Croydon, London" className="h-10" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Industry / Sector</label>
+              <Select value={draft.sector ?? "__none__"} onValueChange={(v) => setD("sector", v === "__none__" ? null : v)}>
+                <SelectTrigger className="h-10"><SelectValue placeholder="— Select —" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— None —</SelectItem>
+                  <SelectItem value="Private nursery">Private nursery</SelectItem>
+                  <SelectItem value="School">School</SelectItem>
+                  <SelectItem value="Private family">Private family</SelectItem>
+                  <SelectItem value="SEND">SEND</SelectItem>
+                  <SelectItem value="After school / holiday club">After school / holiday club</SelectItem>
+                  <SelectItem value="Hospital / healthcare">Hospital / healthcare</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Employment type</label>
+              <Select value={draft.employment_type ?? "__none__"} onValueChange={(v) => setD("employment_type", v === "__none__" ? null : v)}>
+                <SelectTrigger className="h-10"><SelectValue placeholder="— Select —" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— None —</SelectItem>
+                  <SelectItem value="full_time">Full time</SelectItem>
+                  <SelectItem value="part_time">Part time</SelectItem>
+                  <SelectItem value="either">Either</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Contract type</label>
+              <Select value={draft.contract_type ?? "__none__"} onValueChange={(v) => setD("contract_type", v === "__none__" ? null : v)}>
+                <SelectTrigger className="h-10"><SelectValue placeholder="— Select —" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— None —</SelectItem>
+                  <SelectItem value="permanent">Permanent</SelectItem>
+                  <SelectItem value="flexible">Flexible</SelectItem>
+                  <SelectItem value="temporary">Temporary</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Branch</label>
