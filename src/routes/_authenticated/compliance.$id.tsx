@@ -23,9 +23,7 @@ type ChecklistKey =
   | "safeguarding_training_cert" | "paediatric_first_aid_cert" | "qualification_certificates"
   | "work_reference_1" | "work_reference_2" | "character_reference";
 
-type ItemStatus = "pending" | "awaiting_candidate" | "uploaded" | "under_review"
-  | "approved" | "verified" | "rejected" | "flagged"
-  | "manual_review" | "awaiting_referee" | "awaiting_manager" | "not_required";
+type ItemStatus = "not_submitted" | "uploaded" | "approved" | "rejected" | "not_required";
 
 const CHECKLIST_ITEMS: { key: ChecklistKey; label: string; group: string; required: boolean }[] = [
   { key: "proof_of_id",              label: "Proof of ID",              group: "Identity",   required: true  },
@@ -49,16 +47,11 @@ const REQUIRED_KEYS = CHECKLIST_ITEMS.filter((i) => i.required).map((i) => i.key
 const GROUPS = ["Identity", "RTW", "DBS", "Training", "References"] as const;
 
 const STATUS_OPTIONS: { value: ItemStatus; label: string }[] = [
-  { value: "pending",            label: "Pending"            },
-  { value: "awaiting_candidate", label: "Awaiting Candidate" },
-  { value: "uploaded",           label: "Uploaded"           },
-  { value: "under_review",       label: "Under Review"       },
-  { value: "approved",           label: "Approved"           },
-  { value: "rejected",           label: "Rejected"           },
-  { value: "manual_review",      label: "Manual Review"      },
-  { value: "awaiting_referee",   label: "Awaiting Referee"   },
-  { value: "awaiting_manager",   label: "Awaiting Manager"   },
-  { value: "not_required",       label: "Not Required"       },
+  { value: "not_submitted", label: "Not Submitted" },
+  { value: "uploaded",      label: "Uploaded"      },
+  { value: "approved",      label: "Approved"      },
+  { value: "rejected",      label: "Rejected"      },
+  { value: "not_required",  label: "Not Required"  },
 ];
 
 const OVERALL_STATUS_OPTIONS = [
@@ -127,30 +120,22 @@ function fmtFileSize(bytes: number | null) {
 // ── Status badge (item-level) ─────────────────────────────────────────────────
 
 const ITEM_BADGE: Record<string, { label: string; bg: string; text: string }> = {
-  pending:            { label: "Pending",            bg: "bg-amber-100",  text: "text-amber-700"  },
-  awaiting_candidate: { label: "Awaiting Candidate", bg: "bg-blue-100",   text: "text-blue-700"   },
-  uploaded:           { label: "Uploaded",           bg: "bg-blue-100",   text: "text-blue-700"   },
-  under_review:       { label: "Under Review",       bg: "bg-indigo-100", text: "text-indigo-700" },
-  approved:           { label: "Approved",           bg: "bg-green-100",  text: "text-green-700"  },
-  verified:           { label: "Verified",           bg: "bg-green-100",  text: "text-green-700"  },
-  rejected:           { label: "Rejected",           bg: "bg-red-100",    text: "text-red-700"    },
-  flagged:            { label: "Flagged",            bg: "bg-red-100",    text: "text-red-700"    },
-  manual_review:      { label: "Manual Review",      bg: "bg-amber-100",  text: "text-amber-700"  },
-  awaiting_referee:   { label: "Awaiting Referee",   bg: "bg-orange-100", text: "text-orange-700" },
-  awaiting_manager:   { label: "Awaiting Manager",   bg: "bg-purple-100", text: "text-purple-700" },
-  not_required:       { label: "Not Required",       bg: "bg-muted",      text: "text-muted-foreground" },
+  not_submitted: { label: "Not Submitted", bg: "bg-gray-100",   text: "text-gray-500"   },
+  uploaded:      { label: "Uploaded",      bg: "bg-amber-100",  text: "text-amber-700"  },
+  approved:      { label: "Approved",      bg: "bg-green-100",  text: "text-green-700"  },
+  rejected:      { label: "Rejected",      bg: "bg-red-100",    text: "text-red-700"    },
+  not_required:  { label: "Not Required",  bg: "bg-purple-50",  text: "text-purple-600" },
 };
 
 function ItemBadge({ status }: { status: string | null }) {
-  const m = ITEM_BADGE[status ?? "pending"] ?? ITEM_BADGE.pending;
+  const m = ITEM_BADGE[status ?? "not_submitted"] ?? ITEM_BADGE.not_submitted;
   return <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold ${m.bg} ${m.text}`}>{m.label}</span>;
 }
 
 function ItemStatusIcon({ status }: { status: string | null }) {
-  if (status === "verified" || status === "approved") return <CheckCircle className="h-5 w-5 text-green-500" />;
-  if (status === "flagged"  || status === "rejected") return <AlertTriangle className="h-5 w-5 text-red-500" />;
-  if (status === "uploaded" || status === "under_review") return <Clock className="h-5 w-5 text-blue-400" />;
-  if (status === "manual_review" || status === "awaiting_manager") return <AlertTriangle className="h-5 w-5 text-amber-500" />;
+  if (status === "approved")      return <CheckCircle className="h-5 w-5 text-green-500" />;
+  if (status === "rejected")      return <AlertTriangle className="h-5 w-5 text-red-500" />;
+  if (status === "uploaded")      return <Clock className="h-5 w-5 text-amber-400" />;
   if (status === "not_required")  return <Minus className="h-5 w-5 text-muted-foreground/40" />;
   return <Circle className="h-5 w-5 text-muted-foreground/25" />;
 }
@@ -164,22 +149,12 @@ function deriveWorkflowState(
 ): DerivedWorkflowState {
   const isRef = item.key.includes("reference");
   switch (status) {
-    case "approved": case "verified": case "not_required":
+    case "approved": case "not_required":
       return { waitingOn: "System", nextAction: "No action required", aiRecommendation: "No action required", priority: 9 };
     case "uploaded":
       return { waitingOn: "Sophie", nextAction: `Review ${item.label.toLowerCase()}`, aiRecommendation: "Run AI check to verify document", priority: 3 };
-    case "under_review":
-      return { waitingOn: "Sophie", nextAction: "AI check in progress", aiRecommendation: "Awaiting AI analysis", priority: 3 };
-    case "flagged": case "rejected":
-      return { waitingOn: "Sophie", nextAction: "Review flagged document", aiRecommendation: "Review AI flag — request replacement if needed", priority: 2 };
-    case "manual_review":
-      return { waitingOn: "Manager", nextAction: "Manual review required", aiRecommendation: "Escalate to Manager", priority: 3 };
-    case "awaiting_referee":
-      return { waitingOn: "Referee", nextAction: "Awaiting referee response", aiRecommendation: "Chase referee", priority: 4 };
-    case "awaiting_manager":
-      return { waitingOn: "Manager", nextAction: "Awaiting manager approval", aiRecommendation: "Escalate to Manager", priority: 3 };
-    case "awaiting_candidate":
-      return { waitingOn: "Candidate", nextAction: "Awaiting candidate upload", aiRecommendation: "Await candidate response", priority: 5 };
+    case "rejected":
+      return { waitingOn: "Sophie", nextAction: "Review rejected document", aiRecommendation: "Request replacement document from candidate", priority: 2 };
     default:
       if (hasDoc) return { waitingOn: "Sophie", nextAction: `Run AI check on ${item.label.toLowerCase()}`, aiRecommendation: "Run AI check to verify document", priority: 3 };
       if (isRef)  return { waitingOn: "Referee", nextAction: "Send reference request", aiRecommendation: "Chase referee", priority: 6 };
@@ -499,7 +474,7 @@ function Page() {
 
     // 4. Auto-advance status to uploaded
     const currentStatus = checklist?.[key];
-    if (!currentStatus || currentStatus === "pending" || currentStatus === "awaiting_candidate") {
+    if (!currentStatus || currentStatus === "not_submitted") {
       await updateItem(key, "uploaded");
     } else {
       setSavingItem(null);
@@ -518,7 +493,7 @@ function Page() {
     const { error } = await supabase.from("candidate_documents").delete().eq("id", doc.id);
     if (error) { toast.error("Remove failed: " + error.message); setSavingItem(null); return; }
     // Reset status to pending
-    await updateItem(key, "pending");
+    await updateItem(key, "not_submitted");
     await loadAll();
     await logWorkflowActivity(key, `Document removed — awaiting replacement`, "system");
     toast.success("Document removed");
@@ -608,7 +583,7 @@ function Page() {
   };
 
   const p = {
-    done: REQUIRED_KEYS.filter((k) => checklist?.[k] === "verified" || checklist?.[k] === "not_required").length,
+    done: REQUIRED_KEYS.filter((k) => checklist?.[k] === "approved" || checklist?.[k] === "not_required").length,
     total: REQUIRED_KEYS.length,
   };
   const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
@@ -692,7 +667,7 @@ function Page() {
       </div>
 
       {CHECKLIST_ITEMS.map((item) => {
-        const status = ((checklist?.[item.key] ?? "pending") as ItemStatus);
+        const status = ((checklist?.[item.key] ?? "not_submitted") as ItemStatus);
         // Latest doc for this item type
         const doc = docs.find((d) => d.document_type === item.key) ?? null;
         const aiResult = checklist?.ai_results?.[item.key] ?? null;
@@ -858,46 +833,46 @@ function buildBlockers(
     : "Contact candidate — overdue";
 
   const addDocBlocker = (key: string, label: string, urgent = false) => {
-    const status = checklist?.[key] ?? "pending";
-    if (status === "verified" || status === "not_required") return;
+    const status = checklist?.[key] ?? "not_submitted";
+    if (status === "approved" || status === "not_required") return;
     const doc = docs.find(d => d.document_type === key);
-    if (status === "flagged") {
-      blockers.push({ label, status, detail: "Document uploaded but flagged by AI — review required.", nextAction: "Review AI flag", urgent: true });
+    if (status === "rejected") {
+      blockers.push({ label, status, detail: "Document rejected — candidate needs to resubmit.", nextAction: "Contact candidate to resubmit", urgent: true });
     } else if (doc) {
-      blockers.push({ label, status: "uploaded", detail: `Document uploaded ${relativeTime(doc.uploaded_at)} — AI check not yet run.`, nextAction: "Run AI check" });
+      blockers.push({ label, status: "uploaded", detail: `Document uploaded ${relativeTime(doc.uploaded_at)} — awaiting review.`, nextAction: "Review document" });
     } else {
-      blockers.push({ label, status: "pending", detail: `No document uploaded. ${lastContactStr}.`, nextAction: chaseAction, urgent, expectedCompletion: daysSinceContact < 1 ? "Expected today" : undefined });
+      blockers.push({ label, status: "not_submitted", detail: `No document uploaded. ${lastContactStr}.`, nextAction: chaseAction, urgent, expectedCompletion: daysSinceContact < 1 ? "Expected today" : undefined });
     }
   };
 
   const addTextBlocker = (key: string, label: string, thing: string) => {
-    const status = checklist?.[key] ?? "pending";
-    if (status === "verified" || status === "not_required") return;
+    const status = checklist?.[key] ?? "not_submitted";
+    if (status === "approved" || status === "not_required") return;
     blockers.push({ label, status, detail: `${thing} not yet received. ${lastContactStr}.`, nextAction: chaseAction });
   };
 
   const addRefBlocker = (refNum: number, label: string) => {
     const key = refNum === 1 ? "work_reference_1" : refNum === 2 ? "work_reference_2" : "character_reference";
-    const status = checklist?.[key] ?? "pending";
-    if (status === "verified" || status === "not_required") return;
+    const status = checklist?.[key] ?? "not_submitted";
+    if (status === "approved" || status === "not_required") return;
     const ref = references.find(r => r.ref_number === refNum);
 
-    if (status === "flagged") {
-      blockers.push({ label, status, detail: `Reference received from ${ref?.referee_name ?? "referee"} but flagged — review content.`, nextAction: "Review reference", urgent: true });
+    if (status === "rejected") {
+      blockers.push({ label, status, detail: `Reference received from ${ref?.referee_name ?? "referee"} but rejected — review content.`, nextAction: "Review reference", urgent: true });
     } else if (ref?.received_at) {
-      blockers.push({ label, status: "uploaded", detail: `Reference received from ${ref.referee_name ?? "referee"} — AI check not yet run.`, nextAction: "Run AI check" });
+      blockers.push({ label, status: "uploaded", detail: `Reference received from ${ref.referee_name ?? "referee"} — awaiting review.`, nextAction: "Review reference" });
     } else if (ref?.requested_at) {
       const days = daysSince(ref.requested_at);
       const sent = relativeTime(ref.requested_at);
       if (days < 3) {
-        blockers.push({ label, status: "pending", detail: `Reference request sent ${sent} to ${ref.referee_name ?? "referee"}.`, nextAction: "Awaiting response", expectedCompletion: "Expected within 2–3 days" });
+        blockers.push({ label, status: "not_submitted", detail: `Reference request sent ${sent} to ${ref.referee_name ?? "referee"}.`, nextAction: "Awaiting response", expectedCompletion: "Expected within 2–3 days" });
       } else if (days < 7) {
-        blockers.push({ label, status: "pending", detail: `Reference request sent ${sent} — no response yet.`, nextAction: "Send reminder to referee", urgent: days > 5, expectedCompletion: "Expected within 1–2 days if chased" });
+        blockers.push({ label, status: "not_submitted", detail: `Reference request sent ${sent} — no response yet.`, nextAction: "Send reminder to referee", urgent: days > 5, expectedCompletion: "Expected within 1–2 days if chased" });
       } else {
-        blockers.push({ label, status: "pending", detail: `Reference request sent ${sent} — overdue with no response.`, nextAction: "Chase referee or request alternative", urgent: true });
+        blockers.push({ label, status: "not_submitted", detail: `Reference request sent ${sent} — overdue with no response.`, nextAction: "Chase referee or request alternative", urgent: true });
       }
     } else {
-      blockers.push({ label, status: "pending", detail: "Reference request not yet sent.", nextAction: "Send reference request" });
+      blockers.push({ label, status: "not_submitted", detail: "Reference request not yet sent.", nextAction: "Send reference request" });
     }
   };
 
@@ -911,8 +886,8 @@ function buildBlockers(
   addTextBlocker("ni_number_check", "NI Number", "NI number");
   // DBS
   addDocBlocker("dbs_certificate", "DBS Certificate", true);
-  const dbsUpdateStatus = checklist?.["dbs_update_service_check"] ?? "pending";
-  if (dbsUpdateStatus !== "verified" && dbsUpdateStatus !== "not_required") {
+  const dbsUpdateStatus = checklist?.["dbs_update_service_check"] ?? "not_submitted";
+  if (dbsUpdateStatus !== "approved" && dbsUpdateStatus !== "not_required") {
     blockers.push({ label: "DBS Update Service", status: dbsUpdateStatus, detail: "Manual check required on the government website.", nextAction: "Check gov.uk Update Service portal" });
   }
   addDocBlocker("childrens_barred_list", "Children's Barred List", true);
