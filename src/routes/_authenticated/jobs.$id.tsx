@@ -1057,8 +1057,8 @@ function Page() {
             })()}
             {(job.location_text || job.location_postcode) && <><span>·</span><span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.location_text || job.location_postcode}</span></>}
             {job.sector && <><span>·</span><span className="px-2 py-0.5 rounded-full text-xs bg-purple-100 text-purple-700">{job.sector}</span></>}
-            {job.employment_type && <><span>·</span><span className="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700">{{ full_time: "Full time", part_time: "Part time", either: "Full or part time" }[job.employment_type] ?? job.employment_type}</span></>}
-            {job.contract_type && <><span>·</span><span className="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-700">{{ permanent: "Permanent", flexible: "Flexible", temporary: "Temporary" }[job.contract_type] ?? job.contract_type}</span></>}
+            {job.employment_type && <><span>·</span><span className="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700">{{ full_time: "Full time", part_time: "Part time", term_time: "Term-time only", either: "Full or part time" }[job.employment_type] ?? job.employment_type}</span></>}
+            {job.contract_type && <><span>·</span><span className="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-700">{{ permanent: "Permanent", temporary: "Temporary / Flexible" }[job.contract_type] ?? job.contract_type}</span></>}
             <span>·</span>
             <span>Posted {relTime(job.posted_at)}</span>
             <span>·</span>
@@ -1129,26 +1129,25 @@ function Page() {
               </Select>
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Employment type</label>
+              <label className="text-xs font-medium text-muted-foreground">Hours</label>
               <Select value={draft.employment_type ?? "__none__"} onValueChange={(v) => setD("employment_type", v === "__none__" ? null : v)}>
                 <SelectTrigger className="h-10"><SelectValue placeholder="— Select —" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">— None —</SelectItem>
                   <SelectItem value="full_time">Full time</SelectItem>
                   <SelectItem value="part_time">Part time</SelectItem>
-                  <SelectItem value="either">Either</SelectItem>
+                  <SelectItem value="term_time">Term-time only</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Contract type</label>
+              <label className="text-xs font-medium text-muted-foreground">Type</label>
               <Select value={draft.contract_type ?? "__none__"} onValueChange={(v) => setD("contract_type", v === "__none__" ? null : v)}>
                 <SelectTrigger className="h-10"><SelectValue placeholder="— Select —" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">— None —</SelectItem>
                   <SelectItem value="permanent">Permanent</SelectItem>
-                  <SelectItem value="flexible">Flexible</SelectItem>
-                  <SelectItem value="temporary">Temporary</SelectItem>
+                  <SelectItem value="temporary">Temporary / Flexible</SelectItem>
                 </SelectContent>
               </Select>
             </div>
