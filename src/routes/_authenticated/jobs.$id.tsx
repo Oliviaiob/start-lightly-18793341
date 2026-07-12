@@ -54,6 +54,7 @@ type Job = {
   sector: string | null;
   employment_type: string | null;
   contract_type: string | null;
+  start_date_text: string | null;
 };
 
 type PipelineEntry = {
@@ -774,7 +775,7 @@ function Page() {
 
   const loadAll = async () => {
     const [jRes, pRes, aRes] = await Promise.all([
-      supabase.from("jobs").select("id,title,client_id,status,qualification_required,salary_min,salary_max,location_postcode,location_text,sector,employment_type,contract_type,description,notes,hours,room,advertising_notes,source_boards,branch_id,posted_at,boolean_searches,description_soar,clients(company_name)").eq("id", id).maybeSingle(),
+      supabase.from("jobs").select("id,title,client_id,status,qualification_required,salary_min,salary_max,location_postcode,location_text,sector,employment_type,contract_type,start_date_text,description,notes,hours,room,advertising_notes,source_boards,branch_id,posted_at,boolean_searches,description_soar,clients(company_name)").eq("id", id).maybeSingle(),
       supabase.from("job_pipeline").select("id,stage,stage_changed_at,candidates(id,first_name,last_name,qualification_level,postcode,phone)").eq("job_id", id).order("stage_changed_at", { ascending: false }),
       supabase.from("activity_log").select("id,activity_type,description,created_by,created_at").eq("entity_id", id).eq("entity_type", "job").order("created_at", { ascending: false }).limit(30),
     ]);
@@ -809,6 +810,7 @@ function Page() {
       sector: draft.sector || null,
       employment_type: draft.employment_type || null,
       contract_type: draft.contract_type || null,
+      start_date_text: draft.start_date_text || null,
       branch_id: draft.branch_id || null,
       room: draft.room || null,
       hours: draft.hours || null,
@@ -1148,6 +1150,10 @@ function Page() {
                   <SelectItem value="temporary">Temporary</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Start date</label>
+              <Input value={draft.start_date_text ?? ""} onChange={(e) => setD("start_date_text", e.target.value)} placeholder="e.g. ASAP, September 2026" className="h-10" />
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Branch</label>
