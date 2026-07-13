@@ -798,6 +798,59 @@ function Page() {
 
       {isTemp && (
         <div className="space-y-6">
+          {/* Temp Info — full-width card */}
+          <Card className="p-5 rounded-2xl border-2 border-teal/30 shadow-[var(--shadow-card)] bg-card">
+            <div className="flex items-center gap-2 mb-4">
+              <Briefcase className="h-4 w-4 text-teal-foreground" />
+              <h3 className="font-semibold text-sm">Temp Info</h3>
+              <span className="ml-auto text-[10px] text-muted-foreground">Used for shift matching</span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <div className="space-y-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Qualification</p>
+                <p className="text-sm font-medium">{fmtQual(c.qualification_level) || "—"}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Fields of Work</p>
+                <p className="text-sm font-medium">
+                  {(c as any).fields_of_work?.length
+                    ? (c as any).fields_of_work.map((f: string) =>
+                        f.replace(/_/g, " ").replace(/\w/g, (ch: string) => ch.toUpperCase())
+                      ).join(", ")
+                    : "—"}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Age Groups</p>
+                <p className="text-sm font-medium">
+                  {(c as any).preferred_age_groups?.length ? (c as any).preferred_age_groups.join(", ") : "—"}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Available Days</p>
+                <p className="text-sm font-medium">
+                  {(c as any).available_days?.length ? (c as any).available_days.join(", ") : "—"}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Time Slots</p>
+                <p className="text-sm font-medium capitalize">
+                  {(c as any).availability_times?.length ? (c as any).availability_times.join(", ") : "—"}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Commute</p>
+                <p className="text-sm font-medium">{c.commute_radius || "—"}</p>
+              </div>
+            </div>
+            {(c as any).experience_summary && (
+              <div className="mt-4 pt-4 border-t border-border/60 space-y-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Experience Summary</p>
+                <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">{(c as any).experience_summary}</p>
+              </div>
+            )}
+          </Card>
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card className="p-5 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
               <h3 className="font-semibold text-sm mb-3">Rate of Pay</h3>
@@ -864,59 +917,6 @@ function Page() {
                   </li>
                 ))}
               </ul>
-            )}
-          </Card>
-
-          {/* Matching Info — full-width card for shift matching */}
-          <Card className="p-5 rounded-2xl border-2 border-teal/30 shadow-[var(--shadow-card)] bg-card">
-            <div className="flex items-center gap-2 mb-4">
-              <Briefcase className="h-4 w-4 text-teal-foreground" />
-              <h3 className="font-semibold text-sm">Matching Info</h3>
-              <span className="ml-auto text-[10px] text-muted-foreground">Used for shift matching</span>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              <div className="space-y-1">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Qualification</p>
-                <p className="text-sm font-medium">{fmtQual(c.qualification_level) || "—"}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Fields of Work</p>
-                <p className="text-sm font-medium">
-                  {(c as any).fields_of_work?.length
-                    ? (c as any).fields_of_work.map((f: string) =>
-                        f.replace(/_/g, " ").replace(/\w/g, (ch: string) => ch.toUpperCase())
-                      ).join(", ")
-                    : "—"}
-                </p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Age Groups</p>
-                <p className="text-sm font-medium">
-                  {(c as any).preferred_age_groups?.length ? (c as any).preferred_age_groups.join(", ") : "—"}
-                </p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Available Days</p>
-                <p className="text-sm font-medium">
-                  {(c as any).available_days?.length ? (c as any).available_days.join(", ") : "—"}
-                </p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Time Slots</p>
-                <p className="text-sm font-medium capitalize">
-                  {(c as any).availability_times?.length ? (c as any).availability_times.join(", ") : "—"}
-                </p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Commute</p>
-                <p className="text-sm font-medium">{c.commute_radius || "—"}</p>
-              </div>
-            </div>
-            {(c as any).experience_summary && (
-              <div className="mt-4 pt-4 border-t border-border/60 space-y-1">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Experience Summary</p>
-                <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">{(c as any).experience_summary}</p>
-              </div>
             )}
           </Card>
         </div>
