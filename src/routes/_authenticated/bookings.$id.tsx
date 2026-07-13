@@ -1206,6 +1206,8 @@ function Page() {
   const [invitedCandidateIds, setInvitedCandidateIds] = useState<Set<string>>(new Set());
   const [editNotes, setEditNotes] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancellingBooking, setCancellingBooking] = useState(false);
   // Availability: submittedThisWeek set + time-off map (candidate_id -> array of time-off periods)
   const [availSubmitted, setAvailSubmitted] = useState<Set<string>>(new Set());
   const [candTimeOff, setCandTimeOff] = useState<Map<string, { title: string; start_date: string; end_date: string }[]>>(new Map());
@@ -1417,8 +1419,39 @@ function Page() {
   };
 
   const cancelBooking = async () => {
-    await supabase.from("bookings").update({ status: "cancelled" }).eq("id", id);
+    setCancellingBooking(true);
+    // 1. Cancel all non-cancelled temp_shifts for this booking
+    const activeShifts = shifts.filter((s) => (s.shift_status ?? s.status) !== "cancelled");
+    const { error: shiftsErr } = await supabase
+      .from("temp_shifts")
+      .update({ status: "cancelled", shift_status: "cancelled" })
+      .eq("booking_id", id)
+      .not("shift_status", "eq", "cancelled");
+    if (shiftsErr) { toast.error("Failed to cancel shifts: " + shiftsErr.message); setCancellingBooking(false); return; }
+
+    // 2. Cancel the booking record
+    const { error: bookingErr } = await supabase.from("bookings").update({ status: "cancelled" }).eq("id", id);
+    if (bookingErr) { toast.error("Failed to cancel booking: " + bookingErr.message); setCancellingBooking(false); return; }
+
+    // 3. For assigned shifts — trigger cancellation flow (updates shift_offers + push notification)
+    const assignedShifts = activeShifts.filter((s) => s.candidate_id);
+    await Promise.all(assignedShifts.map((s) =>
+      (supabase as any).functions.invoke("cancel-shift-booking", {
+        body: { shift_id: s.id, booking_id: id },
+      })
+    ));
+
+    // 4. Catch-all: cancel any remaining shift_offers for this booking (pending/unassigned visibility)
+    await supabase
+      .from("shift_offers")
+      .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
+      .eq("booking_group_id", id)
+      .not("status", "in", '("cancelled","completed")');
+
+    setShifts([]);
     setBooking((prev) => prev ? { ...prev, status: "cancelled" } : prev);
+    setShowCancelConfirm(false);
+    setCancellingBooking(false);
     toast.success("Booking cancelled");
   };
 
@@ -1648,10 +1681,29 @@ function Page() {
       {/* Footer */}
       {isActive && (
         <div className="flex justify-between pb-6">
-          <button onClick={cancelBooking}
-            className="h-10 px-5 rounded-full border border-destructive/40 text-destructive text-sm font-medium hover:bg-destructive/5">
-            Cancel entire booking
-          </button>
+          {showCancelConfirm ? (
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground">Cancel this entire booking?</span>
+              <button
+                onClick={cancelBooking}
+                disabled={cancellingBooking}
+                className="h-9 px-4 rounded-lg bg-destructive text-white text-sm font-medium hover:bg-destructive/90 disabled:opacity-50">
+                {cancellingBooking ? "Cancelling…" : "Yes, cancel booking"}
+              </button>
+              <button
+                onClick={() => setShowCancelConfirm(false)}
+                disabled={cancellingBooking}
+                className="h-9 px-4 rounded-lg border text-sm font-medium hover:bg-muted/30">
+                Keep booking
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowCancelConfirm(true)}
+              className="h-10 px-5 rounded-full border border-destructive/40 text-destructive text-sm font-medium hover:bg-destructive/5">
+              Cancel entire booking
+            </button>
+          )}
         </div>
       )}
 
