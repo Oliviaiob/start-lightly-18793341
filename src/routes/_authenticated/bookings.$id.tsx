@@ -1394,9 +1394,18 @@ function Page() {
   };
 
   const cancelShift = async (shiftId: string) => {
-    await supabase.from("temp_shifts").update({ status: "cancelled", shift_status: "cancelled" }).eq("id", shiftId);
+    const { error } = await supabase
+      .from("temp_shifts")
+      .update({ status: "cancelled", shift_status: "cancelled" })
+      .eq("id", shiftId);
+    if (error) { toast.error("Failed to cancel shift: " + error.message); return; }
+    // Remove from local state immediately
+    setShifts((prev) => prev.filter((s) => s.id !== shiftId));
+    // Trigger app-side cancellation + push notification
+    await (supabase as any).functions.invoke("cancel-shift-booking", {
+      body: { shift_id: shiftId, booking_id: id },
+    });
     toast.success("Shift date cancelled");
-    loadAll();
   };
 
   const saveNotes = async () => {
@@ -1557,7 +1566,7 @@ function Page() {
                 </tr>
               </thead>
               <tbody>
-                {shifts.map((s) => {
+                {shifts.filter((s) => (s.shift_status ?? s.status) !== 'cancelled').map((s) => {
                   const hours = s.total_hours ?? calcHours(s.start_time, s.end_time);
                   const isConfirmed = (s.shift_status ?? s.status) === "confirmed";
                   const isCancelled = (s.shift_status ?? s.status) === "cancelled";
