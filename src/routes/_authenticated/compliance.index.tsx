@@ -13,7 +13,7 @@ import {
 import {
   ShieldCheck, AlertTriangle, CheckCircle, Clock,
   UserPlus, Search, Minus, Circle, Upload, User, RefreshCw, FileText, Smartphone,
-  ChevronDown, Activity,
+  ChevronDown, Activity, Phone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AddTempCandidateModal } from "@/components/add-temp-candidate-modal";
@@ -79,6 +79,7 @@ type Candidate = {
   email: string | null; phone: string | null;
   status_temp: string | null; source: string | null;
   dbs_next_check_due: string | null; paediatric_first_aid_expiry: string | null;
+  welcome_call_booked_at: string | null;
   updated_at: string | null;
   checklist: ChecklistRow | null;
 };
@@ -117,6 +118,14 @@ function ItemIcon({ status }: { status: string | null }) {
   if (status === "uploaded")     return <Clock className="h-4 w-4 text-blue-500" />;
   if (status === "not_required") return <Minus className="h-4 w-4 text-muted-foreground/40" />;
   return <Circle className="h-4 w-4 text-muted-foreground/25" />;
+}
+
+
+function WelcomeCallIcon({ date }: { date: string | null }) {
+  if (!date) return <Circle className="h-4 w-4 text-muted-foreground/25" />;
+  const isPast = new Date(date) <= new Date();
+  if (isPast) return <CheckCircle className="h-4 w-4 text-green-500" />;
+  return <Clock className="h-4 w-4 text-blue-500" />;
 }
 
 const STATUS_META: Record<string, { label: string; dot: string; text: string; bg: string }> = {
@@ -164,7 +173,7 @@ function Page() {
     setLoading(true);
     const { data, error } = await supabase
       .from("candidates")
-      .select(`id,first_name,last_name,email,phone,status_temp,source,dbs_next_check_due,paediatric_first_aid_expiry,updated_at,compliance_checklists(id,proof_of_id,passport_photo,proof_of_address_1,proof_of_address_2,right_to_work,ni_number_check,dbs_certificate,dbs_update_service_check,childrens_barred_list,safeguarding_training_cert,paediatric_first_aid_cert,qualification_certificates,work_reference_1,work_reference_2,character_reference,overall_status,updated_at)`)
+      .select(`id,first_name,last_name,email,phone,status_temp,source,dbs_next_check_due,paediatric_first_aid_expiry,welcome_call_booked_at,updated_at,compliance_checklists(id,proof_of_id,passport_photo,proof_of_address_1,proof_of_address_2,right_to_work,ni_number_check,dbs_certificate,dbs_update_service_check,childrens_barred_list,safeguarding_training_cert,paediatric_first_aid_cert,qualification_certificates,work_reference_1,work_reference_2,character_reference,overall_status,updated_at)`)
       .in("candidate_type", ["temp", "both"])
       .order("created_at", { ascending: false });
 
@@ -173,6 +182,7 @@ function Page() {
       id: c.id, first_name: c.first_name, last_name: c.last_name,
       email: c.email, phone: c.phone, status_temp: c.status_temp, source: c.source,
       dbs_next_check_due: c.dbs_next_check_due, paediatric_first_aid_expiry: c.paediatric_first_aid_expiry,
+      welcome_call_booked_at: c.welcome_call_booked_at ?? null,
       updated_at: c.updated_at, checklist: c.compliance_checklists?.[0] ?? null,
     }));
     setCandidates(mapped);
@@ -365,6 +375,7 @@ function Page() {
                   <th className="text-left font-semibold py-2.5 px-3">Status</th>
                   <th className="text-left font-semibold py-2.5 px-3">Progress</th>
                   {TABLE_COLS.map((col) => <th key={col.key} className="text-center font-semibold py-2.5 px-2">{col.short}</th>)}
+                  <th className="text-center font-semibold py-2.5 px-2" title="Welcome Call"><Phone className="h-3.5 w-3.5 mx-auto" /></th>
                   <th className="text-left font-semibold py-2.5 px-3">Updated</th>
                   <th className="py-2.5 px-4" />
                 </tr>
@@ -406,6 +417,9 @@ function Page() {
                           <div className="flex justify-center"><ItemIcon status={c.checklist?.[col.key] ?? null} /></div>
                         </td>
                       ))}
+                      <td className="py-3 px-2 text-center">
+                        <div className="flex justify-center"><WelcomeCallIcon date={c.welcome_call_booked_at} /></div>
+                      </td>
                       <td className="py-3 px-3 text-xs text-muted-foreground whitespace-nowrap">
                         {fmtShort(c.updated_at)}
                         {dbsWarn && <div className="text-[10px] text-amber-600 font-medium">DBS {fmtShort(c.dbs_next_check_due)}</div>}
