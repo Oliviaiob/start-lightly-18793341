@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/page-header";
@@ -13,9 +13,34 @@ import {
 import {
   ShieldCheck, AlertTriangle, CheckCircle, Clock,
   UserPlus, Search, Minus, Circle, Upload, User, RefreshCw, FileText, Smartphone,
+  ChevronDown, Activity,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AddTempCandidateModal } from "@/components/add-temp-candidate-modal";
+
+type ActivityItem = {
+  id: string;
+  candidateId: string;
+  candidateName: string;
+  label: string;
+  at: string;
+  source: "document" | "reference";
+};
+
+const DOC_LABELS: Record<string, string> = {
+  proof_of_id: "Proof of ID",
+  proof_of_address_1: "Proof of Address 1",
+  proof_of_address_2: "Proof of Address 2",
+  passport_photo: "Passport Photo",
+  dbs_certificate: "DBS Certificate",
+  right_to_work: "Right to Work",
+  ni_number_check: "NI Number",
+  qualification_certificates: "Qualification Certificate",
+  paediatric_first_aid_cert: "Paediatric First Aid",
+  safeguarding_training_cert: "Safeguarding Certificate",
+  cv: "CV",
+  signature: "Signature",
+};
 
 export const Route = createFileRoute("/_authenticated/compliance/")({
   component: Page,
@@ -132,6 +157,8 @@ function Page() {
   const [activeFilter, setActiveFilter] = useState<FilterKey>("all");
   const [q, setQ] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(true);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
 
   const load = async () => {
     setLoading(true);
@@ -149,6 +176,38 @@ function Page() {
       updated_at: c.updated_at, checklist: c.compliance_checklists?.[0] ?? null,
     }));
     setCandidates(mapped);
+
+    // Load recent activity: document uploads + reference submissions
+    const [{ data: docData }, { data: refData }] = await Promise.all([
+      (supabase as any)
+        .from("candidate_documents")
+        .select("id, candidate_id, document_type, file_name, uploaded_at, candidates(first_name, last_name)")
+        .order("uploaded_at", { ascending: false })
+        .limit(30),
+      (supabase as any)
+        .from("references")
+        .select("id, candidate_id, ref_type, ref_number, created_at, candidates(first_name, last_name)")
+        .order("created_at", { ascending: false })
+        .limit(20),
+    ]);
+    const docItems: ActivityItem[] = (docData ?? []).map((d: any) => ({
+      id: `doc-${d.id}`,
+      candidateId: d.candidate_id,
+      candidateName: `${d.candidates?.first_name ?? ""} ${d.candidates?.last_name ?? ""}`.trim() || "Unknown",
+      label: `uploaded ${DOC_LABELS[d.document_type] ?? d.document_type}`,
+      at: d.uploaded_at,
+      source: "document",
+    }));
+    const refItems: ActivityItem[] = (refData ?? []).map((r: any) => ({
+      id: `ref-${r.id}`,
+      candidateId: r.candidate_id,
+      candidateName: `${r.candidates?.first_name ?? ""} ${r.candidates?.last_name ?? ""}`.trim() || "Unknown",
+      label: `submitted ${r.ref_type === "character" ? "Character Reference" : `Work Reference ${r.ref_number}`} details`,
+      at: r.created_at,
+      source: "reference",
+    }));
+    const merged = [...docItems, ...refItems].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()).slice(0, 20);
+    setActivity(merged);
     setLoading(false);
   };
 
@@ -215,6 +274,49 @@ function Page() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Latest Activity */}
+      {activity.length > 0 && (
+        <Card className="rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card overflow-hidden">
+          <button
+            onClick={() => setActivityOpen(o => !o)}
+            className="w-full flex items-center justify-between px-5 py-3.5 text-left hover:bg-muted/30 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Activity className="h-4 w-4 text-teal-foreground" />
+              <span className="text-sm font-semibold">Latest Activity</span>
+              <span className="text-xs text-muted-foreground ml-1">({activity.length} recent actions)</span>
+            </div>
+            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${activityOpen ? "rotate-180" : ""}`} />
+          </button>
+          {activityOpen && (
+            <ul className="divide-y border-t">
+              {activity.map((item) => (
+                <li key={item.id} className="flex items-center justify-between px-5 py-2.5 hover:bg-muted/20 transition-colors text-sm">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className={`flex-shrink-0 h-1.5 w-1.5 rounded-full ${item.source === "document" ? "bg-teal" : "bg-purple-400"}`} />
+                    <span className="font-medium text-foreground flex-shrink-0">{item.candidateName}</span>
+                    <span className="text-muted-foreground truncate">{item.label}</span>
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {new Date(item.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}{" "}
+                      {new Date(item.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                    <Link
+                      to="/compliance/$id"
+                      params={{ id: item.candidateId }}
+                      className="text-xs text-teal font-medium hover:opacity-80 whitespace-nowrap"
+                    >
+                      View →
+                    </Link>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
       )}
 
       {/* Clickable stat tiles — these ARE the filter */}
