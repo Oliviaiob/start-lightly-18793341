@@ -724,7 +724,7 @@ function genDatesInRange(start: string, end: string, days: number[]): string[] {
   const last = new Date(end + "T00:00:00");
   while (cur <= last) {
     if (days.includes(cur.getDay())) {
-      results.push(cur.toISOString().slice(0, 10));
+      const y = cur.getFullYear(); const mo = String(cur.getMonth() + 1).padStart(2, "0"); const dy = String(cur.getDate()).padStart(2, "0"); results.push(`${y}-${mo}-${dy}`);
     }
     cur.setDate(cur.getDate() + 1);
   }

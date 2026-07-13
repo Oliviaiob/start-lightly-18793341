@@ -273,7 +273,7 @@ Use "manual_review" if you cannot determine pass/fail from the content provided 
         if (result.status === "verified" || result.status === "flagged") {
           await supabase
             .from("compliance_checklists")
-            .update({ [document_type]: result.status === "verified" ? "verified" : "flagged" } as any)
+            .update({ [document_type]: result.status === "verified" ? "approved" : "rejected" } as any)
             .eq("id", checklist.id);
         }
       }
