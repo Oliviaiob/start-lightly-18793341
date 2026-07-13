@@ -76,19 +76,19 @@ function fmtShort(iso: string | null) {
 function progress(c: Candidate) {
   if (!c.checklist) return { done: 0, total: REQUIRED_KEYS.length };
   const done = REQUIRED_KEYS.filter(
-    (k) => c.checklist![k] === "verified" || c.checklist![k] === "not_required"
+    (k) => c.checklist![k] === "approved" || c.checklist![k] === "not_required"
   ).length;
   return { done, total: REQUIRED_KEYS.length };
 }
 
 function isFlagged(c: Candidate) {
   if (!c.checklist) return false;
-  return (Object.keys(c.checklist) as ChecklistKey[]).some((k) => c.checklist![k] === "flagged");
+  return (Object.keys(c.checklist) as ChecklistKey[]).some((k) => c.checklist![k] === "rejected");
 }
 
 function ItemIcon({ status }: { status: string | null }) {
-  if (status === "verified")     return <CheckCircle className="h-4 w-4 text-green-500" />;
-  if (status === "flagged")      return <AlertTriangle className="h-4 w-4 text-red-500" />;
+  if (status === "approved")     return <CheckCircle className="h-4 w-4 text-green-500" />;
+  if (status === "rejected")     return <AlertTriangle className="h-4 w-4 text-red-500" />;
   if (status === "uploaded")     return <Clock className="h-4 w-4 text-blue-500" />;
   if (status === "not_required") return <Minus className="h-4 w-4 text-muted-foreground/40" />;
   return <Circle className="h-4 w-4 text-muted-foreground/25" />;
