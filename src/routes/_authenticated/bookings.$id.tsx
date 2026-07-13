@@ -599,78 +599,180 @@ function InlineAssign({ shift, pool, onAssign, candTimeOff }: {
 
 // ── Add Shift Date Modal ──────────────────────────────────────────────────────
 
+const DOW = [
+  { key: 1, label: "Mon" }, { key: 2, label: "Tue" }, { key: 3, label: "Wed" },
+  { key: 4, label: "Thu" }, { key: 5, label: "Fri" }, { key: 6, label: "Sat" },
+  { key: 0, label: "Sun" },
+];
+
+function genDatesInRange(start: string, end: string, days: number[]): string[] {
+  const results: string[] = [];
+  if (!start || !end || days.length === 0) return results;
+  const cur = new Date(start + "T00:00:00");
+  const last = new Date(end + "T00:00:00");
+  while (cur <= last) {
+    if (days.includes(cur.getDay())) {
+      results.push(cur.toISOString().slice(0, 10));
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return results;
+}
+
 function AddDateModal({ bookingId, defaultQual, open, onClose, onCreated }: {
   bookingId: string; defaultQual: string | null;
   open: boolean; onClose: () => void; onCreated: () => void;
 }) {
+  const [mode, setMode] = useState<"single" | "range">("single");
   const [form, setForm] = useState({ shift_date: "", start_time: "", end_time: "",
     shift_type: "full_day", qualification_required: defaultQual ?? "__none__",
     notes: "", rate_per_hour: "", charge_rate: "" });
+  const [range, setRange] = useState({ start: "", end: "" });
+  const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [saving, setSaving] = useState(false);
+
+  const previewDates = useMemo(() =>
+    mode === "range" ? genDatesInRange(range.start, range.end, selectedDays) : [],
+    [mode, range.start, range.end, selectedDays]);
+
   useEffect(() => {
-    if (open) setForm({ shift_date: "", start_time: "", end_time: "", shift_type: "full_day",
-      qualification_required: defaultQual ?? "__none__", notes: "", rate_per_hour: "", charge_rate: "" });
+    if (open) {
+      setMode("single");
+      setForm({ shift_date: "", start_time: "", end_time: "", shift_type: "full_day",
+        qualification_required: defaultQual ?? "__none__", notes: "", rate_per_hour: "", charge_rate: "" });
+      setRange({ start: "", end: "" });
+      setSelectedDays([1, 2, 3, 4, 5]);
+    }
   }, [open]);
+
   const set = (k: string, v: string) => setForm((p) => ({ ...p, [k]: v }));
-  const save = async () => {
+  const toggleDay = (d: number) => setSelectedDays(p => p.includes(d) ? p.filter(x => x !== d) : [...p, d]);
+
+  const sharedPayload = () => ({
+    booking_id: bookingId,
+    start_time: form.start_time || null, end_time: form.end_time || null,
+    shift_type: form.shift_type,
+    qualification_required: form.qualification_required === "__none__" ? null : form.qualification_required,
+    notes: form.notes || null,
+    rate_per_hour: form.rate_per_hour ? parseFloat(form.rate_per_hour) : null,
+    charge_rate: form.charge_rate ? parseFloat(form.charge_rate) : null,
+    total_hours: calcHours(form.start_time || null, form.end_time || null),
+    status: "unfilled", shift_status: "unfilled",
+  });
+
+  const saveSingle = async () => {
     if (!form.shift_date) { toast.error("Select a date"); return; }
     setSaving(true);
-    const hours = calcHours(form.start_time || null, form.end_time || null);
-    const { error } = await supabase.from("temp_shifts").insert({
-      booking_id: bookingId,
-      shift_date: form.shift_date,
-      start_time: form.start_time || null, end_time: form.end_time || null,
-      shift_type: form.shift_type,
-      qualification_required: form.qualification_required === "__none__" ? null : form.qualification_required,
-      notes: form.notes || null,
-      rate_per_hour: form.rate_per_hour ? parseFloat(form.rate_per_hour) : null,
-      charge_rate: form.charge_rate ? parseFloat(form.charge_rate) : null,
-      total_hours: hours, status: "unfilled", shift_status: "unfilled",
-    });
+    const { error } = await supabase.from("temp_shifts").insert({ ...sharedPayload(), shift_date: form.shift_date });
     setSaving(false);
     if (error) { toast.error("Failed: " + error.message); return; }
     toast.success("Shift date added"); onCreated();
   };
+
+  const saveRange = async () => {
+    if (previewDates.length === 0) { toast.error("No dates match — check your range and day selection"); return; }
+    setSaving(true);
+    const rows = previewDates.map(d => ({ ...sharedPayload(), shift_date: d }));
+    const { error } = await supabase.from("temp_shifts").insert(rows);
+    setSaving(false);
+    if (error) { toast.error("Failed: " + error.message); return; }
+    toast.success(`${rows.length} shift${rows.length > 1 ? "s" : ""} added`); onCreated();
+  };
+
+  const sharedFields = (
+    <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">Start time</label>
+        <Input type="time" value={form.start_time} onChange={(e) => set("start_time", e.target.value)} className="h-10" /></div>
+      <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">End time</label>
+        <Input type="time" value={form.end_time} onChange={(e) => set("end_time", e.target.value)} className="h-10" /></div>
+      <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">Shift type</label>
+        <Select value={form.shift_type} onValueChange={(v) => set("shift_type", v)}>
+          <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+          <SelectContent>{SHIFT_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+        </Select></div>
+      <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">Qualification</label>
+        <Select value={form.qualification_required} onValueChange={(v) => set("qualification_required", v)}>
+          <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">— Any —</SelectItem>
+            {QUAL_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+          </SelectContent>
+        </Select></div>
+      <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">Rate of pay (£/hr)</label>
+        <Input type="number" step="0.01" value={form.rate_per_hour} onChange={(e) => set("rate_per_hour", e.target.value)} placeholder="e.g. 13.50" className="h-10" /></div>
+      <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">Charge rate (£/hr)</label>
+        <Input type="number" step="0.01" value={form.charge_rate} onChange={(e) => set("charge_rate", e.target.value)} placeholder="e.g. 18.00" className="h-10" /></div>
+      <div className="space-y-1 col-span-2"><label className="text-xs font-medium text-muted-foreground">Notes</label>
+        <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={2}
+          className="w-full text-sm bg-muted/40 rounded-xl p-3 border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" /></div>
+    </div>
+  );
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>Add Shift Date</DialogTitle><DialogDescription>Add a date to this booking.</DialogDescription></DialogHeader>
-        <div className="space-y-3 mt-2">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1 col-span-2">
-              <label className="text-xs font-medium text-muted-foreground">Date *</label>
-              <Input type="date" value={form.shift_date} onChange={(e) => set("shift_date", e.target.value)} className="h-10" />
-            </div>
-            <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">Start time</label>
-              <Input type="time" value={form.start_time} onChange={(e) => set("start_time", e.target.value)} className="h-10" /></div>
-            <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">End time</label>
-              <Input type="time" value={form.end_time} onChange={(e) => set("end_time", e.target.value)} className="h-10" /></div>
-            <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">Shift type</label>
-              <Select value={form.shift_type} onValueChange={(v) => set("shift_type", v)}>
-                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>{SHIFT_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
-              </Select></div>
-            <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">Qualification</label>
-              <Select value={form.qualification_required} onValueChange={(v) => set("qualification_required", v)}>
-                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">— Any —</SelectItem>
-                  {QUAL_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                </SelectContent>
-              </Select></div>
-            <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">Rate of pay (£/hr)</label>
-              <Input type="number" step="0.01" value={form.rate_per_hour} onChange={(e) => set("rate_per_hour", e.target.value)} placeholder="e.g. 13.50" className="h-10" /></div>
-            <div className="space-y-1"><label className="text-xs font-medium text-muted-foreground">Charge rate (£/hr)</label>
-              <Input type="number" step="0.01" value={form.charge_rate} onChange={(e) => set("charge_rate", e.target.value)} placeholder="e.g. 18.00" className="h-10" /></div>
-            <div className="space-y-1 col-span-2"><label className="text-xs font-medium text-muted-foreground">Notes</label>
-              <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={2}
-                className="w-full text-sm bg-muted/40 rounded-xl p-3 border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none" /></div>
-          </div>
+        <DialogHeader>
+          <DialogTitle>Add Shift Date{mode === "range" ? "s" : ""}</DialogTitle>
+          <DialogDescription>Add one date or a range of dates to this booking.</DialogDescription>
+        </DialogHeader>
+
+        {/* Mode toggle */}
+        <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit mt-1">
+          {(["single", "range"] as const).map(m => (
+            <button key={m} onClick={() => setMode(m)}
+              className={`h-7 px-4 rounded-md text-xs font-medium transition-colors ${mode === m ? "bg-white shadow-sm text-navy" : "text-muted-foreground hover:text-foreground"}`}>
+              {m === "single" ? "Single date" : "Date range"}
+            </button>
+          ))}
+        </div>
+
+        <div className="space-y-3">
+          {mode === "single" ? (
+            <>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Date *</label>
+                <Input type="date" value={form.shift_date} onChange={(e) => set("shift_date", e.target.value)} className="h-10" />
+              </div>
+              {sharedFields}
+            </>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Start date *</label>
+                  <Input type="date" value={range.start} onChange={(e) => setRange(p => ({ ...p, start: e.target.value }))} className="h-10" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">End date *</label>
+                  <Input type="date" value={range.end} onChange={(e) => setRange(p => ({ ...p, end: e.target.value }))} className="h-10" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Days of week</label>
+                <div className="flex gap-1.5 flex-wrap">
+                  {DOW.map(d => (
+                    <button key={d.key} onClick={() => toggleDay(d.key)}
+                      className={`h-7 w-10 rounded-md text-xs font-medium border transition-colors ${selectedDays.includes(d.key) ? "bg-teal text-white border-teal" : "border-gray-200 text-gray-500 bg-white hover:bg-gray-50"}`}>
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {previewDates.length > 0 && (
+                <p className="text-xs text-teal font-medium">
+                  {previewDates.length} shift{previewDates.length > 1 ? "s" : ""} will be created
+                  {previewDates.length <= 5 && `: ${previewDates.map(d => new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })).join(", ")}`}
+                </p>
+              )}
+              {sharedFields}
+            </>
+          )}
+
           <div className="flex justify-end gap-3 pt-1">
             <button onClick={onClose} className="h-10 px-5 rounded-full border text-sm font-medium hover:bg-muted">Cancel</button>
-            <button onClick={save} disabled={saving}
+            <button onClick={mode === "single" ? saveSingle : saveRange} disabled={saving}
               className="h-10 px-5 rounded-full bg-navy text-white text-sm font-medium hover:opacity-90 disabled:opacity-50">
-              {saving ? "Adding…" : "Add date"}
+              {saving ? "Adding…" : mode === "single" ? "Add date" : `Add ${previewDates.length > 0 ? previewDates.length + " " : ""}date${previewDates.length !== 1 ? "s" : ""}`}
             </button>
           </div>
         </div>
