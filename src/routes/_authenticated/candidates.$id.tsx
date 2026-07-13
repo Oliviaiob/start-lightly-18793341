@@ -2400,7 +2400,9 @@ function ChannelBadge({ ch, dir }: { ch: string; dir: string }) {
 function MessagesTab({ candidateId, candidatePhone, isTemp }: { candidateId: string; candidatePhone: string | null; isTemp: boolean }) {
   const [messages, setMessages] = useState<{ id: string; content: string; direction: string; channel: string; status: string; created_at: string }[]>([]);
   const [input, setInput] = useState("");
-  const [channel, setChannel] = useState<MsgChannel>("whatsapp");
+  const [channel, setChannel] = useState<MsgChannel>(
+    () => (localStorage.getItem("soar_last_channel") as MsgChannel) ?? "whatsapp"
+  );
   const [channelLocked, setChannelLocked] = useState(false);
   const [sending, setSending] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -2481,7 +2483,7 @@ function MessagesTab({ candidateId, candidatePhone, isTemp }: { candidateId: str
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[11px] font-medium text-gray-500">Reply via:</span>
           {channels.map(ch => (
-            <button key={ch} onClick={() => setChannel(ch)}
+            <button key={ch} onClick={() => { setChannel(ch); localStorage.setItem("soar_last_channel", ch); }}
               className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11px] font-medium border transition-colors ${channel === ch ? "bg-navy border-navy text-white" : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"}`}>
               <ChannelIcon ch={ch} size={14} />
               {ch === "app" ? "App" : ch === "sms" ? "SMS" : "WhatsApp"}

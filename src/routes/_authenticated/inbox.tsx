@@ -39,7 +39,9 @@ function InboxPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [channel, setChannel] = useState<"app" | "whatsapp" | "sms">("app");
+  const [channel, setChannel] = useState<"app" | "whatsapp" | "sms">(
+    () => (localStorage.getItem("soar_last_channel") as "app" | "whatsapp" | "sms") ?? "app"
+  );
   const [inboxFilter, setInboxFilter] = useState<"all" | "mine">("mine");
   const [sending, setSending] = useState(false);
   const [search, setSearch] = useState("");
@@ -337,7 +339,7 @@ function InboxPage() {
                 ? (["app", "whatsapp", "sms"] as const)
                 : (["whatsapp", "sms"] as const)
               ).map(ch => (
-                <button key={ch} onClick={() => setChannel(ch as any)}
+                <button key={ch} onClick={() => { setChannel(ch as any); localStorage.setItem("soar_last_channel", ch); }}
                   className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11px] font-medium border transition-colors ${channel === ch ? "bg-navy border-navy text-white" : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"}`}>
                   <ChannelIcon ch={ch} size={14} />{channelLabel(ch)}
                 </button>
