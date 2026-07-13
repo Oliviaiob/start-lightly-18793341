@@ -1149,23 +1149,50 @@ function Page() {
 
           <TabsContent value="cv" className="mt-5 text-sm">
             <div className="space-y-4">
-              {/* Original CV */}
+              {/* CV Files */}
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Original CV</span>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">CV Files</span>
                   <label className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium cursor-pointer transition-opacity ${cvUploading ? "opacity-50 pointer-events-none" : "bg-navy/10 text-navy hover:bg-navy/20"}`}>
                     <Upload className="h-3.5 w-3.5" />
-                    {cvUploading ? "Uploading…" : c.cv_original_url ? "Replace CV" : "Upload CV"}
-                    <input type="file" accept=".pdf" className="hidden" disabled={cvUploading} onChange={e => { const f = e.target.files?.[0]; if (f) uploadCV(f); e.target.value = ""; }} />
+                    {cvUploading ? "Uploading…" : "Upload CV"}
+                    <input type="file" accept=".pdf,.doc,.docx" className="hidden" disabled={cvUploading} onChange={e => { const f = e.target.files?.[0]; if (f) uploadCV(f); e.target.value = ""; }} />
                   </label>
                 </div>
-                {c.cv_original_url ? (
-                  <a href={c.cv_original_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 p-3 rounded-xl bg-muted/40 hover:bg-muted transition-colors">
-                    <FileText className="h-4 w-4 text-navy" /> View Original CV
-                  </a>
-                ) : (
-                  <div className="text-muted-foreground text-sm py-1">No CV uploaded yet.</div>
-                )}
+                {(() => {
+                  const cvDocs = docs.filter(d => d.document_type === "cv");
+                  if (cvDocs.length === 0 && !c.cv_original_url) {
+                    return <div className="text-muted-foreground py-1">No CV uploaded yet.</div>;
+                  }
+                  // If we have candidate_documents entries, show those (they include filename + date)
+                  if (cvDocs.length > 0) {
+                    return (
+                      <ul className="space-y-2">
+                        {cvDocs.map(d => (
+                          <li key={d.id}>
+                            <a href={d.file_url ?? "#"} target="_blank" rel="noreferrer"
+                              className="flex items-center gap-3 p-3 rounded-xl bg-muted/40 hover:bg-muted transition-colors">
+                              <FileText className="h-4 w-4 text-navy flex-shrink-0" />
+                              <div className="min-w-0">
+                                <div className="font-medium truncate">{d.file_name || "CV"}</div>
+                                <div className="text-[11px] text-muted-foreground">
+                                  Uploaded via app · {d.uploaded_at ? new Date(d.uploaded_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : ""}
+                                </div>
+                              </div>
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    );
+                  }
+                  // Fallback: cv_original_url only (manually uploaded from CRM)
+                  return (
+                    <a href={c.cv_original_url!} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-2 p-3 rounded-xl bg-muted/40 hover:bg-muted transition-colors">
+                      <FileText className="h-4 w-4 text-navy" /> View CV
+                    </a>
+                  );
+                })()}
               </div>
 
               {/* SOAR CV */}
