@@ -9,6 +9,8 @@ import { ScopeProvider } from "@/contexts/scope-context";
 import { ScopeToggle } from "@/components/scope-toggle";
 import { HelpCircle } from "lucide-react";
 
+const CRM_ROLES = ["admin", "management", "recruiter"];
+
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async () => {
@@ -16,6 +18,19 @@ export const Route = createFileRoute("/_authenticated")({
 
     const { data, error } = await supabase.auth.getUser();
     if (error || !data.user) throw redirect({ to: "/auth" });
+
+    // Check role — candidates and unassigned users cannot access the CRM
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", data.user.id)
+      .single();
+
+    if (!profile || !CRM_ROLES.includes(profile.role ?? "")) {
+      await supabase.auth.signOut();
+      throw redirect({ to: "/auth" });
+    }
+
     return { user: data.user };
   },
   component: AuthedLayout,
