@@ -379,12 +379,23 @@ function AvailDot({ candidateId, availSubmitted, candTimeOff, shiftDate }: {
   return <span className="h-2 w-2 rounded-full bg-amber-400 inline-block" title="No availability submitted this week" />;
 }
 
-function AppCandidateCard({ candidate, shifts, onCandidateClick, availSubmitted, candTimeOff }: {
+function AppCandidateCard({ candidate, shifts, onCandidateClick, availSubmitted, candTimeOff, acceptedDates, onReject }: {
   candidate: PoolCandidate; shifts: Shift[]; onCandidateClick: (id: string) => void;
   availSubmitted: Set<string>; candTimeOff: Map<string, { title: string; start_date: string; end_date: string }[]>;
+  acceptedDates: Set<string>; onReject: (candidateId: string) => void;
 }) {
-  const appliedCount = candidate.entries.filter((e) => e.status !== "declined").length;
+  const [rejecting, setRejecting] = useState(false);
+  const acceptedCount = acceptedDates.size;
   const totalShifts = shifts.length;
+
+  const handleReject = async () => {
+    setRejecting(true);
+    await onReject(candidate.candidate_id);
+    setRejecting(false);
+  };
+
+  // Only show chips for dates the candidate actually accepted
+  const acceptedShifts = shifts.filter((s) => acceptedDates.has(s.shift_date));
 
   return (
     <div className="bg-card rounded-xl border border-border/50 px-4 py-3 flex flex-col gap-2">
@@ -410,28 +421,34 @@ function AppCandidateCard({ candidate, shifts, onCandidateClick, availSubmitted,
             </span>
           </div>
           <span className="text-[10px] text-muted-foreground font-medium">
-            {appliedCount}/{totalShifts} shifts
+            {acceptedCount}/{totalShifts} shifts selected
           </span>
         </div>
       </div>
-      {/* Day chips — one per shift, filled = applied, hollow = not */}
-      <div className="flex flex-wrap gap-1 pt-1 border-t border-border/30">
-        {shifts.map((s) => {
-          const entry = candidate.entries.find((e) => e.shift_id === s.id);
-          const applied = !!entry && entry.status !== "declined";
-          const confirmed = entry?.status === "confirmed";
-          return (
-            <span key={s.id} className={`text-[10px] px-2 py-0.5 rounded-full font-medium transition-colors ${
-              confirmed
-                ? "bg-green-100 text-green-700 border border-green-200"
-                : applied
-                ? "bg-navy/10 text-navy border border-navy/20"
-                : "bg-muted/40 text-muted-foreground border border-border/50"
-            }`}>
-              {dayChip(s.shift_date)}
-            </span>
-          );
-        })}
+      {/* Day chips — only dates the candidate accepted in the app */}
+      {acceptedShifts.length > 0 && (
+        <div className="flex flex-wrap gap-1 pt-1 border-t border-border/30">
+          {acceptedShifts.map((s) => {
+            const entry = candidate.entries.find((e) => e.shift_id === s.id);
+            const confirmed = entry?.status === "confirmed";
+            return (
+              <span key={s.id} className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${
+                confirmed
+                  ? "bg-green-100 text-green-700 border-green-200"
+                  : "bg-teal/10 text-teal-foreground border-teal/20"
+              }`}>
+                {dayChip(s.shift_date)}
+              </span>
+            );
+          })}
+        </div>
+      )}
+      {/* Reject button */}
+      <div className="flex justify-end pt-0.5">
+        <button onClick={handleReject} disabled={rejecting}
+          className="h-6 px-3 rounded-full text-[11px] font-medium border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors">
+          {rejecting ? "Removing…" : "Reject"}
+        </button>
       </div>
     </div>
   );
@@ -884,12 +901,15 @@ function Page() {
   // Availability: submittedThisWeek set + time-off map (candidate_id -> array of time-off periods)
   const [availSubmitted, setAvailSubmitted] = useState<Set<string>>(new Set());
   const [candTimeOff, setCandTimeOff] = useState<Map<string, { title: string; start_date: string; end_date: string }[]>>(new Map());
+  // app candidate accepted shift dates: candidateId -> Set<shift_date>
+  const [appAcceptedDates, setAppAcceptedDates] = useState<Map<string, Set<string>>>(new Map());
 
   const loadAll = async () => {
-    const [bRes, sRes, slRes] = await Promise.all([
+    const [bRes, sRes, slRes, soRes] = await Promise.all([
       supabase.from("bookings").select(`id,client_id,branch_id,qualification_required,notes,status,clients(company_name),client_branches(branch_name),profiles!created_by(first_name,last_name)`).eq("id", id).maybeSingle(),
       supabase.from("temp_shifts").select(`id,shift_date,shift_type,start_time,end_time,qualification_required,status,shift_status,candidate_id,rate_per_hour,charge_rate,total_hours,notes,candidates(first_name,last_name,phone)`).eq("booking_id", id).order("shift_date"),
       supabase.from("shift_shortlist").select(`id,shift_id,candidate_id,status,source,booking_id,candidates(first_name,last_name,phone,qualification_level,has_dbs)`).eq("booking_id", id),
+      supabase.from("shift_offers").select("candidate_id,shift_date,status").eq("booking_group_id", id).eq("status", "accepted"),
     ]);
 
     if (bRes.error) { toast.error("Failed to load booking"); setLoading(false); return; }
@@ -935,7 +955,24 @@ function Page() {
       status: e.status, source: (e as any).source ?? "manual",
     })));
 
+    // Build map of accepted shift dates per app candidate
+    const acceptedMap = new Map<string, Set<string>>();
+    ((soRes.data ?? []) as any[]).forEach((o) => {
+      if (!acceptedMap.has(o.candidate_id)) acceptedMap.set(o.candidate_id, new Set());
+      acceptedMap.get(o.candidate_id)!.add(o.shift_date);
+    });
+    setAppAcceptedDates(acceptedMap);
+
     setLoading(false);
+  };
+
+  const rejectAppCandidate = async (candidateId: string) => {
+    await (supabase as any).from("shift_shortlist")
+      .update({ status: "declined" })
+      .eq("booking_id", id)
+      .eq("candidate_id", candidateId)
+      .eq("source", "app");
+    loadAll();
   };
 
   // Fetch availability data for pool candidates whenever pool changes
@@ -1134,7 +1171,7 @@ function Page() {
               </div>
             ) : (
               appPool.map((c) => (
-                <AppCandidateCard key={c.candidate_id} candidate={c} shifts={shifts} onCandidateClick={setDrawerCandidateId} availSubmitted={availSubmitted} candTimeOff={candTimeOff} />
+                <AppCandidateCard key={c.candidate_id} candidate={c} shifts={shifts} onCandidateClick={setDrawerCandidateId} availSubmitted={availSubmitted} candTimeOff={candTimeOff} acceptedDates={appAcceptedDates.get(c.candidate_id) ?? new Set()} onReject={rejectAppCandidate} />
               ))
             )}
           </div>
