@@ -1021,7 +1021,7 @@ function Page() {
             <TabTrig value="docs" icon={FolderOpen}>Documents</TabTrig>
             <TabTrig value="refs" icon={UserRound}>References</TabTrig>
             {isTemp && <TabTrig value="availability" icon={Clock}>Availability</TabTrig>}
-            <TabTrig value="appinfo" icon={ClipboardList}>App Info</TabTrig>
+            {isTemp && <TabTrig value="appinfo" icon={ClipboardList}>App Info</TabTrig>}
           </TabsList>
 
           <TabsContent value="personal" className="mt-5">
@@ -1373,9 +1373,11 @@ function Page() {
             </TabsContent>
           )}
 
-          <TabsContent value="appinfo" className="mt-5">
-            <AppInfoTab candidate={c} />
-          </TabsContent>
+          {isTemp && (
+            <TabsContent value="appinfo" className="mt-5">
+              <AppInfoTab candidate={c} />
+            </TabsContent>
+          )}
         </Tabs>
       </Card>
     </div>
