@@ -556,11 +556,13 @@ function ManualCandidateCard({ candidate, shifts, onCandidateClick, availSubmitt
 function InlineAssign({ shift, pool, onAssign, candTimeOff }: {
   shift: Shift;
   pool: PoolCandidate[];
-  onAssign: (shiftId: string, candidateId: string) => void;
+  onAssign: (shiftId: string, candidateId: string) => Promise<void>;
   candTimeOff: Map<string, { title: string; start_date: string; end_date: string }[]>;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
+  const [pending, setPending] = useState<PoolCandidate | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
   const ref = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -593,17 +595,52 @@ function InlineAssign({ shift, pool, onAssign, candTimeOff }: {
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  // Eligible: not declined for this specific shift, not already confirmed on another
+  const handleConfirm = async () => {
+    if (!pending) return;
+    setConfirming(true);
+    await onAssign(shift.id, pending.candidate_id);
+    setConfirming(false);
+    setPending(null);
+  };
+
+  // Eligible: not declined for this specific shift
   const eligible = pool.filter((c) => {
     const entry = c.entries.find((e) => e.shift_id === shift.id);
     if (entry?.status === "declined") return false;
     return true;
   });
 
-  const filtered = eligible.filter((c) =>
+  const filteredPool = eligible.filter((c) =>
     c.name.toLowerCase().includes(q.toLowerCase())
   );
 
+  // ── Pending confirmation state ──────────────────────────────────────────────
+  if (pending) {
+    return (
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 h-8 px-3 rounded-lg bg-amber-50 border border-amber-200">
+          <div className={`h-5 w-5 rounded-full flex items-center justify-center flex-shrink-0 ${pending.source === "app" ? "bg-teal" : "bg-navy"}`}>
+            <span className="text-[8px] font-bold text-white">{pending.initials}</span>
+          </div>
+          <span className="text-xs font-semibold text-amber-900">{pending.name}</span>
+        </div>
+        <button
+          onClick={handleConfirm}
+          disabled={confirming}
+          className="h-8 px-3.5 rounded-lg bg-green-600 text-white text-xs font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors">
+          {confirming ? "Confirming…" : "Confirm booking"}
+        </button>
+        <button
+          onClick={() => { setPending(null); setOpen(true); }}
+          disabled={confirming}
+          className="h-8 px-3 rounded-lg border text-xs font-medium text-muted-foreground hover:bg-muted/40 disabled:opacity-50 transition-colors">
+          Change
+        </button>
+      </div>
+    );
+  }
+
+  // ── Select dropdown ─────────────────────────────────────────────────────────
   return (
     <div ref={ref} className="relative">
       <button ref={buttonRef} onClick={() => setOpen((o) => !o)}
@@ -626,14 +663,14 @@ function InlineAssign({ shift, pool, onAssign, candTimeOff }: {
             </div>
           </div>
           <div className="max-h-56 overflow-y-auto py-1">
-            {filtered.length === 0
+            {filteredPool.length === 0
               ? <div className="px-4 py-3 text-xs text-muted-foreground">No candidates found</div>
-              : filtered.map((c) => {
+              : filteredPool.map((c) => {
                   const appliedHere = c.entries.some((e) => e.shift_id === shift.id && e.status !== "declined");
                   const appliedCount = c.entries.filter((e) => e.status !== "declined").length;
                   return (
                     <button key={c.candidate_id}
-                      onMouseDown={() => { onAssign(shift.id, c.candidate_id); setOpen(false); setQ(""); }}
+                      onMouseDown={() => { setPending(c); setOpen(false); setQ(""); }}
                       className="w-full text-left px-3 py-2.5 hover:bg-muted/60 flex items-center gap-2.5 transition-colors">
                       <div className={`h-7 w-7 rounded-full flex items-center justify-center flex-shrink-0 ${c.source === "app" ? "bg-teal" : "bg-navy"}`}>
                         <span className="text-[9px] font-bold text-white">{c.initials}</span>
@@ -1333,12 +1370,19 @@ function Page() {
       { onConflict: "shift_id,candidate_id" }
     );
     if (e1) { toast.error("Failed: " + e1.message); return; }
-    // Decline all others for this shift
+    // Decline all others for this shift in shortlist
     await supabase.from("shift_shortlist").update({ status: "declined" })
       .eq("shift_id", shiftId).neq("candidate_id", candidateId);
     // Update shift record
-    await supabase.from("temp_shifts").update({ candidate_id: candidateId, status: "confirmed", shift_status: "confirmed" }).eq("id", shiftId);
-    toast.success("Candidate confirmed");
+    const { error: e2 } = await supabase.from("temp_shifts")
+      .update({ candidate_id: candidateId, status: "confirmed", shift_status: "confirmed" })
+      .eq("id", shiftId);
+    if (e2) { toast.error("Failed to update shift: " + e2.message); return; }
+    // Send confirmation notification to candidate (updates shift_offers + push notification)
+    await (supabase as any).functions.invoke("confirm-shift-booking", {
+      body: { shift_id: shiftId, candidate_id: candidateId, booking_id: id },
+    });
+    toast.success("Shift confirmed successfully");
     loadAll();
   };
 
