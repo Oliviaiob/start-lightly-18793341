@@ -46,6 +46,7 @@ import {
   Smartphone,
   Send,
   CheckCheck,
+  ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
 import { fmtQual } from "@/lib/utils";
@@ -93,6 +94,33 @@ type Candidate = {
   created_by: string | null;
   created_at: string | null;
   assigned_recruiter_id: string | null;
+  // App compliance fields
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  emergency_contact_relationship: string | null;
+  has_disability: boolean | null;
+  disability_notes: string | null;
+  requires_work_permit: boolean | null;
+  work_permit_notes: string | null;
+  ni_number: string | null;
+  languages: string[] | null;
+  experience_summary: string | null;
+  fields_of_work: string[] | null;
+  preferred_age_groups: string[] | null;
+  available_days: string[] | null;
+  availability_times: string[] | null;
+  availability_notes: string | null;
+  declaration_ever_cautioned: boolean | null;
+  declaration_ever_cautioned_details: string | null;
+  declaration_since_dbs: boolean | null;
+  declaration_since_dbs_details: string | null;
+  terms_agreed: boolean | null;
+  gdpr_agreed: boolean | null;
+  payroll_sharing_agreed: boolean | null;
+  marketing_opt_in: boolean | null;
+  signature_full_name: string | null;
+  signature_url: string | null;
+  bank_details_token: string | null;
 };
 
 type Note = {
@@ -939,6 +967,7 @@ function Page() {
             <TabTrig value="docs" icon={FolderOpen}>Documents</TabTrig>
             <TabTrig value="refs" icon={UserRound}>References</TabTrig>
             {isTemp && <TabTrig value="availability" icon={Clock}>Availability</TabTrig>}
+            <TabTrig value="appinfo" icon={ClipboardList}>App Info</TabTrig>
           </TabsList>
 
           <TabsContent value="personal" className="mt-5">
@@ -1289,6 +1318,10 @@ function Page() {
               <PermNotesTab candidate={c} onSave={(patch) => setC((prev: any) => prev ? { ...prev, ...patch } : prev)} />
             </TabsContent>
           )}
+
+          <TabsContent value="appinfo" className="mt-5">
+            <AppInfoTab candidate={c} />
+          </TabsContent>
         </Tabs>
       </Card>
     </div>
@@ -2603,6 +2636,171 @@ function PermNotesTab({ candidate, onSave }: { candidate: any; onSave: (patch: a
           <span className="font-semibold">Sammie tip:</span> Fill in salary expectations and recruiter notes to improve permanent match quality.
         </div>
       )}
+    </div>
+  );
+}
+
+// ── AppInfoTab ────────────────────────────────────────────────────────────────
+function AppInfoTab({ candidate }: { candidate: any }) {
+  const bool = (v: boolean | null, yes = "Yes", no = "No") =>
+    v == null ? "—" : v ? yes : no;
+  const arr = (v: string[] | null) =>
+    v && v.length ? v.join(", ") : "—";
+  const str = (v: string | null | undefined) =>
+    v && v.trim() ? v : "—";
+
+  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div className="space-y-3">
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
+        {children}
+      </div>
+      <hr className="border-border" />
+    </div>
+  );
+
+  const Field = ({ label, value }: { label: string; value: string }) => (
+    <div className="space-y-0.5">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm font-medium break-words">{value}</p>
+    </div>
+  );
+
+  const BoolField = ({ label, value, yes, no }: { label: string; value: boolean | null; yes?: string; no?: string }) => (
+    <div className="space-y-0.5">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+        value == null
+          ? "bg-muted text-muted-foreground"
+          : value
+          ? "bg-red-50 text-red-700"
+          : "bg-green-50 text-green-700"
+      }`}>
+        {bool(value, yes ?? "Yes", no ?? "No")}
+      </span>
+    </div>
+  );
+
+  const ni = candidate.national_insurance_number || candidate.ni_number;
+
+  return (
+    <div className="space-y-6 text-sm">
+
+      {/* Emergency Contact */}
+      <Section title="Emergency Contact">
+        <Field label="Name" value={str(candidate.emergency_contact_name)} />
+        <Field label="Phone" value={str(candidate.emergency_contact_phone)} />
+        <Field label="Relationship" value={str(candidate.emergency_contact_relationship)} />
+      </Section>
+
+      {/* Personal */}
+      <Section title="Personal Details">
+        <Field label="National Insurance Number" value={str(ni)} />
+        <Field label="Languages" value={arr(candidate.languages)} />
+      </Section>
+
+      {/* Right to Work & Health */}
+      <Section title="Right to Work &amp; Health">
+        <BoolField label="Requires work permit / visa" value={candidate.requires_work_permit} yes="Yes — permit required" no="No — right to work in UK" />
+        {candidate.work_permit_notes && (
+          <div className="sm:col-span-2 space-y-0.5">
+            <p className="text-xs text-muted-foreground">Work permit notes</p>
+            <p className="text-sm">{candidate.work_permit_notes}</p>
+          </div>
+        )}
+        <BoolField label="Disability or health condition" value={candidate.has_disability} yes="Disclosed" no="None disclosed" />
+        {candidate.disability_notes && (
+          <div className="sm:col-span-2 space-y-0.5">
+            <p className="text-xs text-muted-foreground">Health notes</p>
+            <p className="text-sm">{candidate.disability_notes}</p>
+          </div>
+        )}
+      </Section>
+
+      {/* Experience */}
+      <Section title="Experience &amp; Skills">
+        <div className="sm:col-span-2 space-y-0.5">
+          <p className="text-xs text-muted-foreground">Experience summary</p>
+          <p className="text-sm whitespace-pre-wrap">{str(candidate.experience_summary)}</p>
+        </div>
+        <Field label="Fields of work" value={arr(candidate.fields_of_work)} />
+        <Field label="Preferred age groups" value={arr(candidate.preferred_age_groups)} />
+      </Section>
+
+      {/* Availability */}
+      <Section title="Availability">
+        <Field label="Available days" value={arr(candidate.available_days)} />
+        <Field label="Time slots" value={arr(candidate.availability_times)} />
+        <Field label="Commute radius" value={str(candidate.commute_radius)} />
+        {candidate.availability_notes && (
+          <div className="sm:col-span-2 space-y-0.5">
+            <p className="text-xs text-muted-foreground">Availability notes</p>
+            <p className="text-sm">{candidate.availability_notes}</p>
+          </div>
+        )}
+      </Section>
+
+      {/* Declarations */}
+      <Section title="Declarations">
+        <BoolField
+          label="Declaration A — Ever cautioned, reprimanded or convicted?"
+          value={candidate.declaration_ever_cautioned}
+          yes="Disclosed — see notes"
+          no="Clear"
+        />
+        {candidate.declaration_ever_cautioned && candidate.declaration_ever_cautioned_details && (
+          <div className="sm:col-span-2 space-y-0.5">
+            <p className="text-xs text-muted-foreground">Declaration A details</p>
+            <p className="text-sm">{candidate.declaration_ever_cautioned_details}</p>
+          </div>
+        )}
+        <BoolField
+          label="Declaration B — Anything to declare since last DBS?"
+          value={candidate.declaration_since_dbs}
+          yes="Disclosed — see notes"
+          no="Clear"
+        />
+        {candidate.declaration_since_dbs && candidate.declaration_since_dbs_details && (
+          <div className="sm:col-span-2 space-y-0.5">
+            <p className="text-xs text-muted-foreground">Declaration B details</p>
+            <p className="text-sm">{candidate.declaration_since_dbs_details}</p>
+          </div>
+        )}
+      </Section>
+
+      {/* Consents & Payment */}
+      <div className="space-y-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Consents &amp; Payment</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: "Terms agreed", value: candidate.terms_agreed },
+            { label: "GDPR agreed", value: candidate.gdpr_agreed },
+            { label: "Payroll sharing", value: candidate.payroll_sharing_agreed },
+            { label: "Marketing opt-in", value: candidate.marketing_opt_in },
+          ].map(({ label, value }) => (
+            <div key={label} className={`rounded-lg border px-3 py-2 text-center ${
+              value ? "border-green-200 bg-green-50" : "border-muted bg-muted/30"
+            }`}>
+              <p className="text-xs text-muted-foreground">{label}</p>
+              <p className={`text-sm font-semibold mt-0.5 ${value ? "text-green-700" : "text-muted-foreground"}`}>
+                {value == null ? "—" : value ? "✓ Yes" : "No"}
+              </p>
+            </div>
+          ))}
+        </div>
+        {candidate.signature_full_name && (
+          <div className="mt-3 space-y-1">
+            <p className="text-xs text-muted-foreground">Signed as</p>
+            <p className="text-sm font-medium">{candidate.signature_full_name}</p>
+          </div>
+        )}
+        {candidate.bank_details_token && (
+          <div className="mt-2 rounded-lg border border-border bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
+            Bank details on file (stored securely via token)
+          </div>
+        )}
+      </div>
+
     </div>
   );
 }
