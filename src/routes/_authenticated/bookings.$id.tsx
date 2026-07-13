@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   ArrowLeft, Plus, CheckCircle, XCircle, Clock, Smartphone,
-  UserPlus, Banknote, X, Search, ChevronDown,
+  UserPlus, Banknote, X, Search, ChevronDown, Sparkles, Bell, MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -63,6 +63,15 @@ type CandidateOption = {
   qualification_level: string | null; phone: string | null; has_dbs: boolean | null;
 };
 
+type SmartMatchCandidate = {
+  id: string; name: string; initials: string;
+  qual: string | null; has_dbs: boolean | null;
+  distance_miles: number | null; avail_overlap: number;
+  commute_radius: string | null;
+  ai_score: number | null; ai_reason: string | null;
+  _pos: string | null; _employer: string | null; _notes: string | null;
+};
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const QUAL_OPTIONS = [
@@ -73,6 +82,10 @@ const QUAL_OPTIONS = [
   { value: "deputy_manager", label: "Deputy Manager" },
   { value: "manager", label: "Manager" },
 ];
+
+const QUAL_RANK: Record<string, number> = {
+  unqualified: 0, level_2: 1, level_3: 2, room_leader: 3, deputy_manager: 4, manager: 5,
+};
 
 const SHIFT_TYPES = [
   { value: "full_day", label: "Full Day" },
@@ -117,6 +130,23 @@ function dayChip(iso: string) {
   const d = new Date(iso);
   return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric" });
 }
+
+function haversineMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 3958.8;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+function parseCommuteMiles(s: string | null): number | null {
+  if (!s) return null;
+  const m = s.match(/(\d+(?:\.\d+)?)\s*mile/i);
+  return m ? parseFloat(m[1]) : null;
+}
+function shiftDayName(iso: string): string {
+  return new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short" });
+}
+function normDay(s: string): string { return s.trim().toLowerCase().slice(0, 3); }
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
@@ -456,37 +486,65 @@ function AppCandidateCard({ candidate, shifts, onCandidateClick, availSubmitted,
 
 // ── Manual Candidate Card ─────────────────────────────────────────────────────
 
-function ManualCandidateCard({ candidate, shifts, onCandidateClick, availSubmitted, candTimeOff }: {
+function ManualCandidateCard({ candidate, shifts, onCandidateClick, availSubmitted, candTimeOff, invited, onInvite }: {
   candidate: PoolCandidate; shifts: Shift[]; onCandidateClick: (id: string) => void;
   availSubmitted: Set<string>; candTimeOff: Map<string, { title: string; start_date: string; end_date: string }[]>;
+  invited: boolean; onInvite: (candidateId: string) => void;
 }) {
+  const [inviting, setInviting] = useState(false);
   const shortlistedFor = candidate.entries.filter((e) => e.status !== "declined").length;
 
+  const handleInvite = async () => {
+    setInviting(true);
+    await onInvite(candidate.candidate_id);
+    setInviting(false);
+  };
+
   return (
-    <div className="bg-card rounded-xl border border-border/50 px-4 py-3 flex items-center gap-3">
-      <div className="h-8 w-8 rounded-full bg-navy flex items-center justify-center flex-shrink-0">
-        <span className="text-[10px] font-bold text-white">{candidate.initials}</span>
-      </div>
-      <div className="min-w-0 flex-1">
-        <button onClick={() => onCandidateClick(candidate.candidate_id)}
-          className="text-sm font-semibold hover:text-teal transition-colors truncate block text-left">
-          {candidate.name}
-        </button>
-        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-          {fmtQual(candidate.qual)}
-          {candidate.phone && <span>· {candidate.phone}</span>}
-          {candidate.has_dbs && <span className="text-green-600 font-medium">· ✓ DBS</span>}
+    <div className="bg-card rounded-xl border border-border/50 px-4 py-3 flex flex-col gap-2">
+      <div className="flex items-center gap-3">
+        <div className="h-8 w-8 rounded-full bg-navy flex items-center justify-center flex-shrink-0">
+          <span className="text-[10px] font-bold text-white">{candidate.initials}</span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <button onClick={() => onCandidateClick(candidate.candidate_id)}
+            className="text-sm font-semibold hover:text-teal transition-colors truncate block text-left">
+            {candidate.name}
+          </button>
+          <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+            {fmtQual(candidate.qual)}
+            {candidate.phone && <span>· {candidate.phone}</span>}
+            {candidate.has_dbs && <span className="text-green-600 font-medium">· ✓ DBS</span>}
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+          <div className="flex items-center gap-1.5">
+            <AvailDot candidateId={candidate.candidate_id} availSubmitted={availSubmitted} candTimeOff={candTimeOff} />
+            {invited ? (
+              <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-semibold bg-teal/10 text-teal-foreground border border-teal/20">
+                <Bell className="h-2.5 w-2.5" /> Invited
+              </span>
+            ) : (
+              <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-navy/10 text-navy">
+                Manual
+              </span>
+            )}
+          </div>
+          {shortlistedFor > 0 && (
+            <span className="text-[10px] text-muted-foreground">{shortlistedFor}/{shifts.length} shifts</span>
+          )}
         </div>
       </div>
-      <div className="flex flex-col items-end gap-1 flex-shrink-0">
-        <div className="flex items-center gap-1.5">
-          <AvailDot candidateId={candidate.candidate_id} availSubmitted={availSubmitted} candTimeOff={candTimeOff} />
-          <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-navy/10 text-navy">
-            Manual
-          </span>
-        </div>
-        {shortlistedFor > 0 && (
-          <span className="text-[10px] text-muted-foreground">{shortlistedFor}/{shifts.length} shifts</span>
+      {/* Invite button */}
+      <div className="flex justify-end pt-0.5">
+        {invited ? (
+          <span className="text-[11px] text-muted-foreground italic">Notification sent</span>
+        ) : (
+          <button onClick={handleInvite} disabled={inviting}
+            className="h-6 px-3 rounded-full text-[11px] font-medium bg-teal text-white hover:opacity-90 disabled:opacity-50 transition-colors inline-flex items-center gap-1">
+            <Bell className="h-2.5 w-2.5" />
+            {inviting ? "Sending…" : "Send Invite"}
+          </button>
         )}
       </div>
     </div>
@@ -798,84 +856,296 @@ function AddDateModal({ bookingId, defaultQual, open, onClose, onCreated }: {
   );
 }
 
-// ── Add Candidate Modal ───────────────────────────────────────────────────────
+// ── Smart Match Modal ─────────────────────────────────────────────────────────
 
-function AddCandidateModal({ bookingId, existingIds, open, onClose, onAdded }: {
-  bookingId: string; existingIds: string[];
-  open: boolean; onClose: () => void; onAdded: (cand: CandidateOption) => void;
+function SmartMatchModal({ booking, shifts, existingIds, invitedIds, open, onClose, onAdded, onInvited }: {
+  booking: Booking; shifts: Shift[];
+  existingIds: string[]; invitedIds: Set<string>;
+  open: boolean; onClose: () => void;
+  onAdded: () => void; onInvited: (candidateId: string) => void;
 }) {
-  const [candidates, setCandidates] = useState<CandidateOption[]>([]);
+  const [phase, setPhase] = useState<"idle" | "loading" | "scoring" | "done">("idle");
+  const [candidates, setCandidates] = useState<SmartMatchCandidate[]>([]);
+  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
+  const [addingId, setAddingId] = useState<string | null>(null);
+  const [invitingId, setInvitingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [dropOpen, setDropOpen] = useState(false);
-  const [selected, setSelected] = useState<CandidateOption | null>(null);
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!open) { setSelected(null); setSearch(""); setDropOpen(false); return; }
-    supabase.from("candidates")
-      .select("id,first_name,last_name,qualification_level,phone,has_dbs")
-      .in("status_temp", ["active", "compliance_review"]).order("first_name")
-      .then(({ data }) => setCandidates((data as CandidateOption[]) ?? []));
+    if (!open) { setCandidates([]); setPhase("idle"); setAddedIds(new Set()); setSearch(""); return; }
+    run();
   }, [open]);
 
-  const filtered = candidates
-    .filter((c) => !existingIds.includes(c.id))
-    .filter((c) => `${c.first_name ?? ""} ${c.last_name ?? ""}`.toLowerCase().includes(search.toLowerCase()));
+  const run = async () => {
+    setPhase("loading");
 
-  const save = async () => {
-    if (!selected) { toast.error("Select a candidate"); return; }
-    setSaving(true);
+    // 1. Fetch booking location (branch → client fallback)
+    let shiftLat: number | null = null;
+    let shiftLon: number | null = null;
+    if (booking.branch_id) {
+      const { data: br } = await supabase.from("client_branches").select("latitude,longitude").eq("id", booking.branch_id).maybeSingle();
+      shiftLat = (br as any)?.latitude ?? null;
+      shiftLon = (br as any)?.longitude ?? null;
+    }
+    if ((shiftLat == null || shiftLon == null) && booking.client_id) {
+      const { data: cl } = await supabase.from("clients").select("latitude,longitude").eq("id", booking.client_id).maybeSingle();
+      shiftLat = (cl as any)?.latitude ?? null;
+      shiftLon = (cl as any)?.longitude ?? null;
+    }
+
+    // 2. Fetch active temp candidates
+    const { data: rawCands } = await supabase
+      .from("candidates")
+      .select("id,first_name,last_name,qualification_level,has_dbs,latitude,longitude,commute_radius,available_days,preferred_age_groups,current_position,current_employer,notes")
+      .in("status_temp", ["active", "compliance_review"])
+      .in("candidate_type", ["temp", "both"]);
+
+    // 3. Booking shift days-of-week (normalised to "mon","tue" etc)
+    const shiftDays = Array.from(new Set(shifts.map((s) => normDay(shiftDayName(s.shift_date)))));
+
+    // 4. Required qual rank
+    const reqRank = QUAL_RANK[booking.qualification_required ?? ""] ?? 0;
+
+    // 5. Filter + enrich
+    const enriched: SmartMatchCandidate[] = ((rawCands ?? []) as any[])
+      .filter((c) => (QUAL_RANK[c.qualification_level ?? ""] ?? 0) >= reqRank)
+      .reduce((acc: SmartMatchCandidate[], c) => {
+        const fn = c.first_name ?? "";
+        const ln = c.last_name ?? "";
+
+        let distance_miles: number | null = null;
+        if (shiftLat != null && shiftLon != null && c.latitude != null && c.longitude != null) {
+          distance_miles = Math.round(haversineMiles(c.latitude, c.longitude, shiftLat, shiftLon) * 10) / 10;
+        }
+
+        // Skip if clearly beyond commute radius
+        const commuteMiles = parseCommuteMiles(c.commute_radius);
+        if (distance_miles != null && commuteMiles != null && distance_miles > commuteMiles) return acc;
+
+        // Availability overlap
+        const candDays = (c.available_days ?? []).map((d: string) => normDay(d));
+        const overlap = shiftDays.filter((d) => candDays.includes(d)).length;
+        const availPercent = shiftDays.length > 0 ? Math.round((overlap / shiftDays.length) * 100) : 100;
+
+        acc.push({
+          id: c.id,
+          name: `${fn} ${ln}`.trim(),
+          initials: `${fn[0] ?? ""}${ln[0] ?? ""}`.toUpperCase(),
+          qual: c.qualification_level,
+          has_dbs: c.has_dbs,
+          distance_miles,
+          avail_overlap: availPercent,
+          commute_radius: c.commute_radius,
+          ai_score: null,
+          ai_reason: null,
+          _pos: c.current_position ?? null,
+          _employer: c.current_employer ?? null,
+          _notes: c.notes ?? null,
+        });
+        return acc;
+      }, [])
+      .sort((a, b) => (a.distance_miles ?? 999) - (b.distance_miles ?? 999));
+
+    setCandidates(enriched);
+    setPhase("scoring");
+
+    // 6. AI scoring (top 30)
+    try {
+      const top = enriched.slice(0, 30);
+      const shiftDesc = shifts.length > 0
+        ? `${shifts.length} shifts from ${shifts[0].shift_date}${shifts.length > 1 ? ` to ${shifts[shifts.length - 1].shift_date}` : ""}`
+        : "Various dates";
+
+      const { data: fnRes } = await supabase.functions.invoke("ai-smart-match", {
+        body: {
+          job: {
+            title: "Temp Childcare Worker",
+            qualification_required: booking.qualification_required,
+            location: [booking.client_name, booking.branch_name].filter(Boolean).join(", "),
+            description: `Temp booking at ${booking.client_name ?? "client"}. ${shiftDesc}.`,
+          },
+          candidates: top.map((c) => ({
+            id: c.id,
+            name: c.name,
+            current_position: c._pos ?? "",
+            current_employer: c._employer ?? "",
+            qualifications_text: fmtQual(c.qual),
+            notes: c._notes ?? "",
+            availability_notes: c.avail_overlap > 0
+              ? `Available for ${c.avail_overlap}% of shift days`
+              : "Limited availability overlap with shift days",
+            commute_radius: c.commute_radius ?? "unknown",
+          })),
+        },
+      });
+
+      const scores: { id: string; ai_score: number; reason: string }[] = fnRes?.scores ?? [];
+      const scoreMap = new Map(scores.map((s) => [s.id, s]));
+
+      setCandidates((prev) =>
+        [...prev]
+          .map((c) => {
+            const sc = scoreMap.get(c.id);
+            return sc ? { ...c, ai_score: sc.ai_score, ai_reason: sc.reason } : c;
+          })
+          .sort((a, b) => (b.ai_score ?? 0) - (a.ai_score ?? 0))
+      );
+    } catch (e) {
+      console.error("AI scoring failed:", e);
+    }
+
+    setPhase("done");
+  };
+
+  const addToPool = async (candidateId: string) => {
+    setAddingId(candidateId);
     const { error } = await supabase.from("shift_shortlist").insert({
-      booking_id: bookingId, candidate_id: selected.id, source: "manual",
-      status: "shortlisted",
+      booking_id: booking.id, candidate_id: candidateId, source: "manual", status: "shortlisted",
     });
-    setSaving(false);
+    setAddingId(null);
     if (error) { toast.error("Failed: " + error.message); return; }
-    toast.success("Candidate added to booking pool");
-    onAdded(selected);
+    setAddedIds((prev) => new Set([...prev, candidateId]));
+    onAdded();
+    toast.success("Candidate added to pool");
+  };
+
+  const sendInvite = async (candidateId: string) => {
+    setInvitingId(candidateId);
+    const { error } = await (supabase as any).functions.invoke("send-shift-invite", {
+      body: { booking_id: booking.id, candidate_id: candidateId },
+    });
+    setInvitingId(null);
+    if (error) { toast.error("Failed to send invite"); return; }
+    onInvited(candidateId);
+    toast.success("Invite sent");
+  };
+
+  const filtered = candidates.filter((c) =>
+    !search || c.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const scoreColor = (score: number | null) => {
+    if (score == null) return "bg-muted/60 text-muted-foreground";
+    if (score >= 75) return "bg-green-500 text-white";
+    if (score >= 50) return "bg-amber-400 text-white";
+    return "bg-muted text-muted-foreground";
   };
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>Add Candidate to Pool</DialogTitle>
-          <DialogDescription>They'll appear in the assign dropdown for all shifts.</DialogDescription></DialogHeader>
-        <div className="space-y-3 mt-2">
-          <div className="relative">
-            {selected && !dropOpen
-              ? <div className="h-10 px-3 rounded-lg border bg-background flex items-center justify-between text-sm cursor-pointer hover:bg-muted/40"
-                  onClick={() => { setDropOpen(true); setSearch(""); }}>
-                  <span className="font-medium">{selected.first_name} {selected.last_name}</span>
-                  <span className="text-xs text-muted-foreground">change</span>
+      <DialogContent className="max-w-2xl flex flex-col" style={{ maxHeight: "82vh" }}>
+        <DialogHeader className="flex-shrink-0">
+          <DialogTitle className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-teal" />
+            Smart Match
+          </DialogTitle>
+          <DialogDescription>
+            Temp candidates ranked by AI suitability for this booking
+            {booking.qualification_required ? ` · ${fmtQual(booking.qualification_required)} required` : ""}.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="relative flex-shrink-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="Filter by name…"
+            className="w-full h-9 pl-9 pr-3 text-sm rounded-lg bg-muted/40 border border-transparent focus:outline-none focus:ring-2 focus:ring-teal/40" />
+        </div>
+
+        {(phase === "loading" || phase === "scoring") && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-shrink-0">
+            <div className="h-3 w-3 rounded-full border-2 border-teal border-t-transparent animate-spin" />
+            {phase === "loading" ? "Finding matching candidates…" : "Scoring with AI…"}
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto space-y-1.5 min-h-0">
+          {phase === "done" && filtered.length === 0 && (
+            <div className="py-10 text-center text-sm text-muted-foreground">
+              No candidates match the booking requirements.
+            </div>
+          )}
+          {filtered.map((c) => {
+            const inPool = existingIds.includes(c.id) || addedIds.has(c.id);
+            const isInvited = invitedIds.has(c.id);
+            const isAdding = addingId === c.id;
+            const isInviting = invitingId === c.id;
+
+            return (
+              <div key={c.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border/50 hover:bg-muted/20 transition-colors">
+                {/* Avatar + AI score badge */}
+                <div className="relative flex-shrink-0">
+                  <div className="h-9 w-9 rounded-full bg-navy flex items-center justify-center">
+                    <span className="text-[10px] font-bold text-white">{c.initials}</span>
+                  </div>
+                  {c.ai_score != null && (
+                    <div className={`absolute -bottom-1.5 left-1/2 -translate-x-1/2 h-4 min-w-[24px] rounded-full text-[8px] font-bold flex items-center justify-center px-1 ${scoreColor(c.ai_score)}`}>
+                      {c.ai_score}
+                    </div>
+                  )}
                 </div>
-              : <Input value={search} onChange={(e) => { setSearch(e.target.value); setDropOpen(true); }}
-                  onFocus={() => setDropOpen(true)} placeholder="Search temp candidates…" className="h-10" autoComplete="off" />}
-            {dropOpen && (
-              <div className="absolute left-0 right-0 top-11 z-50 bg-card border rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                {filtered.length === 0
-                  ? <div className="px-4 py-3 text-sm text-muted-foreground">No candidates found</div>
-                  : filtered.map((c) => (
-                    <button key={c.id} onMouseDown={() => { setSelected(c); setSearch(""); setDropOpen(false); }}
-                      className="w-full text-left px-4 py-2.5 text-sm hover:bg-muted/60 flex items-center gap-3">
-                      <div className="h-7 w-7 rounded-full bg-navy flex items-center justify-center flex-shrink-0">
-                        <span className="text-[9px] font-bold text-white">{(c.first_name?.[0] ?? "").toUpperCase()}{(c.last_name?.[0] ?? "").toUpperCase()}</span>
-                      </div>
-                      <div>
-                        <div className="font-medium">{c.first_name} {c.last_name}</div>
-                        <div className="text-[11px] text-muted-foreground">{fmtQual(c.qualification_level)}{c.has_dbs ? " · ✓ DBS" : ""}</div>
-                      </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-sm font-semibold">{c.name}</span>
+                    {c.has_dbs && <span className="text-[9px] text-green-600 font-semibold">✓ DBS</span>}
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap mt-0.5">
+                    <span>{fmtQual(c.qual)}</span>
+                    {c.distance_miles != null && (
+                      <span className="flex items-center gap-0.5">
+                        <MapPin className="h-2.5 w-2.5" />{c.distance_miles} mi
+                      </span>
+                    )}
+                    {c.avail_overlap > 0 ? (
+                      <span className="text-emerald-600 font-medium">{c.avail_overlap}% available</span>
+                    ) : (
+                      <span className="text-amber-500">Check availability</span>
+                    )}
+                  </div>
+                  {c.ai_reason && (
+                    <div className="text-[10px] text-muted-foreground/60 mt-0.5 line-clamp-1">{c.ai_reason}</div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {inPool ? (
+                    <span className="h-7 px-2.5 rounded-full text-[11px] font-medium bg-green-100 text-green-700 flex items-center gap-1 whitespace-nowrap">
+                      ✓ In pool
+                    </span>
+                  ) : (
+                    <button onClick={() => addToPool(c.id)} disabled={isAdding}
+                      className="h-7 px-3 rounded-full text-[11px] font-medium border border-navy/30 text-navy hover:bg-navy/5 disabled:opacity-50 transition-colors whitespace-nowrap">
+                      {isAdding ? "Adding…" : "Add"}
                     </button>
-                  ))}
+                  )}
+                  {isInvited ? (
+                    <span className="h-7 px-2.5 rounded-full text-[11px] font-medium bg-teal/10 text-teal-foreground flex items-center gap-1 whitespace-nowrap">
+                      <Bell className="h-2.5 w-2.5" /> Invited
+                    </span>
+                  ) : (
+                    <button onClick={() => sendInvite(c.id)} disabled={isInviting}
+                      className="h-7 px-3 rounded-full text-[11px] font-medium bg-teal text-white hover:opacity-90 disabled:opacity-50 transition-colors inline-flex items-center gap-1 whitespace-nowrap">
+                      {isInviting ? "Sending…" : <><Bell className="h-2.5 w-2.5" />Invite</>}
+                    </button>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
-          <div className="flex justify-end gap-3 pt-1">
-            <button onClick={onClose} className="h-10 px-5 rounded-full border text-sm font-medium hover:bg-muted">Cancel</button>
-            <button onClick={save} disabled={saving || !selected}
-              className="h-10 px-5 rounded-full bg-navy text-white text-sm font-medium hover:opacity-90 disabled:opacity-50">
-              {saving ? "Adding…" : "Add to pool"}
-            </button>
-          </div>
+            );
+          })}
+        </div>
+
+        <div className="flex justify-between items-center pt-2 flex-shrink-0 border-t">
+          <span className="text-xs text-muted-foreground">
+            {candidates.length} candidate{candidates.length !== 1 ? "s" : ""} matched
+            {phase !== "done" && " · scoring…"}
+          </span>
+          <button onClick={onClose}
+            className="h-9 px-5 rounded-full border text-sm font-medium hover:bg-muted transition-colors">
+            Close
+          </button>
         </div>
       </DialogContent>
     </Dialog>
@@ -894,8 +1164,9 @@ function Page() {
   const [candMeta, setCandMeta] = useState<Record<string, { name: string; initials: string; qual: string | null; phone: string | null; has_dbs: boolean | null }>>({});
   const [loading, setLoading] = useState(true);
   const [showAddDate, setShowAddDate] = useState(false);
-  const [showAddCandidate, setShowAddCandidate] = useState(false);
+  const [showSmartMatch, setShowSmartMatch] = useState(false);
   const [drawerCandidateId, setDrawerCandidateId] = useState<string | null>(null);
+  const [invitedCandidateIds, setInvitedCandidateIds] = useState<Set<string>>(new Set());
   const [editNotes, setEditNotes] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
   // Availability: submittedThisWeek set + time-off map (candidate_id -> array of time-off periods)
@@ -905,11 +1176,12 @@ function Page() {
   const [appAcceptedDates, setAppAcceptedDates] = useState<Map<string, Set<string>>>(new Map());
 
   const loadAll = async () => {
-    const [bRes, sRes, slRes, soRes] = await Promise.all([
+    const [bRes, sRes, slRes, soRes, invRes] = await Promise.all([
       supabase.from("bookings").select(`id,client_id,branch_id,qualification_required,notes,status,clients(company_name),client_branches(branch_name),profiles!created_by(first_name,last_name)`).eq("id", id).maybeSingle(),
       supabase.from("temp_shifts").select(`id,shift_date,shift_type,start_time,end_time,qualification_required,status,shift_status,candidate_id,rate_per_hour,charge_rate,total_hours,notes,candidates(first_name,last_name,phone)`).eq("booking_id", id).order("shift_date"),
       supabase.from("shift_shortlist").select(`id,shift_id,candidate_id,status,source,booking_id,candidates(first_name,last_name,phone,qualification_level,has_dbs)`).eq("booking_id", id),
       supabase.from("shift_offers").select("candidate_id,shift_date,status").eq("booking_group_id", id).eq("status", "accepted"),
+      (supabase as any).from("shift_invitations").select("candidate_id").eq("booking_id", id),
     ]);
 
     if (bRes.error) { toast.error("Failed to load booking"); setLoading(false); return; }
@@ -963,6 +1235,9 @@ function Page() {
     });
     setAppAcceptedDates(acceptedMap);
 
+    // Build invited candidates set
+    setInvitedCandidateIds(new Set(((invRes.data ?? []) as any[]).map((r) => r.candidate_id)));
+
     setLoading(false);
   };
 
@@ -973,6 +1248,15 @@ function Page() {
       .eq("candidate_id", candidateId)
       .eq("source", "app");
     loadAll();
+  };
+
+  const inviteCandidate = async (candidateId: string) => {
+    const { error } = await (supabase as any).functions.invoke("send-shift-invite", {
+      body: { booking_id: id, candidate_id: candidateId },
+    });
+    if (error) { toast.error("Failed to send invite"); return; }
+    setInvitedCandidateIds((prev) => new Set([...prev, candidateId]));
+    toast.success("Invite sent");
   };
 
   // Fetch availability data for pool candidates whenever pool changes
@@ -1149,7 +1433,7 @@ function Page() {
             <span className="text-muted-foreground font-normal ml-1">({pool.length})</span>
           </h2>
           {isActive && (
-            <button onClick={() => setShowAddCandidate(true)}
+            <button onClick={() => setShowSmartMatch(true)}
               className="h-8 px-3.5 rounded-full bg-navy text-white text-xs font-medium hover:opacity-90 inline-flex items-center gap-1.5">
               <UserPlus className="h-3 w-3" /> Add candidate
             </button>
@@ -1190,7 +1474,7 @@ function Page() {
               </div>
             ) : (
               manualPool.map((c) => (
-                <ManualCandidateCard key={c.candidate_id} candidate={c} shifts={shifts} onCandidateClick={setDrawerCandidateId} availSubmitted={availSubmitted} candTimeOff={candTimeOff} />
+                <ManualCandidateCard key={c.candidate_id} candidate={c} shifts={shifts} onCandidateClick={setDrawerCandidateId} availSubmitted={availSubmitted} candTimeOff={candTimeOff} invited={invitedCandidateIds.has(c.candidate_id)} onInvite={inviteCandidate} />
               ))
             )}
           </div>
@@ -1323,9 +1607,16 @@ function Page() {
         open={showAddDate} onClose={() => setShowAddDate(false)}
         onCreated={() => { setShowAddDate(false); loadAll(); }} />
 
-      <AddCandidateModal bookingId={id} existingIds={existingCandidateIds}
-        open={showAddCandidate} onClose={() => setShowAddCandidate(false)}
-        onAdded={() => { setShowAddCandidate(false); loadAll(); }} />
+      <SmartMatchModal
+        booking={booking}
+        shifts={shifts}
+        existingIds={existingCandidateIds}
+        invitedIds={invitedCandidateIds}
+        open={showSmartMatch}
+        onClose={() => setShowSmartMatch(false)}
+        onAdded={() => loadAll()}
+        onInvited={(candidateId) => setInvitedCandidateIds((prev) => new Set([...prev, candidateId]))}
+      />
 
       <CandidateDrawer candidateId={drawerCandidateId} onClose={() => setDrawerCandidateId(null)} />
     </div>
