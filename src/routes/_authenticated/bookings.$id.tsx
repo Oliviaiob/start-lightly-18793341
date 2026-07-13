@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   ArrowLeft, Plus, CheckCircle, XCircle, Clock, Smartphone,
-  UserPlus, Banknote, X, Search, ChevronDown, Sparkles, Bell, MapPin,
+  UserPlus, Banknote, X, Search, ChevronDown, Sparkles, Bell, MapPin, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -61,6 +61,14 @@ type CandidateFull = {
 type CandidateOption = {
   id: string; first_name: string | null; last_name: string | null;
   qualification_level: string | null; phone: string | null; has_dbs: boolean | null;
+};
+
+type ActivityLogEntry = {
+  id: string;
+  activity_type: string;
+  description: string;
+  source: string;
+  created_at: string;
 };
 
 type SmartMatchCandidate = {
@@ -1208,6 +1216,7 @@ function Page() {
   const [savingNotes, setSavingNotes] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancellingBooking, setCancellingBooking] = useState(false);
+  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   // Availability: submittedThisWeek set + time-off map (candidate_id -> array of time-off periods)
   const [availSubmitted, setAvailSubmitted] = useState<Set<string>>(new Set());
   const [candTimeOff, setCandTimeOff] = useState<Map<string, { title: string; start_date: string; end_date: string }[]>>(new Map());
@@ -1215,12 +1224,13 @@ function Page() {
   const [appAcceptedDates, setAppAcceptedDates] = useState<Map<string, Set<string>>>(new Map());
 
   const loadAll = async () => {
-    const [bRes, sRes, slRes, soRes, invRes] = await Promise.all([
+    const [bRes, sRes, slRes, soRes, invRes, actLogRes] = await Promise.all([
       supabase.from("bookings").select(`id,client_id,branch_id,qualification_required,notes,status,clients(company_name),client_branches(branch_name),profiles!created_by(first_name,last_name)`).eq("id", id).maybeSingle(),
       supabase.from("temp_shifts").select(`id,shift_date,shift_type,start_time,end_time,qualification_required,status,shift_status,candidate_id,rate_per_hour,charge_rate,total_hours,notes,candidates(first_name,last_name,phone)`).eq("booking_id", id).order("shift_date"),
       supabase.from("shift_shortlist").select(`id,shift_id,candidate_id,status,source,booking_id,candidates(first_name,last_name,phone,qualification_level,has_dbs)`).eq("booking_id", id),
       supabase.from("shift_offers").select("candidate_id,shift_date,status").eq("booking_group_id", id).eq("status", "accepted"),
       (supabase as any).from("shift_invitations").select("candidate_id").eq("booking_id", id),
+      (supabase as any).from("activity_log").select("id,activity_type,description,source,created_at").eq("entity_type","booking").eq("entity_id",id).order("created_at",{ascending:false}),
     ]);
 
     if (bRes.error) { toast.error("Failed to load booking"); setLoading(false); return; }
@@ -1276,6 +1286,7 @@ function Page() {
 
     // Build invited candidates set
     setInvitedCandidateIds(new Set(((invRes.data ?? []) as any[]).map((r) => r.candidate_id)));
+    setActivityLog((actLogRes?.data ?? []) as ActivityLogEntry[]);
 
     setLoading(false);
   };
@@ -1677,6 +1688,41 @@ function Page() {
           </div>
         )}
       </div>
+
+      {/* Cancellation Activity Log */}
+      {activityLog.filter((e) => e.activity_type === "candidate_cancellation").length > 0 && (
+        <div className="bg-card rounded-2xl shadow-[var(--shadow-card)] px-6 py-5">
+          <h2 className="font-semibold text-sm mb-4 flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-500" /> Cancellations
+          </h2>
+          <div className="space-y-3">
+            {activityLog
+              .filter((e) => e.activity_type === "candidate_cancellation")
+              .map((entry) => {
+                let parsed: any = {};
+                try { parsed = JSON.parse(entry.description); } catch {}
+                const shiftDate = parsed.shift_date
+                  ? new Date(parsed.shift_date + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })
+                  : "—";
+                const cancelledAt = new Date(entry.created_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+                const wasConfirmed = parsed.original_status === "confirmed";
+                return (
+                  <div key={entry.id} className="flex items-start gap-3 text-sm py-2 border-b last:border-0">
+                    <div className="flex-1">
+                      <span className="font-medium">{parsed.candidate_name ?? "Candidate"}</span>
+                      <span className="text-muted-foreground"> cancelled their {wasConfirmed ? <span className="text-destructive font-medium">confirmed</span> : "pending"} booking for </span>
+                      <span className="font-medium">{shiftDate}</span>
+                      {parsed.cancellation_reason && (
+                        <span className="text-muted-foreground"> · "{parsed.cancellation_reason}"</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground whitespace-nowrap">{cancelledAt}</div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       {isActive && (
