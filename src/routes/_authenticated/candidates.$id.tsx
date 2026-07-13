@@ -457,10 +457,11 @@ function Page() {
         setClients((cs as Client[]) || []);
       }
 
-      // Load all recruiter profiles for the dropdown
+      // Load recruiter/admin/management profiles for the dropdown
       const { data: recProfs } = await supabase
         .from("profiles")
         .select("id, display_name, first_name, last_name")
+        .in("role", ["admin", "management", "recruiter"])
         .eq("is_active", true)
         .order("first_name");
       setRecruiters((recProfs as any[]) || []);
