@@ -71,6 +71,12 @@ type ActivityLogEntry = {
   created_at: string;
 };
 
+type ShiftOfferSummary = {
+  source: string | null;
+  status: string;
+  temp_shift_id: string | null;
+};
+
 type SmartMatchCandidate = {
   id: string; name: string; initials: string;
   qual: string | null; has_dbs: boolean | null;
@@ -494,10 +500,12 @@ function AppCandidateCard({ candidate, shifts, onCandidateClick, availSubmitted,
 
 // ── Manual Candidate Card ─────────────────────────────────────────────────────
 
-function ManualCandidateCard({ candidate, shifts, onCandidateClick, availSubmitted, candTimeOff, invited, onInvite }: {
+function ManualCandidateCard({ candidate, shifts, onCandidateClick, availSubmitted, candTimeOff, invited, onInvite, offerState, onWithdraw }: {
   candidate: PoolCandidate; shifts: Shift[]; onCandidateClick: (id: string) => void;
   availSubmitted: Set<string>; candTimeOff: Map<string, { title: string; start_date: string; end_date: string }[]>;
   invited: boolean; onInvite: (candidateId: string) => void;
+  offerState: "offered" | "accepted" | null;
+  onWithdraw: (candidateId: string) => void;
 }) {
   const [inviting, setInviting] = useState(false);
   const shortlistedFor = candidate.entries.filter((e) => e.status !== "declined").length;
@@ -528,7 +536,11 @@ function ManualCandidateCard({ candidate, shifts, onCandidateClick, availSubmitt
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
           <div className="flex items-center gap-1.5">
             <AvailDot candidateId={candidate.candidate_id} availSubmitted={availSubmitted} candTimeOff={candTimeOff} />
-            {invited ? (
+            {offerState === "accepted" ? (
+              <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-semibold bg-green-100 text-green-700 border border-green-200">
+                <CheckCircle className="h-2.5 w-2.5" /> Applied
+              </span>
+            ) : (offerState === "offered" || invited) ? (
               <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full text-[10px] font-semibold bg-teal/10 text-teal-foreground border border-teal/20">
                 <Bell className="h-2.5 w-2.5" /> Invited
               </span>
@@ -543,9 +555,16 @@ function ManualCandidateCard({ candidate, shifts, onCandidateClick, availSubmitt
           )}
         </div>
       </div>
-      {/* Invite button */}
+      {/* Action button */}
       <div className="flex justify-end pt-0.5">
-        {invited ? (
+        {offerState === "offered" ? (
+          <button onClick={() => onWithdraw(candidate.candidate_id)}
+            className="h-6 px-3 rounded-full text-[11px] font-medium border border-muted text-muted-foreground hover:border-destructive/50 hover:text-destructive transition-colors">
+            Withdraw invite
+          </button>
+        ) : offerState === "accepted" ? (
+          <span className="text-[11px] text-muted-foreground italic">Accepted invite</span>
+        ) : invited ? (
           <span className="text-[11px] text-muted-foreground italic">Notification sent</span>
         ) : (
           <button onClick={handleInvite} disabled={inviting}
@@ -561,11 +580,12 @@ function ManualCandidateCard({ candidate, shifts, onCandidateClick, availSubmitt
 
 // ── Inline Assign Dropdown ────────────────────────────────────────────────────
 
-function InlineAssign({ shift, pool, onAssign, candTimeOff }: {
+function InlineAssign({ shift, pool, onAssign, candTimeOff, candidateOffers }: {
   shift: Shift;
   pool: PoolCandidate[];
   onAssign: (shiftId: string, candidateId: string) => Promise<void>;
   candTimeOff: Map<string, { title: string; start_date: string; end_date: string }[]>;
+  candidateOffers: Map<string, ShiftOfferSummary[]>;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -611,10 +631,16 @@ function InlineAssign({ shift, pool, onAssign, candTimeOff }: {
     setPending(null);
   };
 
-  // Eligible: not declined for this specific shift
+  // Eligible: in pool, not in a non-assignable offer state for this specific shift
   const eligible = pool.filter((c) => {
     const entry = c.entries.find((e) => e.shift_id === shift.id);
     if (entry?.status === "declined") return false;
+    // If candidate has a shift_offer for this specific shift, check it's assignable
+    const offers = candidateOffers.get(c.candidate_id) ?? [];
+    const shiftOffer = offers.find((o) => o.temp_shift_id === shift.id);
+    if (shiftOffer && ["offered", "declined", "withdrawn", "unavailable", "cancelled"].includes(shiftOffer.status)) {
+      return false;
+    }
     return true;
   });
 
@@ -1220,16 +1246,18 @@ function Page() {
   // Availability: submittedThisWeek set + time-off map (candidate_id -> array of time-off periods)
   const [availSubmitted, setAvailSubmitted] = useState<Set<string>>(new Set());
   const [candTimeOff, setCandTimeOff] = useState<Map<string, { title: string; start_date: string; end_date: string }[]>>(new Map());
-  // app candidate accepted shift dates: candidateId -> Set<shift_date>
+  // app candidate selected shift dates: candidateId -> Set<shift_date>
   const [appAcceptedDates, setAppAcceptedDates] = useState<Map<string, Set<string>>>(new Map());
+  // all active shift_offers per candidate for this booking (for display state + InlineAssign)
+  const [candidateOffersMap, setCandidateOffersMap] = useState<Map<string, ShiftOfferSummary[]>>(new Map());
 
   const loadAll = async () => {
     const [bRes, sRes, slRes, soRes, invRes, actLogRes] = await Promise.all([
       supabase.from("bookings").select(`id,client_id,branch_id,qualification_required,notes,status,clients(company_name),client_branches(branch_name),profiles!created_by(first_name,last_name)`).eq("id", id).maybeSingle(),
       supabase.from("temp_shifts").select(`id,shift_date,shift_type,start_time,end_time,qualification_required,status,shift_status,candidate_id,rate_per_hour,charge_rate,total_hours,notes,candidates(first_name,last_name,phone)`).eq("booking_id", id).order("shift_date"),
       supabase.from("shift_shortlist").select(`id,shift_id,candidate_id,status,source,booking_id,candidates(first_name,last_name,phone,qualification_level,has_dbs)`).eq("booking_id", id),
-      supabase.from("shift_offers").select("candidate_id,shift_date,status").eq("booking_group_id", id).eq("status", "accepted"),
-      (supabase as any).from("shift_invitations").select("candidate_id").eq("booking_id", id),
+      supabase.from("shift_offers").select("candidate_id,temp_shift_id,shift_date,source,status").eq("booking_group_id", id).not("status", "in", '("withdrawn","cancelled")'),
+      (supabase as any).from("shift_invitations").select("candidate_id,status").eq("booking_id", id),
       (supabase as any).from("activity_log").select("id,activity_type,description,source,created_at").eq("entity_type","booking").eq("entity_id",id).order("created_at",{ascending:false}),
     ]);
 
@@ -1276,27 +1304,44 @@ function Page() {
       status: e.status, source: (e as any).source ?? "manual",
     })));
 
-    // Build map of accepted shift dates per app candidate
+    // Build date map (pending self-applications + accepted invites) for shift chips
     const acceptedMap = new Map<string, Set<string>>();
+    // Build full offers map for InlineAssign + ManualCandidateCard display state
+    const offersMap = new Map<string, ShiftOfferSummary[]>();
     ((soRes.data ?? []) as any[]).forEach((o) => {
-      if (!acceptedMap.has(o.candidate_id)) acceptedMap.set(o.candidate_id, new Set());
-      acceptedMap.get(o.candidate_id)!.add(o.shift_date);
+      if (o.status === "pending" || o.status === "accepted") {
+        if (!acceptedMap.has(o.candidate_id)) acceptedMap.set(o.candidate_id, new Set());
+        acceptedMap.get(o.candidate_id)!.add(o.shift_date);
+      }
+      if (!offersMap.has(o.candidate_id)) offersMap.set(o.candidate_id, []);
+      offersMap.get(o.candidate_id)!.push({ source: o.source ?? null, status: o.status, temp_shift_id: o.temp_shift_id ?? null });
     });
     setAppAcceptedDates(acceptedMap);
+    setCandidateOffersMap(offersMap);
 
-    // Build invited candidates set
-    setInvitedCandidateIds(new Set(((invRes.data ?? []) as any[]).map((r) => r.candidate_id)));
+    // Build invited candidates set — only active 'invited' status (not withdrawn)
+    setInvitedCandidateIds(new Set(
+      ((invRes.data ?? []) as any[])
+        .filter((r) => r.status === "invited")
+        .map((r) => r.candidate_id)
+    ));
     setActivityLog((actLogRes?.data ?? []) as ActivityLogEntry[]);
 
     setLoading(false);
   };
 
   const rejectAppCandidate = async (candidateId: string) => {
-    await (supabase as any).from("shift_shortlist")
+    // Decline in shortlist (any source)
+    await supabase.from("shift_shortlist")
       .update({ status: "declined" })
       .eq("booking_id", id)
+      .eq("candidate_id", candidateId);
+    // Update shift_offers to unavailable — triggers "Shift Filled" state in app
+    await supabase.from("shift_offers")
+      .update({ status: "unavailable" })
+      .eq("booking_group_id", id)
       .eq("candidate_id", candidateId)
-      .eq("source", "app");
+      .in("status", ["pending", "accepted"]);
     loadAll();
   };
 
@@ -1305,8 +1350,17 @@ function Page() {
       body: { booking_id: id, candidate_id: candidateId },
     });
     if (error) { toast.error("Failed to send invite"); return; }
-    setInvitedCandidateIds((prev) => new Set([...prev, candidateId]));
     toast.success("Invite sent");
+    loadAll();
+  };
+
+  const withdrawCandidate = async (candidateId: string) => {
+    const { error } = await (supabase as any).functions.invoke("withdraw-shift-invite", {
+      body: { booking_id: id, candidate_id: candidateId },
+    });
+    if (error) { toast.error("Failed to withdraw invite"); return; }
+    toast.success("Invitation withdrawn");
+    loadAll();
   };
 
   // Fetch availability data for pool candidates whenever pool changes
@@ -1383,9 +1437,6 @@ function Page() {
       { onConflict: "shift_id,candidate_id" }
     );
     if (e1) { toast.error("Failed: " + e1.message); return; }
-    // Decline all others for this shift in shortlist
-    await supabase.from("shift_shortlist").update({ status: "declined" })
-      .eq("shift_id", shiftId).neq("candidate_id", candidateId);
     // Update shift record
     const { error: e2 } = await supabase.from("temp_shifts")
       .update({ candidate_id: candidateId, status: "confirmed", shift_status: "confirmed" })
@@ -1457,7 +1508,7 @@ function Page() {
       .from("shift_offers")
       .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
       .eq("booking_group_id", id)
-      .not("status", "in", '("cancelled","completed")');
+      .not("status", "in", '("cancelled","completed","withdrawn")');
 
     setShifts([]);
     setBooking((prev) => prev ? { ...prev, status: "cancelled" } : prev);
@@ -1570,9 +1621,26 @@ function Page() {
                 No candidates added yet.
               </div>
             ) : (
-              manualPool.map((c) => (
-                <ManualCandidateCard key={c.candidate_id} candidate={c} shifts={shifts} onCandidateClick={setDrawerCandidateId} availSubmitted={availSubmitted} candTimeOff={candTimeOff} invited={invitedCandidateIds.has(c.candidate_id)} onInvite={inviteCandidate} />
-              ))
+              manualPool.map((c) => {
+                const offers = candidateOffersMap.get(c.candidate_id) ?? [];
+                const hasAccepted = offers.some((o) => o.source === "crm_invite" && o.status === "accepted");
+                const hasOffered = offers.some((o) => o.source === "crm_invite" && o.status === "offered");
+                const offerState: "offered" | "accepted" | null = hasAccepted ? "accepted" : hasOffered ? "offered" : null;
+                return (
+                  <ManualCandidateCard
+                    key={c.candidate_id}
+                    candidate={c}
+                    shifts={shifts}
+                    onCandidateClick={setDrawerCandidateId}
+                    availSubmitted={availSubmitted}
+                    candTimeOff={candTimeOff}
+                    invited={invitedCandidateIds.has(c.candidate_id)}
+                    onInvite={inviteCandidate}
+                    offerState={offerState}
+                    onWithdraw={withdrawCandidate}
+                  />
+                );
+              })
             )}
           </div>
         </div>
@@ -1638,7 +1706,7 @@ function Page() {
                             </button>
                           </div>
                         ) : (
-                          <InlineAssign shift={s} pool={pool} onAssign={assignCandidate} candTimeOff={candTimeOff} />
+                          <InlineAssign shift={s} pool={pool} onAssign={assignCandidate} candTimeOff={candTimeOff} candidateOffers={candidateOffersMap} />
                         )}
                       </td>
                       <td className="py-3 px-3 text-xs text-muted-foreground whitespace-nowrap">
