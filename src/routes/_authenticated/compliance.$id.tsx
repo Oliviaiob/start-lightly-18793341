@@ -727,6 +727,18 @@ function Page() {
       const cl = await getOrCreateChecklist();
       await supabase.from("compliance_checklists").update({ [key]: value } as any).eq("id", cl.id!);
       setChecklist((prev) => prev ? { ...prev, [key]: value } : null);
+
+      // Push notification to candidate when recruiter makes a decision
+      if (value === "approved" || value === "rejected") {
+        const label = CHECKLIST_ITEMS.find((i) => i.key === key)?.label ?? key;
+        const title = value === "approved" ? "Document approved ✓" : "Document needs attention";
+        const body  = value === "approved"
+          ? `Your ${label} has been approved.`
+          : `Your ${label} needs attention — please log in to re-upload.`;
+        supabase.functions.invoke("send-push-notification", {
+          body: { candidate_id: id, title, body, link_to: "/compliance" },
+        }).catch(() => {}); // fire-and-forget
+      }
     } catch (e: any) { toast.error("Save failed: " + e.message); }
     setSavingItem(null);
   };
