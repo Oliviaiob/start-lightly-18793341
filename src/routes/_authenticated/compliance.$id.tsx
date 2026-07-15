@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ArrowLeft, CheckCircle, AlertTriangle, Clock, Minus, Circle,
-  Upload, FileText, RefreshCw, ExternalLink, Smartphone, Sparkles,
+  Upload, FileText, RefreshCw, ExternalLink, Smartphone, Sparkles, Copy,
   Copy, Mail, Link2, BanIcon, PartyPopper, ChevronRight, Trash2, Plus, X, Bell,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -188,7 +188,7 @@ function deriveWorkflowState(
 function ChecklistSection({
   item, status, doc, aiResult, note, workflowState, workflowActivity,
   onStatusChange, onNoteChange, onNoteBlur, onUpload, onRemove, onRecheck,
-  onWorkflowUpdate, onWorkflowLog, saving,
+  onWorkflowUpdate, onWorkflowLog, saving, extraContent,
 }: {
   item: (typeof CHECKLIST_ITEMS)[number];
   status: ItemStatus;
@@ -206,6 +206,7 @@ function ChecklistSection({
   onWorkflowUpdate: (updates: Partial<WorkflowStateData>) => Promise<void>;
   onWorkflowLog: (desc: string, source?: "system" | "ai" | "recruiter") => Promise<void>;
   saving: boolean;
+  extraContent?: React.ReactNode;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -354,6 +355,8 @@ function ChecklistSection({
           </div>
         )}
 
+        {extraContent}
+
         {/* AI Workflow Panel */}
         <WorkflowPanel
           state={workflowState}
@@ -371,6 +374,43 @@ function ChecklistSection({
           rows={2}
           className="w-full text-sm bg-muted/30 rounded-xl p-3 border border-border/40 focus:outline-none focus:ring-2 focus:ring-teal/40 resize-none placeholder:text-muted-foreground/50" />
       </div>
+    </div>
+  );
+}
+
+// ── DbsInfoPanel ─────────────────────────────────────────────────────────────
+
+function DbsInfoPanel({ extracted }: { extracted: Record<string, unknown> | null }) {
+  const certNum  = (extracted?.certificate_number ?? extracted?.dbs_certificate_number ?? null) as string | null;
+  const surname  = (extracted?.surname ?? extracted?.name_on_certificate ?? null) as string | null;
+  const dob      = (extracted?.date_of_birth ?? null) as string | null;
+
+  const Field = ({ label, value, copyable }: { label: string; value: string | null; copyable?: boolean }) => (
+    <div className="flex items-center justify-between gap-2 py-2 border-b border-border/30 last:border-0">
+      <span className="text-[11px] text-muted-foreground w-36 shrink-0">{label}</span>
+      <div className="flex items-center gap-1.5 flex-1">
+        <span className="text-[11px] font-medium text-foreground">{value ?? "—"}</span>
+        {copyable && value && (
+          <button
+            onClick={() => { navigator.clipboard.writeText(value); }}
+            title="Copy to clipboard"
+            className="h-5 w-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+          >
+            <Copy className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="rounded-xl border border-border/50 bg-muted/20 px-4 py-1">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground pt-2 pb-1">
+        DBS Update Service — required fields
+      </p>
+      <Field label="Certificate Number" value={certNum} copyable />
+      <Field label="Applicant's Surname" value={surname} />
+      <Field label="Date of Birth"       value={dob} />
     </div>
   );
 }
@@ -1091,6 +1131,9 @@ function Page() {
             onWorkflowUpdate={(updates) => upsertWorkflowState(item.key, updates)}
             onWorkflowLog={(desc, src) => logWorkflowActivity(item.key, desc, src)}
             saving={savingItem === item.key}
+            extraContent={item.key === "dbs_update_service_check" ? (
+              <DbsInfoPanel extracted={checklist?.ai_results?.dbs_certificate?.extracted ?? null} />
+            ) : undefined}
           />
           {item.key === "qualification_certificates" && (
             <QualificationsPanel
