@@ -94,6 +94,29 @@ type DocumentRecord = {
   file_size: number | null;
 };
 
+type CandidateQualification = {
+  id: string;
+  candidate_id: string;
+  qualification_name: string | null;
+  level: string | null;
+  awarding_body: string | null;
+  document_id: string | null;
+  certificate_url: string | null;
+  certificate_number: string | null;
+  issue_date: string | null;
+  expiry_date: string | null;
+  does_not_expire: boolean;
+  source: string;
+  status: string;
+  ai_result: Record<string, any>;
+  ai_checked_at: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function initials(c: Candidate) {
@@ -213,6 +236,7 @@ function ChecklistSection({
         <div className="flex items-center gap-3 flex-wrap">
           <label className="cursor-pointer">
             <input ref={fileRef} type="file" className="hidden"
+              accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.bmp,.webp,.tiff,.tif,.doc,.docx"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); e.target.value = ""; }} />
             <span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border text-xs font-medium hover:bg-muted/40 transition-colors cursor-pointer">
               <Upload className="h-3.5 w-3.5" /> Upload
@@ -351,6 +375,274 @@ function ChecklistSection({
   );
 }
 
+// ── QualificationsPanel ──────────────────────────────────────────────────────
+
+const QUAL_STATUS_BADGE: Record<string, { label: string; bg: string; text: string }> = {
+  not_submitted:          { label: "Not submitted",        bg: "bg-gray-100",    text: "text-gray-500"   },
+  uploaded:               { label: "Uploaded",             bg: "bg-amber-100",   text: "text-amber-700"  },
+  processing:             { label: "Processing",           bg: "bg-blue-100",    text: "text-blue-700"   },
+  ai_review_complete:     { label: "AI reviewed",          bg: "bg-purple-100",  text: "text-purple-700" },
+  manual_review_required: { label: "Manual review needed", bg: "bg-orange-100",  text: "text-orange-700" },
+  approved:               { label: "Approved",             bg: "bg-green-100",   text: "text-green-700"  },
+  rejected:               { label: "Rejected",             bg: "bg-red-100",     text: "text-red-700"    },
+  replacement_requested:  { label: "Replacement requested",bg: "bg-yellow-100",  text: "text-yellow-700" },
+};
+
+function QualStatusBadge({ status }: { status: string }) {
+  const b = QUAL_STATUS_BADGE[status] ?? { label: status, bg: "bg-gray-100", text: "text-gray-500" };
+  return <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold ${b.bg} ${b.text}`}>{b.label}</span>;
+}
+
+function QualificationsPanel({
+  qualifications, savingQual, onAdd, onUpdate, onUpload, onRecheck, onSetStatus, onDelete,
+}: {
+  qualifications: CandidateQualification[];
+  savingQual: string | null;
+  onAdd: () => void;
+  onUpdate: (qualId: string, fields: Partial<CandidateQualification>) => void;
+  onUpload: (qualId: string, file: File) => void;
+  onRecheck: (qualId: string) => void;
+  onSetStatus: (qualId: string, status: string) => void;
+  onDelete: (qualId: string) => void;
+}) {
+  return (
+    <div className="bg-card rounded-2xl border border-border/50 overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b bg-muted/10">
+        <h3 className="font-semibold text-sm">Qualifications</h3>
+        <button
+          onClick={onAdd}
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-navy text-navy-foreground text-xs font-medium hover:opacity-90 transition-opacity"
+        >
+          <Plus className="h-3.5 w-3.5" /> Add Qualification
+        </button>
+      </div>
+      {qualifications.length === 0 ? (
+        <div className="px-5 py-8 text-sm text-muted-foreground text-center">
+          No qualifications added yet. Click "Add Qualification" to get started.
+        </div>
+      ) : (
+        <div className="divide-y divide-border/40">
+          {qualifications.map((qual) => (
+            <QualCard
+              key={qual.id}
+              qual={qual}
+              saving={savingQual === qual.id}
+              onUpdate={(fields) => onUpdate(qual.id, fields)}
+              onUpload={(file) => onUpload(qual.id, file)}
+              onRecheck={() => onRecheck(qual.id)}
+              onSetStatus={(s) => onSetStatus(qual.id, s)}
+              onDelete={() => onDelete(qual.id)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QualCard({
+  qual, saving, onUpdate, onUpload, onRecheck, onSetStatus, onDelete,
+}: {
+  qual: CandidateQualification;
+  saving: boolean;
+  onUpdate: (fields: Partial<CandidateQualification>) => void;
+  onUpload: (file: File) => void;
+  onRecheck: () => void;
+  onSetStatus: (s: string) => void;
+  onDelete: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [localName, setLocalName] = useState(qual.qualification_name ?? "");
+  const [localLevel, setLocalLevel] = useState(qual.level ?? "");
+  const [localBody, setLocalBody] = useState(qual.awarding_body ?? "");
+  const [localCertNum, setLocalCertNum] = useState(qual.certificate_number ?? "");
+  const [localIssue, setLocalIssue] = useState(qual.issue_date ?? "");
+  const [localExpiry, setLocalExpiry] = useState(qual.expiry_date ?? "");
+  const [localNoExpiry, setLocalNoExpiry] = useState(qual.does_not_expire);
+
+  const aiSummary = qual.ai_result?.summary as string | undefined;
+  const aiStatus  = qual.ai_result?.status  as string | undefined;
+
+  return (
+    <div className="px-5 py-4 space-y-4">
+      {/* Row 1: name + level + awarding body + delete */}
+      <div className="flex items-start gap-3 flex-wrap">
+        <div className="flex-1 min-w-[160px]">
+          <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.1em]">Qualification</label>
+          <input
+            className="mt-1 w-full h-8 rounded-lg bg-muted/40 border-0 px-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-teal"
+            value={localName}
+            placeholder="e.g. Level 3 Diploma in Childcare"
+            onChange={(e) => setLocalName(e.target.value)}
+            onBlur={() => onUpdate({ qualification_name: localName || null })}
+          />
+        </div>
+        <div className="w-28">
+          <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.1em]">Level</label>
+          <input
+            className="mt-1 w-full h-8 rounded-lg bg-muted/40 border-0 px-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-teal"
+            value={localLevel}
+            placeholder="Level 3"
+            onChange={(e) => setLocalLevel(e.target.value)}
+            onBlur={() => onUpdate({ level: localLevel || null })}
+          />
+        </div>
+        <div className="flex-1 min-w-[140px]">
+          <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.1em]">Awarding Body</label>
+          <input
+            className="mt-1 w-full h-8 rounded-lg bg-muted/40 border-0 px-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-teal"
+            value={localBody}
+            placeholder="e.g. CACHE"
+            onChange={(e) => setLocalBody(e.target.value)}
+            onBlur={() => onUpdate({ awarding_body: localBody || null })}
+          />
+        </div>
+        <div className="flex-shrink-0 pt-5">
+          <button onClick={onDelete} className="h-8 w-8 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 grid place-items-center transition-colors" title="Remove qualification">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Row 2: cert number + issue date + expiry */}
+      <div className="flex items-end gap-3 flex-wrap">
+        <div className="w-36">
+          <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.1em]">Certificate Number</label>
+          <input
+            className="mt-1 w-full h-8 rounded-lg bg-muted/40 border-0 px-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-teal"
+            value={localCertNum}
+            placeholder="Optional"
+            onChange={(e) => setLocalCertNum(e.target.value)}
+            onBlur={() => onUpdate({ certificate_number: localCertNum || null })}
+          />
+        </div>
+        <div className="w-36">
+          <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.1em]">Issue Date</label>
+          <input
+            type="date"
+            className="mt-1 w-full h-8 rounded-lg bg-muted/40 border-0 px-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-teal"
+            value={localIssue}
+            onChange={(e) => setLocalIssue(e.target.value)}
+            onBlur={() => onUpdate({ issue_date: localIssue || null })}
+          />
+        </div>
+        <div className="w-36">
+          <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.1em]">Expiry Date</label>
+          <input
+            type="date"
+            className="mt-1 w-full h-8 rounded-lg bg-muted/40 border-0 px-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-teal disabled:opacity-40"
+            value={localExpiry}
+            disabled={localNoExpiry}
+            onChange={(e) => setLocalExpiry(e.target.value)}
+            onBlur={() => onUpdate({ expiry_date: localExpiry || null })}
+          />
+        </div>
+        <label className="flex items-center gap-1.5 h-8 cursor-pointer text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            className="rounded"
+            checked={localNoExpiry}
+            onChange={(e) => {
+              setLocalNoExpiry(e.target.checked);
+              if (e.target.checked) setLocalExpiry("");
+              onUpdate({ does_not_expire: e.target.checked, expiry_date: e.target.checked ? null : localExpiry || null });
+            }}
+          />
+          Does not expire
+        </label>
+      </div>
+
+      {/* Row 3: certificate upload + status */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <label className="cursor-pointer">
+          <input
+            ref={fileRef}
+            type="file"
+            className="hidden"
+            accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.bmp,.webp,.tiff,.tif,.doc,.docx"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) onUpload(f); e.target.value = ""; }}
+          />
+          <span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border text-xs font-medium hover:bg-muted/40 transition-colors cursor-pointer">
+            <Upload className="h-3.5 w-3.5" />
+            {qual.certificate_url ? "Replace certificate" : "Upload certificate"}
+          </span>
+        </label>
+
+        {qual.certificate_url && (
+          <a
+            href={qual.certificate_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-teal/40 text-teal text-xs font-medium hover:bg-teal/5 transition-colors"
+          >
+            <ExternalLink className="h-3.5 w-3.5" /> View certificate
+          </a>
+        )}
+
+        <QualStatusBadge status={qual.status} />
+
+        {saving && (
+          <span className="text-xs text-muted-foreground animate-pulse">Processing…</span>
+        )}
+
+        {qual.certificate_url && !saving && (
+          <button
+            onClick={onRecheck}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <RefreshCw className="h-3 w-3" /> Re-run AI check
+          </button>
+        )}
+      </div>
+
+      {/* AI result */}
+      {aiSummary && (
+        <div className={`rounded-xl px-3 py-2.5 text-xs space-y-0.5 ${
+          aiStatus === "verified"      ? "bg-green-50 text-green-800"  :
+          aiStatus === "flagged"       ? "bg-red-50 text-red-800"      :
+                                         "bg-amber-50 text-amber-800"
+        }`}>
+          <div className="font-semibold flex items-center gap-1.5">
+            <Sparkles className="h-3 w-3" />
+            AI review — {aiStatus === "verified" ? "Passed" : aiStatus === "flagged" ? "Flagged" : "Manual review"}
+          </div>
+          <div>{aiSummary}</div>
+          {Array.isArray(qual.ai_result?.reasons) && qual.ai_result.reasons.length > 0 && (
+            <ul className="mt-1 list-disc list-inside space-y-0.5 opacity-80">
+              {(qual.ai_result.reasons as string[]).map((r, i) => <li key={i}>{r}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex items-center gap-2 flex-wrap pt-1">
+        <button
+          onClick={() => onSetStatus("approved")}
+          disabled={qual.status === "approved" || saving}
+          className="inline-flex items-center gap-1.5 h-7 px-3 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 disabled:opacity-40 transition-colors"
+        >
+          <CheckCircle className="h-3 w-3" /> Approve
+        </button>
+        <button
+          onClick={() => onSetStatus("rejected")}
+          disabled={qual.status === "rejected" || saving}
+          className="inline-flex items-center gap-1.5 h-7 px-3 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 disabled:opacity-40 transition-colors"
+        >
+          <X className="h-3 w-3" /> Reject
+        </button>
+        <button
+          onClick={() => onSetStatus("replacement_requested")}
+          disabled={qual.status === "replacement_requested" || saving}
+          className="inline-flex items-center gap-1.5 h-7 px-3 rounded-lg border text-xs font-medium hover:bg-muted/40 disabled:opacity-40 transition-colors"
+        >
+          <RefreshCw className="h-3 w-3" /> Request Replacement
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 function Page() {
@@ -368,15 +660,18 @@ function Page() {
   const [workflowStates, setWorkflowStates] = useState<WorkflowStateData[]>([]);
   const [workflowActivity, setWorkflowActivity] = useState<WorkflowActivityData[]>([]);
   const [workflowAvailable, setWorkflowAvailable] = useState(true);
+  const [qualifications, setQualifications] = useState<CandidateQualification[]>([]);
+  const [savingQual, setSavingQual] = useState<string | null>(null);
 
   const loadAll = async () => {
     setLoading(true);
-    const [candRes, clRes, docsRes, refsRes, msgRes] = await Promise.all([
+    const [candRes, clRes, docsRes, refsRes, msgRes, qualsRes] = await Promise.all([
       supabase.from("candidates").select("id,first_name,last_name,email,phone,qualification_level,status_temp,source,dbs_next_check_due,paediatric_first_aid_expiry,onboarding_email_sent_at,bank_details_token").eq("id", id).maybeSingle(),
       supabase.from("compliance_checklists").select("*").eq("candidate_id", id).maybeSingle(),
       supabase.from("candidate_documents").select("id,document_type,file_name,file_url,status,uploaded_at,file_size").eq("candidate_id", id).order("uploaded_at", { ascending: false }),
       supabase.from("references").select("id,referee_name,referee_email,referee_phone,referee_job_title,company_name,ref_type,ref_number,candidate_position,employment_start_date,employment_end_date,is_current_role,reason_for_leaving,relationship_to_candidate,known_duration,status,requested_at,received_at,reminder_stage,next_reminder_at,short_code").eq("candidate_id", id).order("ref_number", { ascending: true }),
       (supabase as any).from("messages").select("content,direction,created_at").eq("candidate_id", id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("candidate_qualifications").select("*").eq("candidate_id", id).order("created_at", { ascending: true }),
     ]);
     // Load workflow engine data (graceful fallback if migration not yet run)
     if (workflowAvailable) {
@@ -411,6 +706,7 @@ function Page() {
     setDocs((docsRes.data as DocumentRecord[]) ?? []);
     setReferences((refsRes.data as ReferenceRecord[]) ?? []);
     setLastMessage((msgRes as any)?.data ?? null);
+    setQualifications((qualsRes as any)?.data ?? []);
     setLoading(false);
   };
 
@@ -497,6 +793,97 @@ function Page() {
     await loadAll();
     await logWorkflowActivity(key, `Document removed — awaiting replacement`, "system");
     toast.success("Document removed");
+  };
+
+  // ── Qualification handlers ────────────────────────────────────────────────
+
+  const addQualification = async () => {
+    const { data, error } = await supabase
+      .from("candidate_qualifications")
+      .insert({ candidate_id: id, source: "crm", status: "not_submitted" })
+      .select("*")
+      .single();
+    if (error) { toast.error("Could not add qualification"); return; }
+    setQualifications((prev) => [...prev, data as CandidateQualification]);
+  };
+
+  const updateQualification = async (qualId: string, fields: Partial<CandidateQualification>) => {
+    setQualifications((prev) => prev.map((q) => q.id === qualId ? { ...q, ...fields } : q));
+    const { error } = await supabase.from("candidate_qualifications").update(fields as any).eq("id", qualId);
+    if (error) { toast.error("Save failed"); await loadAll(); }
+  };
+
+  const handleQualUpload = async (qualId: string, file: File) => {
+    setSavingQual(qualId);
+    const ext = file.name.split(".").pop() ?? "bin";
+    const filePath = `${id}/qualifications/${qualId}/${Date.now()}.${ext}`;
+    const { error: storageError } = await supabase.storage
+      .from("compliance")
+      .upload(filePath, file, { upsert: true, contentType: file.type || "application/octet-stream" });
+    if (storageError) { toast.error("Upload failed: " + storageError.message); setSavingQual(null); return; }
+    const { data: urlData } = supabase.storage.from("compliance").getPublicUrl(filePath);
+    const fileUrl = urlData?.publicUrl ?? null;
+    // Create candidate_documents record
+    const { data: docRec, error: docErr } = await supabase
+      .from("candidate_documents")
+      .insert({ candidate_id: id, document_type: "qualification_certificate", file_name: file.name, file_size: file.size, file_url: fileUrl, status: "pending", uploaded_at: new Date().toISOString() })
+      .select("id")
+      .single();
+    if (docErr) { toast.error("Record failed: " + docErr.message); setSavingQual(null); return; }
+    // Link doc to qualification and set status = processing
+    await supabase.from("candidate_qualifications").update({ document_id: docRec.id, certificate_url: fileUrl, status: "processing" }).eq("id", qualId);
+    await loadAll();
+    // Run AI check
+    const qual = qualifications.find((q) => q.id === qualId);
+    const candidate = (await supabase.from("candidates").select("first_name,last_name,qualification_level").eq("id", id).maybeSingle()).data;
+    try {
+      await supabase.functions.invoke("check-compliance-document", {
+        body: {
+          document_type: "qualification_certificates",
+          candidate_id: id,
+          doc_id: docRec.id,
+          qualification_id: qualId,
+          candidate_name: candidate ? `${candidate.first_name ?? ""} ${candidate.last_name ?? ""}`.trim() : null,
+          candidate_qualification_level: qual?.level ?? candidate?.qualification_level ?? null,
+        },
+      });
+    } catch {}
+    await loadAll();
+    setSavingQual(null);
+    toast.success("Certificate uploaded and AI check started");
+  };
+
+  const runQualAiCheck = async (qualId: string) => {
+    const qual = qualifications.find((q) => q.id === qualId);
+    if (!qual?.document_id) { toast.error("Upload a certificate first"); return; }
+    setSavingQual(qualId);
+    const candidate = (await supabase.from("candidates").select("first_name,last_name,qualification_level").eq("id", id).maybeSingle()).data;
+    try {
+      await supabase.functions.invoke("check-compliance-document", {
+        body: {
+          document_type: "qualification_certificates",
+          candidate_id: id,
+          doc_id: qual.document_id,
+          qualification_id: qualId,
+          candidate_name: candidate ? `${candidate.first_name ?? ""} ${candidate.last_name ?? ""}`.trim() : null,
+          candidate_qualification_level: qual.level ?? candidate?.qualification_level ?? null,
+        },
+      });
+    } catch {}
+    await loadAll();
+    setSavingQual(null);
+  };
+
+  const setQualStatus = async (qualId: string, status: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    await updateQualification(qualId, { status, reviewed_by: user?.id ?? null, reviewed_at: new Date().toISOString() } as any);
+  };
+
+  const deleteQualification = async (qualId: string) => {
+    if (!window.confirm("Remove this qualification?")) return;
+    const { error } = await supabase.from("candidate_qualifications").delete().eq("id", qualId);
+    if (error) { toast.error("Delete failed"); return; }
+    setQualifications((prev) => prev.filter((q) => q.id !== qualId));
   };
 
   const upsertWorkflowState = async (key: string, updates: Partial<WorkflowStateData>) => {
@@ -693,6 +1080,18 @@ function Page() {
             onWorkflowLog={(desc, src) => logWorkflowActivity(item.key, desc, src)}
             saving={savingItem === item.key}
           />
+          {item.key === "qualification_certificates" && (
+            <QualificationsPanel
+              qualifications={qualifications}
+              savingQual={savingQual}
+              onAdd={addQualification}
+              onUpdate={updateQualification}
+              onUpload={handleQualUpload}
+              onRecheck={runQualAiCheck}
+              onSetStatus={setQualStatus}
+              onDelete={deleteQualification}
+            />
+          )}
         );
       })}
 
