@@ -1,11 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, Fragment } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ArrowLeft, CheckCircle, AlertTriangle, Clock, Minus, Circle,
   Upload, FileText, RefreshCw, ExternalLink, Smartphone, Sparkles, Copy,
-  Copy, Mail, Link2, BanIcon, PartyPopper, ChevronRight, Trash2, Plus, X, Bell,
+  Mail, Link2, BanIcon, PartyPopper, ChevronRight, Trash2, Plus, X, Bell,
 } from "lucide-react";
 import { toast } from "sonner";
 import { WorkflowPanel, type WorkflowStateData, type WorkflowActivityData, type ActionOwner, type DerivedWorkflowState } from "@/components/workflow-panel";
@@ -268,6 +268,8 @@ function ChecklistSection({
           )}
         </div>
 
+        {extraContent}
+
         {/* AI check result */}
         {doc && (
           <div className={`rounded-xl border px-4 py-3 ${
@@ -354,8 +356,6 @@ function ChecklistSection({
             )}
           </div>
         )}
-
-        {extraContent}
 
         {/* AI Workflow Panel */}
         <WorkflowPanel
@@ -1113,8 +1113,8 @@ function Page() {
         const note = notes[item.key] ?? "";
 
         return (
+          <Fragment key={item.key}>
           <ChecklistSection
-            key={item.key}
             item={item}
             status={status}
             doc={doc}
@@ -1147,6 +1147,7 @@ function Page() {
               onDelete={deleteQualification}
             />
           )}
+          </Fragment>
         );
       })}
 
