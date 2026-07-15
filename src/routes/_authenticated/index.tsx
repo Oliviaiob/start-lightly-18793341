@@ -67,7 +67,16 @@ type ActivityRow = {
   activity_type: string | null;
   description: string | null;
   entity_type: string | null;
+  entity_id: string | null;
   created_at: string | null;
+};
+
+type ActivityContext = {
+  candidateName?: string;
+  clientName?: string;
+  shiftDate?: string;
+  candidateId?: string;
+  clientId?: string;
 };
 
 function initials(first?: string | null, last?: string | null) {
@@ -147,6 +156,7 @@ function Dashboard() {
   const [shifts, setShifts] = useState<ShiftRow[]>([]);
   const [starred, setStarred] = useState<Candidate[]>([]);
   const [activity, setActivity] = useState<ActivityRow[]>([]);
+  const [activityCtx, setActivityCtx] = useState<Record<string, ActivityContext>>({});
   const [loading, setLoading] = useState(true);
   const scope = useEffectiveScope({ dashboard: true });
   const { userId } = useScope();
@@ -257,7 +267,7 @@ function Dashboard() {
         ),
         supabase
           .from("activity_log")
-          .select("id, activity_type, description, entity_type, created_at")
+          .select("id, activity_type, description, entity_type, entity_id, created_at")
           .order("created_at", { ascending: false })
           .limit(10),
         supabase
@@ -278,7 +288,54 @@ function Dashboard() {
       setInterviews((upcomingInterviewsRes.data as unknown as InterviewRow[]) || []);
       setShifts((upcomingShiftsRes.data as unknown as ShiftRow[]) || []);
       setStarred((starredRes.data as Candidate[]) || []);
-      setActivity((activityRes.data as unknown as ActivityRow[]) || []);
+      const acts = (activityRes.data as unknown as ActivityRow[]) || [];
+      setActivity(acts);
+
+      // Batch-enrich activity context: bookings → shift_offers → candidate + client
+      try {
+        const bookingIds = acts.filter(a => a.entity_type === "booking" && a.entity_id).map(a => a.entity_id as string);
+        const candidateEntityIds = acts.filter(a => a.entity_type === "candidate" && a.entity_id).map(a => a.entity_id as string);
+
+        let shiftRows: { id: string; candidate_id: string | null; client_id: string | null; shift_date: string | null }[] = [];
+        if (bookingIds.length) {
+          const { data } = await supabase.from("shift_offers").select("id,candidate_id,client_id,shift_date").in("id", bookingIds);
+          shiftRows = data ?? [];
+        }
+
+        const bCandidateIds = shiftRows.map(s => s.candidate_id).filter(Boolean) as string[];
+        const bClientIds    = shiftRows.map(s => s.client_id).filter(Boolean) as string[];
+        const allCandidateIds = [...new Set([...candidateEntityIds, ...bCandidateIds])];
+        const allClientIds    = [...new Set(bClientIds)];
+
+        const [{ data: cands }, { data: clients }] = await Promise.all([
+          allCandidateIds.length ? supabase.from("candidates").select("id,first_name,last_name").in("id", allCandidateIds) : Promise.resolve({ data: [] }),
+          allClientIds.length    ? supabase.from("clients").select("id,company_name").in("id", allClientIds)               : Promise.resolve({ data: [] }),
+        ]);
+
+        const candMap: Record<string, string> = Object.fromEntries((cands ?? []).map((c: any) => [c.id, `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim()]));
+        const clientMap: Record<string, string> = Object.fromEntries((clients ?? []).map((c: any) => [c.id, c.company_name]));
+        const shiftMap: Record<string, typeof shiftRows[0]> = Object.fromEntries(shiftRows.map(s => [s.id, s]));
+
+        const ctx: Record<string, ActivityContext> = {};
+        for (const a of acts) {
+          if (!a.entity_id) continue;
+          if (a.entity_type === "booking") {
+            const s = shiftMap[a.entity_id];
+            if (s) ctx[a.id] = {
+              candidateName: s.candidate_id ? candMap[s.candidate_id] : undefined,
+              clientName:    s.client_id    ? clientMap[s.client_id]  : undefined,
+              shiftDate:     s.shift_date   ?? undefined,
+              candidateId:   s.candidate_id ?? undefined,
+              clientId:      s.client_id    ?? undefined,
+            };
+          } else if (a.entity_type === "candidate") {
+            ctx[a.id] = { candidateName: candMap[a.entity_id], candidateId: a.entity_id };
+          } else if (a.entity_type === "client") {
+            ctx[a.id] = { clientId: a.entity_id };
+          }
+        }
+        setActivityCtx(ctx);
+      } catch {}
       setLoading(false);
     })();
   }, [userId, scope]);
@@ -434,19 +491,43 @@ function Dashboard() {
             <div className="text-sm text-muted-foreground py-6 text-center">No recent activity</div>
           ) : (
             <ul className="space-y-3">
-              {activity.map((a) => (
-                <li key={a.id} className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-muted text-foreground grid place-items-center shrink-0">
-                    <ActivityIcon className="h-4 w-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm truncate">
-                      {a.description || `${a.activity_type || "Updated"} ${a.entity_type || ""}`.trim()}
+              {activity.map((a) => {
+                const ctx = activityCtx[a.id];
+                const parts: string[] = [];
+                if (ctx?.candidateName) parts.push(ctx.candidateName);
+                if (ctx?.clientName) parts.push(ctx.clientName);
+                if (ctx?.shiftDate) parts.push(new Date(ctx.shiftDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" }));
+                const contextLine = parts.join(" · ");
+
+                const link = ctx?.candidateId
+                  ? `/compliance/${ctx.candidateId}`
+                  : ctx?.clientId
+                  ? `/clients/${ctx.clientId}`
+                  : null;
+
+                return (
+                  <li key={a.id} className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-muted text-foreground grid place-items-center shrink-0">
+                      <ActivityIcon className="h-4 w-4" />
                     </div>
-                    <div className="text-[11px] text-muted-foreground">{relativeTime(a.created_at)}</div>
-                  </div>
-                </li>
-              ))}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm truncate">
+                        {a.description || `${a.activity_type || "Updated"} ${a.entity_type || ""}`.trim()}
+                      </div>
+                      {contextLine && (
+                        link ? (
+                          <Link to={link} className="text-[11px] text-teal font-medium hover:underline truncate block">
+                            {contextLine}
+                          </Link>
+                        ) : (
+                          <div className="text-[11px] text-muted-foreground font-medium truncate">{contextLine}</div>
+                        )
+                      )}
+                      <div className="text-[11px] text-muted-foreground">{relativeTime(a.created_at)}</div>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Card>
