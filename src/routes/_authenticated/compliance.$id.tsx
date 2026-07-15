@@ -20,7 +20,7 @@ type ChecklistKey =
   | "proof_of_id" | "passport_photo" | "proof_of_address_1" | "proof_of_address_2"
   | "right_to_work" | "ni_number_check"
   | "dbs_certificate" | "dbs_update_service_check" | "childrens_barred_list"
-  | "safeguarding_training_cert" | "paediatric_first_aid_cert" | "qualification_certificates"
+  | "safeguarding_training_cert" | "paediatric_first_aid_cert"
   | "work_reference_1" | "work_reference_2" | "character_reference";
 
 type ItemStatus = "not_submitted" | "uploaded" | "approved" | "rejected" | "not_required";
@@ -37,7 +37,6 @@ const CHECKLIST_ITEMS: { key: ChecklistKey; label: string; group: string; requir
   { key: "childrens_barred_list",    label: "Children's Barred List",   group: "DBS",        required: true  },
   { key: "safeguarding_training_cert", label: "Safeguarding Training",  group: "Training",   required: true  },
   { key: "paediatric_first_aid_cert",  label: "Paediatric First Aid",   group: "Training",   required: false },
-  { key: "qualification_certificates", label: "Qualification Certificates", group: "Training", required: false },
   { key: "work_reference_1",         label: "Work Reference 1",         group: "References", required: true  },
   { key: "work_reference_2",         label: "Work Reference 2",         group: "References", required: true  },
   { key: "character_reference",      label: "Character Reference",      group: "References", required: false },
@@ -1135,21 +1134,21 @@ function Page() {
               <DbsInfoPanel extracted={checklist?.ai_results?.dbs_certificate?.extracted ?? null} />
             ) : undefined}
           />
-          {item.key === "qualification_certificates" && (
-            <QualificationsPanel
-              qualifications={qualifications}
-              savingQual={savingQual}
-              onAdd={addQualification}
-              onUpdate={updateQualification}
-              onUpload={handleQualUpload}
-              onRecheck={runQualAiCheck}
-              onSetStatus={setQualStatus}
-              onDelete={deleteQualification}
-            />
-          )}
           </Fragment>
         );
       })}
+
+      {/* ── Qualifications Panel ─────────────────────────────── */}
+      <QualificationsPanel
+        qualifications={qualifications}
+        savingQual={savingQual}
+        onAdd={addQualification}
+        onUpdate={updateQualification}
+        onUpload={handleQualUpload}
+        onRecheck={runQualAiCheck}
+        onSetStatus={setQualStatus}
+        onDelete={deleteQualification}
+      />
 
       {/* ── References Tracker ─────────────────────────────── */}
       <ReferencesTracker candidateId={id} references={references} onRefresh={loadAll} />
