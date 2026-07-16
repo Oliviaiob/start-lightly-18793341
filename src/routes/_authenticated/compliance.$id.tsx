@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   ArrowLeft, CheckCircle, AlertTriangle, Clock, Minus, Circle,
   Upload, FileText, RefreshCw, ExternalLink, Smartphone, Sparkles, Copy,
-  Mail, Link2, BanIcon, PartyPopper, ChevronRight, Trash2, Plus, X, Bell,
+  Mail, Link2, BanIcon, PartyPopper, ChevronRight, Trash2, Plus, X, Bell, Layers, CheckCheck, SkipForward, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { WorkflowPanel, type WorkflowStateData, type WorkflowActivityData, type ActionOwner, type DerivedWorkflowState } from "@/components/workflow-panel";
@@ -702,6 +702,23 @@ function Page() {
   const [qualifications, setQualifications] = useState<CandidateQualification[]>([]);
   const [savingQual, setSavingQual] = useState<string | null>(null);
 
+  // Batch upload state
+  type BatchFileStatus = 'classifying' | 'ready' | 'conflict' | 'uploading' | 'done' | 'skipped' | 'error';
+  type BatchFileItem = {
+    id: string; file: File;
+    status: BatchFileStatus;
+    detectedType: string | null;
+    resolvedKey: ChecklistKey | 'qualification_certificate' | 'unknown' | null;
+    confidence: number | null;
+    summary: string | null;
+    conflictAction: 'replace' | 'skip' | null;
+    errorMsg: string | null;
+  };
+  const [showBatch, setShowBatch] = useState(false);
+  const [batchItems, setBatchItems] = useState<BatchFileItem[]>([]);
+  const [batchPhase, setBatchPhase] = useState<'classifying' | 'reviewing' | 'uploading' | 'done'>('classifying');
+  const batchInputRef = useRef<HTMLInputElement>(null);
+
   const loadAll = async (opts?: { preserveScroll?: boolean }) => {
     const savedScroll = opts?.preserveScroll ? window.scrollY : null;
     setLoading(true);
@@ -793,6 +810,166 @@ function Page() {
       await supabase.from("compliance_checklists").update({ item_notes: merged as any }).eq("id", cl.id!);
       setChecklist((prev) => prev ? { ...prev, item_notes: merged } : null);
     } catch (e: any) { toast.error("Note save failed"); }
+  };
+
+  // ── Batch upload helpers ──────────────────────────────────────────────────
+
+  const DETECTED_TYPE_LABELS: Record<string, string> = {
+    proof_of_id: 'Proof of ID', passport_photo: 'Passport Photo',
+    proof_of_address: 'Proof of Address', right_to_work: 'Right to Work',
+    ni_number_check: 'NI Number', dbs_certificate: 'DBS Certificate',
+    dbs_update_service: 'DBS Update Service', childrens_barred_list: "Children's Barred List",
+    safeguarding_training_cert: 'Safeguarding Training', paediatric_first_aid_cert: 'Paediatric First Aid',
+    qualification_certificate: 'Qualification Certificate',
+    work_reference: 'Work Reference', character_reference: 'Character Reference',
+    unknown: 'Unknown',
+  };
+
+  const readFileAsBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const resolveTargetKey = (
+    detectedType: string,
+    existingDocs: typeof docs,
+    claimedSlots: Set<string>,
+  ): ChecklistKey | 'qualification_certificate' | 'unknown' => {
+    const DIRECT: Partial<Record<string, ChecklistKey>> = {
+      proof_of_id: 'proof_of_id', passport_photo: 'passport_photo',
+      right_to_work: 'right_to_work', ni_number_check: 'ni_number_check',
+      dbs_certificate: 'dbs_certificate', dbs_update_service: 'dbs_update_service_check',
+      childrens_barred_list: 'childrens_barred_list',
+      safeguarding_training_cert: 'safeguarding_training_cert',
+      paediatric_first_aid_cert: 'paediatric_first_aid_cert',
+      character_reference: 'character_reference',
+    };
+    if (DIRECT[detectedType]) return DIRECT[detectedType]!;
+    if (detectedType === 'qualification_certificate') return 'qualification_certificate';
+    if (detectedType === 'proof_of_address') {
+      const s1Taken = existingDocs.some(d => d.document_type === 'proof_of_address_1') || claimedSlots.has('proof_of_address_1');
+      return s1Taken ? 'proof_of_address_2' : 'proof_of_address_1';
+    }
+    if (detectedType === 'work_reference') {
+      const s1Taken = existingDocs.some(d => d.document_type === 'work_reference_1') || claimedSlots.has('work_reference_1');
+      return s1Taken ? 'work_reference_2' : 'work_reference_1';
+    }
+    return 'unknown';
+  };
+
+  const startBatchUpload = async (files: FileList) => {
+    const items = Array.from(files).map(file => ({
+      id: crypto.randomUUID(), file,
+      status: 'classifying' as const,
+      detectedType: null, resolvedKey: null,
+      confidence: null, summary: null,
+      conflictAction: null, errorMsg: null,
+    }));
+    setBatchItems(items);
+    setBatchPhase('classifying');
+    setShowBatch(true);
+
+    const claimedSlots = new Set<string>();
+    const currentDocs = docs; // snapshot of docs at batch-start time
+
+    for (const item of items) {
+      try {
+        const base64 = await readFileAsBase64(item.file);
+        const { data: cls } = await supabase.functions.invoke('classify-compliance-document', {
+          body: { file_base64: base64, file_name: item.file.name, content_type: item.file.type },
+        });
+        const detectedType: string = cls?.document_type ?? 'unknown';
+        const confidence: number = cls?.confidence ?? 0;
+        const summary: string = cls?.summary ?? '';
+        const resolvedKey = resolveTargetKey(detectedType, currentDocs, claimedSlots);
+        const isQual = resolvedKey === 'qualification_certificate';
+        const isUnknown = resolvedKey === 'unknown';
+        const hasConflict = !isQual && !isUnknown &&
+          currentDocs.some(d => d.document_type === resolvedKey) &&
+          !claimedSlots.has(resolvedKey);
+        if (!isQual && !isUnknown && !hasConflict) claimedSlots.add(resolvedKey);
+        setBatchItems(prev => prev.map(i => i.id === item.id ? {
+          ...i, status: isUnknown ? 'error' : hasConflict ? 'conflict' : 'ready',
+          detectedType, resolvedKey, confidence, summary,
+          errorMsg: isUnknown ? 'Could not identify document type — please upload manually.' : null,
+        } : i));
+      } catch {
+        setBatchItems(prev => prev.map(i => i.id === item.id ? {
+          ...i, status: 'error', errorMsg: 'Classification failed',
+        } : i));
+      }
+    }
+    setBatchPhase('reviewing');
+  };
+
+  const processBatch = async () => {
+    setBatchPhase('uploading');
+    const snap = batchItems;
+    for (const item of snap) {
+      if (item.status === 'error') continue;
+      if (item.status === 'conflict' && item.conflictAction !== 'replace') {
+        setBatchItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'skipped' } : i));
+        continue;
+      }
+      setBatchItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'uploading' } : i));
+      try {
+        if (item.resolvedKey === 'qualification_certificate') {
+          // Create qual record + upload
+          const { data: qual, error: qErr } = await supabase
+            .from('candidate_qualifications')
+            .insert({ candidate_id: id, source: 'crm', status: 'uploaded' })
+            .select('id').single();
+          if (qErr || !qual) throw new Error(qErr?.message ?? 'Qual insert failed');
+          const ext = item.file.name.split('.').pop() ?? 'bin';
+          const filePath = `${id}/qualifications/${qual.id}/${Date.now()}.${ext}`;
+          const { error: stErr } = await supabase.storage.from('candidate-documents').upload(filePath, item.file, { contentType: item.file.type || 'application/octet-stream' });
+          if (stErr) throw new Error(stErr.message);
+          const { data: urlData } = supabase.storage.from('candidate-documents').getPublicUrl(filePath);
+          const { data: docRec, error: docErr } = await supabase.from('candidate_documents').insert({
+            candidate_id: id, document_type: 'qualification_certificates',
+            file_name: item.file.name, file_size: item.file.size,
+            file_url: urlData?.publicUrl, status: 'pending', uploaded_at: new Date().toISOString(),
+          }).select('id').single();
+          if (docErr || !docRec) throw new Error(docErr?.message ?? 'Doc insert failed');
+          await supabase.from('candidate_qualifications').update({ document_id: docRec.id, certificate_url: urlData?.publicUrl }).eq('id', qual.id);
+          // Run AI check
+          const candName = candidate ? `${candidate.first_name ?? ''} ${candidate.last_name ?? ''}`.trim() : null;
+          await supabase.functions.invoke('check-compliance-document', {
+            body: { document_type: 'qualification_certificates', candidate_id: id, doc_id: docRec.id, qualification_id: qual.id, candidate_name: candName, candidate_qualification_level: candidate?.qualification_level ?? null },
+          });
+        } else {
+          // Standard checklist slot
+          const key = item.resolvedKey as ChecklistKey;
+          const ext = item.file.name.split('.').pop() ?? 'bin';
+          const filePath = `${id}/${key}/${Date.now()}.${ext}`;
+          const { error: stErr } = await supabase.storage.from('compliance').upload(filePath, item.file, { upsert: true, contentType: item.file.type || 'application/octet-stream' });
+          if (stErr) throw new Error(stErr.message);
+          const { data: urlData } = supabase.storage.from('compliance').getPublicUrl(filePath);
+          await supabase.from('candidate_documents').delete().eq('candidate_id', id).eq('document_type', key);
+          const { data: docRec, error: docErr } = await supabase.from('candidate_documents').insert({
+            candidate_id: id, document_type: key, file_name: item.file.name,
+            file_size: item.file.size, file_url: urlData?.publicUrl,
+            status: 'pending', uploaded_at: new Date().toISOString(),
+          }).select('id').single();
+          if (docErr || !docRec) throw new Error(docErr?.message ?? 'Doc insert failed');
+          const curStatus = checklist?.[key];
+          if (!curStatus || curStatus === 'not_submitted') await updateItem(key, 'uploaded');
+          // Run AI check
+          const candName = candidate ? `${candidate.first_name ?? ''} ${candidate.last_name ?? ''}`.trim() : null;
+          await supabase.functions.invoke('check-compliance-document', {
+            body: { document_type: key, candidate_id: id, doc_id: docRec.id, candidate_name: candName, candidate_qualification_level: candidate?.qualification_level ?? null },
+          });
+        }
+        setBatchItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'done' } : i));
+      } catch (err: any) {
+        setBatchItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'error', errorMsg: err?.message ?? 'Upload failed' } : i));
+      }
+    }
+    setBatchPhase('done');
+    await loadAll({ preserveScroll: true });
   };
 
   const handleUpload = async (key: ChecklistKey, file: File) => {
@@ -1131,11 +1308,29 @@ function Page() {
         lastMessage={lastMessage}
       />
 
+      {/* Batch upload hidden input */}
+      <input
+        ref={batchInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif,.bmp,.tiff,.tif,.doc,.docx"
+        onChange={(e) => { if (e.target.files?.length) { startBatchUpload(e.target.files); } e.target.value = ""; }}
+      />
+
       {/* Compliance checklist */}
       <div className="space-y-3">
         <div className="flex items-center justify-between px-1">
           <h2 className="font-semibold text-sm">Compliance Checklist</h2>
-          <span className="text-xs text-muted-foreground">{p.done} / {p.total} complete</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground">{p.done} / {p.total} complete</span>
+            <button
+              onClick={() => batchInputRef.current?.click()}
+              className="inline-flex items-center gap-1.5 h-7 px-3 rounded-lg bg-navy text-white text-[11px] font-medium hover:opacity-90 transition-colors"
+            >
+              <Layers className="h-3 w-3" /> Batch Upload
+            </button>
+          </div>
         </div>
         {/* Progress bar */}
         <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -1189,6 +1384,141 @@ function Page() {
         onSetStatus={setQualStatus}
         onDelete={deleteQualification}
       />
+
+      {/* ── Batch Upload Modal ──────────────────────────────────── */}
+      {showBatch && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget && batchPhase !== 'uploading') { setShowBatch(false); setBatchItems([]); } }}>
+          <div className="bg-card rounded-2xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="px-5 py-4 border-b flex items-center justify-between shrink-0">
+              <div>
+                <h2 className="font-semibold text-sm">Batch Upload</h2>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {batchPhase === 'classifying' && 'Identifying documents…'}
+                  {batchPhase === 'reviewing' && `${batchItems.filter(i => i.status === 'ready' || i.status === 'conflict').length} document(s) ready — resolve any conflicts below`}
+                  {batchPhase === 'uploading' && 'Uploading and running AI checks…'}
+                  {batchPhase === 'done' && `Done — ${batchItems.filter(i => i.status === 'done').length} uploaded, ${batchItems.filter(i => i.status === 'skipped').length} skipped, ${batchItems.filter(i => i.status === 'error').length} failed`}
+                </p>
+              </div>
+              {batchPhase !== 'uploading' && (
+                <button onClick={() => { setShowBatch(false); setBatchItems([]); }} className="text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {/* File list */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {batchItems.map(item => {
+                const typeLabel = item.detectedType ? (item.detectedType === 'unknown' ? 'Unknown type' : (
+                  { proof_of_id:'Proof of ID', passport_photo:'Passport Photo', proof_of_address:'Proof of Address',
+                    right_to_work:'Right to Work', ni_number_check:'NI Number', dbs_certificate:'DBS Certificate',
+                    dbs_update_service:'DBS Update Service', childrens_barred_list:"Children's Barred List",
+                    safeguarding_training_cert:'Safeguarding Training', paediatric_first_aid_cert:'Paediatric First Aid',
+                    qualification_certificate:'Qualification Certificate',
+                    work_reference:'Work Reference', character_reference:'Character Reference' }[item.detectedType] ?? item.detectedType
+                )) : null;
+                const slotLabel = item.resolvedKey && item.resolvedKey !== 'unknown' && item.resolvedKey !== 'qualification_certificate'
+                  ? ({ proof_of_id:'Proof of ID', passport_photo:'Passport Photo', proof_of_address_1:'Proof of Address 1',
+                       proof_of_address_2:'Proof of Address 2', right_to_work:'Right to Work', ni_number_check:'NI Number',
+                       dbs_certificate:'DBS Certificate', dbs_update_service_check:'DBS Update Service',
+                       childrens_barred_list:"Children's Barred List", safeguarding_training_cert:'Safeguarding Training',
+                       paediatric_first_aid_cert:'Paediatric First Aid', work_reference_1:'Work Reference 1',
+                       work_reference_2:'Work Reference 2', character_reference:'Character Reference' } as any)[item.resolvedKey]
+                  : null;
+
+                return (
+                  <div key={item.id} className={`rounded-xl border p-3 flex items-start gap-3 text-sm
+                    ${item.status === 'done'     ? 'bg-green-50/60 border-green-200'   : ''}
+                    ${item.status === 'error'    ? 'bg-red-50/60 border-red-200'       : ''}
+                    ${item.status === 'skipped'  ? 'bg-muted/30 border-border/40'      : ''}
+                    ${item.status === 'conflict' ? 'bg-amber-50/60 border-amber-200'   : ''}
+                    ${item.status === 'ready' || item.status === 'uploading' ? 'bg-muted/20 border-border/40' : ''}
+                    ${item.status === 'classifying' ? 'bg-muted/10 border-border/30'   : ''}
+                  `}>
+                    {/* Icon */}
+                    <div className="shrink-0 mt-0.5">
+                      {item.status === 'classifying' && <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />}
+                      {item.status === 'uploading'   && <Loader2 className="h-4 w-4 text-teal animate-spin" />}
+                      {item.status === 'done'        && <CheckCheck className="h-4 w-4 text-green-600" />}
+                      {item.status === 'skipped'     && <SkipForward className="h-4 w-4 text-muted-foreground" />}
+                      {item.status === 'error'       && <AlertTriangle className="h-4 w-4 text-red-500" />}
+                      {item.status === 'conflict'    && <AlertTriangle className="h-4 w-4 text-amber-500" />}
+                      {item.status === 'ready'       && <CheckCircle className="h-4 w-4 text-teal" />}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate text-[12px]">{item.file.name}</div>
+                      {item.status === 'classifying' && (
+                        <div className="text-[11px] text-muted-foreground">Identifying…</div>
+                      )}
+                      {item.status !== 'classifying' && item.summary && (
+                        <div className="text-[11px] text-muted-foreground mt-0.5">{item.summary}</div>
+                      )}
+                      {slotLabel && item.status !== 'error' && (
+                        <div className="text-[11px] font-medium text-foreground/70 mt-0.5">→ {slotLabel}</div>
+                      )}
+                      {item.status === 'error' && (
+                        <div className="text-[11px] text-red-600 mt-0.5">{item.errorMsg}</div>
+                      )}
+                      {item.status === 'skipped' && (
+                        <div className="text-[11px] text-muted-foreground mt-0.5">Skipped — existing document kept</div>
+                      )}
+                      {/* Conflict resolution */}
+                      {item.status === 'conflict' && item.conflictAction === null && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="text-[11px] text-amber-700 font-medium">{slotLabel} already has a document.</span>
+                          <button
+                            onClick={() => setBatchItems(prev => prev.map(i => i.id === item.id ? { ...i, conflictAction: 'replace' as const, status: 'ready' as const } : i))}
+                            className="text-[11px] px-2 py-0.5 rounded-md bg-teal text-white font-medium hover:opacity-90"
+                          >Replace</button>
+                          <button
+                            onClick={() => setBatchItems(prev => prev.map(i => i.id === item.id ? { ...i, conflictAction: 'skip' as const } : i))}
+                            className="text-[11px] px-2 py-0.5 rounded-md border font-medium hover:bg-muted/40"
+                          >Skip</button>
+                        </div>
+                      )}
+                      {item.status === 'conflict' && item.conflictAction === 'replace' && (
+                        <div className="text-[11px] text-teal font-medium mt-1">Will replace existing document</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer actions */}
+            {(batchPhase === 'reviewing' || batchPhase === 'done') && (
+              <div className="px-5 py-4 border-t flex items-center justify-between gap-3 shrink-0">
+                {batchPhase === 'reviewing' && (
+                  <>
+                    <button onClick={() => { setShowBatch(false); setBatchItems([]); }} className="text-sm text-muted-foreground hover:text-foreground">
+                      Cancel
+                    </button>
+                    <button
+                      onClick={processBatch}
+                      disabled={batchItems.some(i => i.status === 'conflict' && i.conflictAction === null)}
+                      className="inline-flex items-center gap-1.5 h-8 px-4 rounded-lg bg-navy text-white text-sm font-medium hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                      Upload {batchItems.filter(i => i.status === 'ready' || (i.status === 'conflict' && i.conflictAction === 'replace')).length} document(s)
+                    </button>
+                  </>
+                )}
+                {batchPhase === 'done' && (
+                  <button
+                    onClick={() => { setShowBatch(false); setBatchItems([]); }}
+                    className="ml-auto inline-flex items-center gap-1.5 h-8 px-4 rounded-lg bg-teal text-white text-sm font-medium hover:opacity-90"
+                  >
+                    <CheckCheck className="h-3.5 w-3.5" /> Done
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── References Tracker ─────────────────────────────── */}
       <ReferencesTracker candidateId={id} references={references} onRefresh={loadAll} />
