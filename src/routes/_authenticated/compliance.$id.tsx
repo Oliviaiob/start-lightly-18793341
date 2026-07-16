@@ -702,7 +702,8 @@ function Page() {
   const [qualifications, setQualifications] = useState<CandidateQualification[]>([]);
   const [savingQual, setSavingQual] = useState<string | null>(null);
 
-  const loadAll = async () => {
+  const loadAll = async (opts?: { preserveScroll?: boolean }) => {
+    const savedScroll = opts?.preserveScroll ? window.scrollY : null;
     setLoading(true);
     const [candRes, clRes, docsRes, refsRes, msgRes, qualsRes] = await Promise.all([
       supabase.from("candidates").select("id,first_name,last_name,email,phone,qualification_level,status_temp,source,dbs_next_check_due,paediatric_first_aid_expiry,onboarding_email_sent_at,bank_details_token").eq("id", id).maybeSingle(),
@@ -747,6 +748,9 @@ function Page() {
     setLastMessage((msgRes as any)?.data ?? null);
     setQualifications((qualsRes as any)?.data ?? []);
     setLoading(false);
+    if (savedScroll !== null) {
+      setTimeout(() => window.scrollTo({ top: savedScroll, behavior: "instant" }), 50);
+    }
   };
 
   useEffect(() => { loadAll(); }, [id]);
@@ -812,12 +816,13 @@ function Page() {
 
     // 3. Remove any existing doc record for this key then insert new one
     await supabase.from("candidate_documents").delete().eq("candidate_id", id).eq("document_type", key);
-    const { error } = await supabase.from("candidate_documents").insert({
+    const { data: docData, error } = await supabase.from("candidate_documents").insert({
       candidate_id: id, document_type: key, file_name: file.name,
       file_size: file.size, file_url: fileUrl, status: "pending",
       uploaded_at: new Date().toISOString(),
-    });
+    }).select("id").single();
     if (error) { toast.error("Record failed: " + error.message); setSavingItem(null); return; }
+    const newDocId = docData?.id ?? null;
 
     // 4. Auto-advance status to uploaded
     const currentStatus = checklist?.[key];
@@ -826,9 +831,44 @@ function Page() {
     } else {
       setSavingItem(null);
     }
-    await loadAll();
+    await loadAll({ preserveScroll: true });
     await logWorkflowActivity(key, `${file.name} uploaded`, "system");
-    toast.success("Document uploaded");
+    toast.success("Document uploaded — running AI check…");
+
+    // 5. Auto-run AI check immediately using the fresh doc ID
+    if (newDocId) {
+      try {
+        const candName = candidate ? `${candidate.first_name ?? ""} ${candidate.last_name ?? ""}`.trim() : null;
+        const { data: aiData } = await supabase.functions.invoke("check-compliance-document", {
+          body: {
+            document_type: key,
+            candidate_id: id,
+            doc_id: newDocId,
+            text_content: null,
+            candidate_name: candName,
+            candidate_qualification_level: candidate?.qualification_level ?? null,
+          },
+        });
+        await loadAll({ preserveScroll: true });
+        const aiStatus = aiData?.status ?? "unknown";
+        const conf = typeof aiData?.confidence === "number" ? Math.round(aiData.confidence * 100) : null;
+        await logWorkflowActivity(key, `AI check completed — ${aiStatus}${conf != null ? ` (${conf}% confidence)` : ""}`, "ai");
+        const item = CHECKLIST_ITEMS.find(i => i.key === key);
+        if (item) {
+          const derived = deriveWorkflowState(item, aiStatus, true);
+          await upsertWorkflowState(key, {
+            current_status: aiStatus,
+            waiting_on: derived.waitingOn as ActionOwner,
+            next_action: derived.nextAction,
+            ai_recommendation: derived.aiRecommendation,
+            priority: derived.priority,
+            confidence_score: conf,
+          });
+        }
+      } catch {
+        // AI check failed silently — recruiter can re-run manually
+      }
+    }
   };
 
   const handleRemove = async (key: ChecklistKey) => {
@@ -841,7 +881,7 @@ function Page() {
     if (error) { toast.error("Remove failed: " + error.message); setSavingItem(null); return; }
     // Reset status to pending
     await updateItem(key, "not_submitted");
-    await loadAll();
+    await loadAll({ preserveScroll: true });
     await logWorkflowActivity(key, `Document removed — awaiting replacement`, "system");
     toast.success("Document removed");
   };
@@ -883,7 +923,7 @@ function Page() {
     if (docErr) { toast.error("Record failed: " + docErr.message); setSavingQual(null); return; }
     // Link doc to qualification and set status = processing
     await supabase.from("candidate_qualifications").update({ document_id: docRec.id, certificate_url: fileUrl, status: "processing" }).eq("id", qualId);
-    await loadAll();
+    await loadAll({ preserveScroll: true });
     // Run AI check
     const qual = qualifications.find((q) => q.id === qualId);
     const candidate = (await supabase.from("candidates").select("first_name,last_name,qualification_level").eq("id", id).maybeSingle()).data;
@@ -899,7 +939,7 @@ function Page() {
         },
       });
     } catch {}
-    await loadAll();
+    await loadAll({ preserveScroll: true });
     setSavingQual(null);
     toast.success("Certificate uploaded and AI check started");
   };
@@ -921,7 +961,7 @@ function Page() {
         },
       });
     } catch {}
-    await loadAll();
+    await loadAll({ preserveScroll: true });
     setSavingQual(null);
   };
 
@@ -985,7 +1025,7 @@ function Page() {
       });
       if (error) throw error;
       // Refresh checklist to pick up auto-updated status and ai_results
-      await loadAll();
+      await loadAll({ preserveScroll: true });
       const aiStatus = data?.status ?? "unknown";
       const rawConfidence = typeof data?.confidence === "number" ? data.confidence : null;
       const confidenceScore = rawConfidence != null ? Math.round(rawConfidence * 100) : null;
@@ -1017,7 +1057,7 @@ function Page() {
   const sendOnboardingEmail = async () => {
     await supabase.from("candidates").update({ onboarding_email_sent_at: new Date().toISOString() }).eq("id", id);
     toast.success("Onboarding email sent");
-    await loadAll();
+    await loadAll({ preserveScroll: true });
   };
 
   const p = {
