@@ -49,10 +49,12 @@ import { supabase } from "@/integrations/supabase/client";
 
 type NavItem = { title: string; url: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; exact?: boolean; iconColor?: string };
 
-const overview: NavItem[] = [{ title: "Dashboard", url: "/", icon: LayoutDashboard, exact: true }];
-const recruitment: NavItem[] = [
+const overview: NavItem[] = [
+  { title: "Dashboard", url: "/", icon: LayoutDashboard, exact: true },
   { title: "Candidates", url: "/candidates", icon: Users },
   { title: "Clients", url: "/clients", icon: Building2 },
+];
+const recruitment: NavItem[] = [
   { title: "Jobs", url: "/jobs", icon: Briefcase },
   { title: "Interviews", url: "/interviews", icon: CalendarCheck },
   { title: "Applications", url: "/applications", icon: FileStack },
