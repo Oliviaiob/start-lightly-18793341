@@ -45,6 +45,7 @@ type Candidate = {
   dbs_verified: boolean | null;
   right_to_work_verified: boolean | null;
   contract_agreed: boolean | null;
+  checklist: Record<string, string> | null;
 };
 
 const ALL = "__all__";
@@ -71,7 +72,17 @@ function relTime(iso?: string | null) {
   return `${Math.floor(d / 365)}y ago`;
 }
 
+const COMPLIANT_REQUIRED_KEYS = [
+  "proof_of_id","passport_photo","proof_of_address_1","right_to_work","ni_number_check",
+  "dbs_certificate","childrens_barred_list","safeguarding_training_cert","work_reference_1","work_reference_2"
+] as const;
 function isCompliant(c: Candidate) {
+  if (c.checklist) {
+    return COMPLIANT_REQUIRED_KEYS.every(
+      (k) => c.checklist![k] === "approved" || c.checklist![k] === "not_required"
+    );
+  }
+  // Fallback to boolean columns for perm candidates / legacy records
   return !!(c.dbs_verified && c.right_to_work_verified && c.contract_agreed);
 }
 
@@ -134,7 +145,7 @@ function Page() {
       let query = supabase
         .from("candidates")
         .select(
-          "id,first_name,last_name,email,town,postcode,candidate_type,status_perm,status_temp,qualification_level,fields_of_work,drives,current_position,current_employer,is_starred,updated_at,created_at,dbs_verified,right_to_work_verified,contract_agreed",
+          "id,first_name,last_name,email,town,postcode,candidate_type,status_perm,status_temp,qualification_level,fields_of_work,drives,current_position,current_employer,is_starred,updated_at,created_at,dbs_verified,right_to_work_verified,contract_agreed,compliance_checklists(proof_of_id,passport_photo,proof_of_address_1,right_to_work,ni_number_check,dbs_certificate,childrens_barred_list,safeguarding_training_cert,work_reference_1,work_reference_2)",
         )
         .order("updated_at", { ascending: false })
         .limit(1000);
@@ -143,7 +154,10 @@ function Page() {
       if (error) {
         toast.error("Failed to load candidates");
       }
-      const candidates = (data as Candidate[]) || [];
+      const candidates: Candidate[] = ((data as any[]) || []).map((c) => ({
+        ...c,
+        checklist: c.compliance_checklists?.[0] ?? null,
+      }));
       setRows(candidates);
       setLoading(false);
 
