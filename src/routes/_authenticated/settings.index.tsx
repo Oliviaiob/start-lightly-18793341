@@ -92,14 +92,23 @@ function SettingsPage() {
 
   const loadTeam = async () => {
     setLoadingTeam(true);
-    const [{ data: profs }, { data: roles }] = await Promise.all([
-      supabase.from("profiles").select("id,first_name,last_name,display_name,email,job_title,is_active").eq("is_ai", false),
-      supabase.from("user_roles").select("user_id,role"),
-    ]);
-    if (profs && roles) {
-      const roleMap: Record<string, string> = {};
-      for (const r of roles as any[]) roleMap[r.user_id] = r.role;
-      setTeam((profs as any[]).map(p => ({ ...p, role: roleMap[p.id] ?? "recruiter" })));
+    // Only fetch profiles that have an explicit role in user_roles
+    // (candidates who applied via the app get a profile but no user_roles row)
+    const { data: roles } = await supabase.from("user_roles").select("user_id,role");
+    if (roles && roles.length > 0) {
+      const roleUserIds = (roles as any[]).map((r: any) => r.user_id);
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("id,first_name,last_name,display_name,email,job_title,is_active")
+        .in("id", roleUserIds)
+        .eq("is_ai", false);
+      if (profs) {
+        const roleMap: Record<string, string> = {};
+        for (const r of roles as any[]) roleMap[r.user_id] = r.role;
+        setTeam((profs as any[]).map(p => ({ ...p, role: roleMap[p.id] ?? "recruiter" })));
+      }
+    } else {
+      setTeam([]);
     }
     setLoadingTeam(false);
   };
