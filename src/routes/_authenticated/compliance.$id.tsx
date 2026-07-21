@@ -380,9 +380,24 @@ function ChecklistSection({
 // ── DbsInfoPanel ─────────────────────────────────────────────────────────────
 
 function DbsInfoPanel({ extracted }: { extracted: Record<string, unknown> | null }) {
-  const certNum  = (extracted?.certificate_number ?? extracted?.dbs_certificate_number ?? null) as string | null;
-  const surname  = (extracted?.surname ?? extracted?.name_on_certificate ?? null) as string | null;
-  const dob      = (extracted?.date_of_birth ?? null) as string | null;
+  // Treat extracted as an object only — it can be a string when pending
+  const data = extracted && typeof extracted === 'object' ? extracted : null;
+
+  // Certificate number: ensure it's a string and zero-pad to 12 digits if numeric
+  const rawCertNum = (data?.certificate_number ?? data?.dbs_certificate_number ?? null) as string | number | null;
+  const certNum = rawCertNum != null
+    ? String(rawCertNum).replace(/\s/g, '').padStart(12, '0')
+    : null;
+
+  const surname  = (data?.surname ?? data?.name_on_certificate ?? null) as string | null;
+
+  // Format DOB from YYYY-MM-DD to DD/MM/YYYY
+  const rawDob = (data?.date_of_birth ?? null) as string | null;
+  const dob = rawDob
+    ? rawDob.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+      ? `${rawDob.slice(8,10)}/${rawDob.slice(5,7)}/${rawDob.slice(0,4)}`
+      : rawDob
+    : null;
 
   const Field = ({ label, value, copyable }: { label: string; value: string | null; copyable?: boolean }) => (
     <div className="flex items-center justify-between gap-2 py-2 border-b border-border/30 last:border-0">
@@ -408,8 +423,8 @@ function DbsInfoPanel({ extracted }: { extracted: Record<string, unknown> | null
         DBS Update Service — required fields
       </p>
       <Field label="Certificate Number" value={certNum} copyable />
-      <Field label="Applicant's Surname" value={surname} />
-      <Field label="Date of Birth"       value={dob} />
+      <Field label="Applicant's Surname" value={surname} copyable />
+      <Field label="Date of Birth"       value={dob} copyable />
     </div>
   );
 }
@@ -1456,8 +1471,36 @@ function Page() {
                       {item.status !== 'classifying' && item.summary && (
                         <div className="text-[11px] text-muted-foreground mt-0.5">{item.summary}</div>
                       )}
-                      {slotLabel && item.status !== 'error' && (
-                        <div className="text-[11px] font-medium text-foreground/70 mt-0.5">→ {slotLabel}</div>
+                      {item.status !== 'error' && item.status !== 'classifying' && (
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          {slotLabel && <span className="text-[11px] font-medium text-foreground/70">→</span>}
+                          {batchPhase === 'reviewing' ? (
+                            <select
+                              className="text-[11px] border border-border/60 rounded-md px-1.5 py-0.5 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-teal/50 cursor-pointer"
+                              value={item.resolvedKey ?? 'unknown'}
+                              onChange={(e) => {
+                                const newKey = e.target.value as BatchFileItem['resolvedKey'];
+                                setBatchItems(prev => prev.map(i => i.id === item.id ? {
+                                  ...i,
+                                  resolvedKey: newKey,
+                                  // Re-check conflict for new slot
+                                  status: (newKey && newKey !== 'unknown' && newKey !== 'qualification_certificate' && docs.some(d => d.document_type === newKey))
+                                    ? 'conflict'
+                                    : 'ready',
+                                  conflictAction: null,
+                                } : i));
+                              }}
+                            >
+                              <option value="unknown">— Unknown / skip —</option>
+                              {CHECKLIST_ITEMS.map(ci => (
+                                <option key={ci.key} value={ci.key}>{ci.label}</option>
+                              ))}
+                              <option value="qualification_certificate">Qualification Certificate</option>
+                            </select>
+                          ) : slotLabel ? (
+                            <span className="text-[11px] font-medium text-foreground/70">{slotLabel}</span>
+                          ) : null}
+                        </div>
                       )}
                       {item.status === 'error' && (
                         <div className="text-[11px] text-red-600 mt-0.5">{item.errorMsg}</div>

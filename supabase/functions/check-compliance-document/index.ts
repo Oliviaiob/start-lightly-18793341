@@ -50,7 +50,7 @@ Extract: ni_number (masked to first 2 chars + XXXX + last char), format_valid (t
 You are checking a DBS (Disclosure and Barring Service) certificate for a UK childcare/early years worker.
 PASS if: The certificate is an ENHANCED DBS (not Basic or Standard), issued within the last 3 years OR the candidate is registered on the DBS Update Service, and the name on the certificate matches the candidate's name.
 FAIL if: The certificate is Basic or Standard level only, is more than 3 years old and not on the Update Service, or the name does not match the candidate record.
-Extract: dbs_level (Basic/Standard/Enhanced), certificate_date, certificate_number, name_on_certificate, on_update_service (true/false/unknown).`,
+Extract: dbs_level (Basic/Standard/Enhanced), certificate_date, certificate_number (IMPORTANT: extract as a STRING preserving all leading zeros — DBS numbers are exactly 12 digits e.g. "001910711356"), name_on_certificate, surname (applicant surname only, as printed on certificate), date_of_birth (in YYYY-MM-DD format), on_update_service (true/false/unknown).`,
 
   dbs_update_service_check: `
 You are reviewing a DBS Update Service check for a UK childcare/early years worker.
