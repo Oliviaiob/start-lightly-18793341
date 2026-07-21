@@ -1,10 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   Settings as SettingsIcon, Upload, Eye, EyeOff, UserPlus,
-  Loader2, X, Building2, Users, User
+  Loader2, X, Building2, Users, User, ChevronRight
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
@@ -188,6 +188,22 @@ function SettingsPage() {
   return (
     <div className="max-w-3xl mx-auto space-y-6 pt-2 pb-12">
       <PageHeader eyebrow="Workspace" title="Settings" description={isAdmin ? "Manage your profile, agency details, and team." : "Manage your profile and preferences."} icon={SettingsIcon} />
+
+      {/* ── COMPANY SETTINGS SHORTCUT (admin only) ── */}
+      {isAdmin && (
+        <Link to="/settings/company" className="block group">
+          <div className="flex items-center gap-4 p-4 rounded-2xl border border-teal/30 bg-teal/5 hover:bg-teal/10 transition-colors">
+            <div className="w-9 h-9 rounded-xl bg-teal/15 flex items-center justify-center shrink-0">
+              <Building2 className="h-4 w-4 text-teal" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-foreground">Company Settings</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Pay &amp; charge rates, key documents</div>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
+          </div>
+        </Link>
+      )}
 
       {/* ── MY PROFILE ── */}
       <Card className="p-6 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card space-y-5">
