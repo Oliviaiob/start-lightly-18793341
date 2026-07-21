@@ -65,12 +65,12 @@ function SettingsPage() {
 
   const init = async (uid: string) => {
     setLoading(true);
-    const [{ data: prof }, { data: roleRow }] = await Promise.all([
+    const [{ data: prof }, { data: roleRows }] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
-      supabase.from("user_roles").select("role").eq("user_id", uid).maybeSingle(),
+      supabase.from("user_roles").select("role").eq("user_id", uid),
     ]);
     if (prof) { setProfile(prof as Profile); setPf({ first_name: prof.first_name ?? "", last_name: prof.last_name ?? "", display_name: prof.display_name ?? "", job_title: prof.job_title ?? "", phone: (prof as any).phone ?? "" }); }
-    const admin = (roleRow as any)?.role === "admin";
+    const admin = (roleRows as any[])?.some((r: any) => r.role === "admin" || r.role === "owner") ?? false;
     setIsAdmin(admin);
     if (admin) { loadAgency(); loadTeam(); }
     setLoading(false);

@@ -64,9 +64,8 @@ function CompanySettingsPage() {
     const { data } = await supabase
       .from("user_roles")
       .select("role")
-      .eq("user_id", uid)
-      .maybeSingle();
-    const admin = (data as any)?.role === "admin";
+      .eq("user_id", uid);
+    const admin = (data as any[])?.some((r: any) => r.role === "admin" || r.role === "owner") ?? false;
     setIsAdmin(admin);
     await Promise.all([loadRates(), loadDocs()]);
     setLoading(false);
