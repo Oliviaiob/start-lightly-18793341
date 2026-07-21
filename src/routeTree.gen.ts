@@ -33,6 +33,7 @@ import { Route as AuthenticatedCandidatesRouteImport } from './routes/_authentic
 import { Route as AuthenticatedBookingsRouteImport } from './routes/_authenticated/bookings'
 import { Route as AuthenticatedApplicationsRouteImport } from './routes/_authenticated/applications'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
+import { Route as AuthenticatedTempsRouteImport } from './routes/_authenticated/temps'
 import { Route as AuthenticatedTimesheetsIndexRouteImport } from './routes/_authenticated/timesheets.index'
 import { Route as AuthenticatedJobsIndexRouteImport } from './routes/_authenticated/jobs.index'
 import { Route as AuthenticatedComplianceIndexRouteImport } from './routes/_authenticated/compliance.index'
@@ -169,6 +170,11 @@ const AuthenticatedAccountRoute = AuthenticatedAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedTempsRoute = AuthenticatedTempsRouteImport.update({
+  id: '/temps',
+  path: '/temps',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedTimesheetsIndexRoute =
   AuthenticatedTimesheetsIndexRouteImport.update({
     id: '/',
@@ -263,6 +269,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRouteWithChildren
   '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/settings/company': typeof AuthenticatedSettingsCompanyRoute
+  '/temps': typeof AuthenticatedTempsRoute
   '/timesheets': typeof AuthenticatedTimesheetsRouteWithChildren
   '/apply/$ref': typeof ApplyRefRoute
   '/reference/$token': typeof ReferenceTokenRoute
@@ -311,6 +318,7 @@ export interface FileRoutesByTo {
   '/clients': typeof AuthenticatedClientsIndexRoute
   '/compliance': typeof AuthenticatedComplianceIndexRoute
   '/jobs': typeof AuthenticatedJobsIndexRoute
+  '/temps': typeof AuthenticatedTempsRoute
   '/timesheets': typeof AuthenticatedTimesheetsIndexRoute
 }
 export interface FileRoutesById {
@@ -374,6 +382,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/settings/'
     | '/settings/company'
+    | '/temps'
     | '/timesheets'
     | '/apply/$ref'
     | '/reference/$token'
@@ -443,6 +452,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/settings/'
     | '/_authenticated/settings/company'
+    | '/_authenticated/temps'
     | '/_authenticated/timesheets'
     | '/apply/$ref'
     | '/reference/$token'
@@ -633,6 +643,13 @@ declare module '@tanstack/react-router' {
       path: '/applications'
       fullPath: '/applications'
       preLoaderRoute: typeof AuthenticatedApplicationsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/temps': {
+      id: '/_authenticated/temps'
+      path: '/temps'
+      fullPath: '/temps'
+      preLoaderRoute: typeof AuthenticatedTempsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/account': {
@@ -854,6 +871,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedPlacementsRoute: typeof AuthenticatedPlacementsRoute
   AuthenticatedSammieRoute: typeof AuthenticatedSammieRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRouteWithChildren
+  AuthenticatedTempsRoute: typeof AuthenticatedTempsRoute
   AuthenticatedTimesheetsRoute: typeof AuthenticatedTimesheetsRouteWithChildren
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
 }
@@ -872,6 +890,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPlacementsRoute: AuthenticatedPlacementsRoute,
   AuthenticatedSammieRoute: AuthenticatedSammieRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRouteWithChildren,
+  AuthenticatedTempsRoute: AuthenticatedTempsRoute,
   AuthenticatedTimesheetsRoute: AuthenticatedTimesheetsRouteWithChildren,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
 }

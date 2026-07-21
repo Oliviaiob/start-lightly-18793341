@@ -60,6 +60,7 @@ const recruitment: NavItem[] = [
   { title: "Applications", url: "/applications", icon: FileStack },
 ];
 const operations: NavItem[] = [
+  { title: "Temp Candidates", url: "/temps", icon: Users },
   { title: "Booking Board", url: "/bookings", icon: CalendarRange },
   { title: "Timesheets", url: "/timesheets", icon: ClipboardList },
   { title: "Compliance", url: "/compliance", icon: ShieldCheck },
