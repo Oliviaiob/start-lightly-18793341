@@ -19,6 +19,8 @@ import { Route as ReferenceTokenRouteImport } from './routes/reference.$token'
 import { Route as ApplyRefRouteImport } from './routes/apply.$ref'
 import { Route as AuthenticatedTimesheetsRouteImport } from './routes/_authenticated/timesheets'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings.index'
+import { Route as AuthenticatedSettingsCompanyRouteImport } from './routes/_authenticated/settings.company'
 import { Route as AuthenticatedSammieRouteImport } from './routes/_authenticated/sammie'
 import { Route as AuthenticatedPlacementsRouteImport } from './routes/_authenticated/placements'
 import { Route as AuthenticatedMapRouteImport } from './routes/_authenticated/map'
@@ -94,6 +96,18 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSettingsIndexRoute =
+  AuthenticatedSettingsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsCompanyRoute =
+  AuthenticatedSettingsCompanyRouteImport.update({
+    id: '/company',
+    path: '/company',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
 const AuthenticatedSammieRoute = AuthenticatedSammieRouteImport.update({
   id: '/sammie',
   path: '/sammie',
@@ -246,7 +260,9 @@ export interface FileRoutesByFullPath {
   '/map': typeof AuthenticatedMapRoute
   '/placements': typeof AuthenticatedPlacementsRoute
   '/sammie': typeof AuthenticatedSammieRoute
-  '/settings': typeof AuthenticatedSettingsRoute
+  '/settings': typeof AuthenticatedSettingsRouteWithChildren
+  '/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/settings/company': typeof AuthenticatedSettingsCompanyRoute
   '/timesheets': typeof AuthenticatedTimesheetsRouteWithChildren
   '/apply/$ref': typeof ApplyRefRoute
   '/reference/$token': typeof ReferenceTokenRoute
@@ -275,7 +291,9 @@ export interface FileRoutesByTo {
   '/map': typeof AuthenticatedMapRoute
   '/placements': typeof AuthenticatedPlacementsRoute
   '/sammie': typeof AuthenticatedSammieRoute
-  '/settings': typeof AuthenticatedSettingsRoute
+  '/settings': typeof AuthenticatedSettingsRouteWithChildren
+  '/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/settings/company': typeof AuthenticatedSettingsCompanyRoute
   '/apply/$ref': typeof ApplyRefRoute
   '/reference/$token': typeof ReferenceTokenRoute
   '/timesheet-approval/$token': typeof TimesheetApprovalTokenRoute
@@ -312,7 +330,9 @@ export interface FileRoutesById {
   '/_authenticated/map': typeof AuthenticatedMapRoute
   '/_authenticated/placements': typeof AuthenticatedPlacementsRoute
   '/_authenticated/sammie': typeof AuthenticatedSammieRoute
-  '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/settings': typeof AuthenticatedSettingsRouteWithChildren
+  '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/_authenticated/settings/company': typeof AuthenticatedSettingsCompanyRoute
   '/_authenticated/timesheets': typeof AuthenticatedTimesheetsRouteWithChildren
   '/apply/$ref': typeof ApplyRefRoute
   '/reference/$token': typeof ReferenceTokenRoute
@@ -352,6 +372,8 @@ export interface FileRouteTypes {
     | '/placements'
     | '/sammie'
     | '/settings'
+    | '/settings/'
+    | '/settings/company'
     | '/timesheets'
     | '/apply/$ref'
     | '/reference/$token'
@@ -381,6 +403,8 @@ export interface FileRouteTypes {
     | '/placements'
     | '/sammie'
     | '/settings'
+    | '/settings/'
+    | '/settings/company'
     | '/apply/$ref'
     | '/reference/$token'
     | '/timesheet-approval/$token'
@@ -417,6 +441,8 @@ export interface FileRouteTypes {
     | '/_authenticated/placements'
     | '/_authenticated/sammie'
     | '/_authenticated/settings'
+    | '/_authenticated/settings/'
+    | '/_authenticated/settings/company'
     | '/_authenticated/timesheets'
     | '/apply/$ref'
     | '/reference/$token'
@@ -517,6 +543,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/settings'
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/settings/': {
+      id: '/_authenticated/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/company': {
+      id: '/_authenticated/settings/company'
+      path: '/company'
+      fullPath: '/settings/company'
+      preLoaderRoute: typeof AuthenticatedSettingsCompanyRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
     }
     '/_authenticated/sammie': {
       id: '/_authenticated/sammie'
@@ -787,6 +827,19 @@ const AuthenticatedTimesheetsRouteWithChildren =
     AuthenticatedTimesheetsRouteChildren,
   )
 
+interface AuthenticatedSettingsRouteChildren {
+  AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
+  AuthenticatedSettingsCompanyRoute: typeof AuthenticatedSettingsCompanyRoute
+}
+const AuthenticatedSettingsRouteChildren: AuthenticatedSettingsRouteChildren = {
+  AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
+  AuthenticatedSettingsCompanyRoute: AuthenticatedSettingsCompanyRoute,
+}
+const AuthenticatedSettingsRouteWithChildren =
+  AuthenticatedSettingsRoute._addFileChildren(
+    AuthenticatedSettingsRouteChildren,
+  )
+
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAccountRoute: typeof AuthenticatedAccountRoute
   AuthenticatedApplicationsRoute: typeof AuthenticatedApplicationsRoute
@@ -800,7 +853,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedMapRoute: typeof AuthenticatedMapRoute
   AuthenticatedPlacementsRoute: typeof AuthenticatedPlacementsRoute
   AuthenticatedSammieRoute: typeof AuthenticatedSammieRoute
-  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRouteWithChildren
   AuthenticatedTimesheetsRoute: typeof AuthenticatedTimesheetsRouteWithChildren
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
 }
@@ -818,7 +871,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedMapRoute: AuthenticatedMapRoute,
   AuthenticatedPlacementsRoute: AuthenticatedPlacementsRoute,
   AuthenticatedSammieRoute: AuthenticatedSammieRoute,
-  AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedSettingsRoute: AuthenticatedSettingsRouteWithChildren,
   AuthenticatedTimesheetsRoute: AuthenticatedTimesheetsRouteWithChildren,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
 }

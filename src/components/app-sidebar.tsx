@@ -224,7 +224,7 @@ export function AppSidebar() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link to="/settings" className="cursor-pointer">
+                  <Link to="/settings/company" className="cursor-pointer">
                     <Building className="h-4 w-4" />
                     <div className="flex-1">
                       <div className="text-sm font-medium">Company Settings</div>
