@@ -234,8 +234,9 @@ function Dashboard() {
         withScope(
           supabase
             .from("compliance_checklists")
-            .select("id", { count: "exact", head: true })
-            .neq("overall_status", "completed"),
+            .select("id, candidates!inner(candidate_type)", { count: "exact", head: true })
+            .neq("overall_status", "completed")
+            .in("candidates.candidate_type", ["temp", "both"]),
         ),
         withScope(
           supabase
