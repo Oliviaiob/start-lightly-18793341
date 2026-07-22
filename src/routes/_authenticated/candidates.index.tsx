@@ -584,17 +584,21 @@ function AddPermCandidateModal({ open, onClose, onCreated }: {
     if (!open) { setStep("choose"); setExtractError(null); setForm({ first_name:"",last_name:"",email:"",phone:"",town:"",postcode:"",current_position:"",current_employer:"",qualification_level:"__none__",qualifications_text:"",expected_salary:"" }); }
   }, [open]);
 
+  const toBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(",")[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
   const handleFile = async (file: File) => {
-    const isPdf = file.name.match(/\.pdf$/i);
-    const isDocx = file.name.match(/\.docx?$/i);
-    if (!isPdf && !isDocx) { setExtractError("Please upload a PDF or Word document."); return; }
+    const isPdf = /\.pdf$/i.test(file.name);
+    const isDocx = /\.docx?$/i.test(file.name);
+    if (!isPdf && !isDocx) { setExtractError("Please upload a PDF or Word document (.pdf or .docx)."); return; }
     setStep("extracting"); setExtractError(null);
     try {
-      const arrayBuf = await file.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuf);
-      let binary = "";
-      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-      const b64 = btoa(binary);
+      const b64 = await toBase64(file);
       const body = isPdf ? { pdf_base64: b64 } : { docx_base64: b64 };
       const { data, error } = await supabase.functions.invoke("extract-cv", { body });
       if (error) throw new Error(error.message);
