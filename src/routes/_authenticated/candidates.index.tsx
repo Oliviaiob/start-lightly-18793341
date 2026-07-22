@@ -585,7 +585,9 @@ function AddPermCandidateModal({ open, onClose, onCreated }: {
   }, [open]);
 
   const handleFile = async (file: File) => {
-    if (!file.name.match(/\.(pdf)$/i)) { setExtractError("Please upload a PDF file."); return; }
+    const isPdf = file.name.match(/\.pdf$/i);
+    const isDocx = file.name.match(/\.docx?$/i);
+    if (!isPdf && !isDocx) { setExtractError("Please upload a PDF or Word document."); return; }
     setStep("extracting"); setExtractError(null);
     try {
       const arrayBuf = await file.arrayBuffer();
@@ -593,7 +595,8 @@ function AddPermCandidateModal({ open, onClose, onCreated }: {
       let binary = "";
       for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
       const b64 = btoa(binary);
-      const { data, error } = await supabase.functions.invoke("extract-cv", { body: { pdf_base64: b64 } });
+      const body = isPdf ? { pdf_base64: b64 } : { docx_base64: b64 };
+      const { data, error } = await supabase.functions.invoke("extract-cv", { body });
       if (error) throw new Error(error.message);
       const d = data?.data ?? {};
       setForm({
@@ -647,7 +650,7 @@ function AddPermCandidateModal({ open, onClose, onCreated }: {
         <div className="px-6 py-5 border-b">
           <h2 className="font-semibold text-base">Add Permanent Candidate</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {step === "choose" ? "Upload a CV — we'll extract the details." : step === "extracting" ? "Extracting CV details…" : "Review and confirm the extracted details."}
+            {step === "choose" ? "Upload a CV (PDF or Word) — we'll extract the details." : step === "extracting" ? "Extracting CV details…" : "Review and confirm the extracted details."}
           </p>
         </div>
 
@@ -655,9 +658,9 @@ function AddPermCandidateModal({ open, onClose, onCreated }: {
           {step === "choose" && (
             <div className="space-y-4">
               <label className="block border-2 border-dashed rounded-xl p-10 text-center cursor-pointer hover:border-teal/50 hover:bg-teal/5 transition-colors">
-                <input type="file" accept=".pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+                <input type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
                 <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                <p className="text-sm font-medium">Click to choose a CV (.pdf)</p>
+                <p className="text-sm font-medium">Click to choose a CV (.pdf or .docx)</p>
                 <p className="text-xs text-muted-foreground mt-1">We'll extract the details automatically</p>
               </label>
               <div className="flex items-center gap-3">

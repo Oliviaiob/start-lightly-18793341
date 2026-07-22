@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.30.1";
+import mammoth from "https://esm.sh/mammoth@1.8.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,24 +11,20 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { pdf_base64 } = await req.json();
-    if (!pdf_base64) throw new Error("pdf_base64 is required");
+    const { pdf_base64, docx_base64, text_content } = await req.json();
+    if (!pdf_base64 && !docx_base64 && !text_content) throw new Error("pdf_base64, docx_base64, or text_content is required");
+
+    // If Word doc, extract text server-side with mammoth
+    let resolvedTextContent = text_content ?? null;
+    if (docx_base64) {
+      const docxBytes = Uint8Array.from(atob(docx_base64), (c) => c.charCodeAt(0));
+      const result = await mammoth.extractRawText({ arrayBuffer: docxBytes.buffer });
+      resolvedTextContent = result.value;
+    }
 
     const client = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY")! });
 
-    const response = await client.messages.create({
-      model: "claude-opus-4-5",
-      max_tokens: 1500,
-      messages: [{
-        role: "user",
-        content: [
-          {
-            type: "document",
-            source: { type: "base64", media_type: "application/pdf", data: pdf_base64 },
-          } as any,
-          {
-            type: "text",
-            text: `Extract candidate information from this CV/resume and return ONLY a valid JSON object. Use null for any field not found.
+    const prompt = `Extract candidate information from this CV/resume and return ONLY a valid JSON object. Use null for any field not found.
 
 {
   "first_name": "",
@@ -44,10 +41,19 @@ serve(async (req) => {
 
 For qualification_level pick the closest match from: unqualified, level_2, level_3, room_leader, deputy_manager, manager — or leave null.
 For qualifications_text write a brief summary of all qualifications and certifications listed.
-Return ONLY the JSON object, no other text.`,
-          },
-        ],
-      }],
+Return ONLY the JSON object, no other text.`;
+
+    const messageContent: any[] = pdf_base64 && !docx_base64
+      ? [
+          { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdf_base64 } },
+          { type: "text", text: prompt },
+        ]
+      : [{ type: "text", text: `${prompt}\n\nCV TEXT:\n${resolvedTextContent}` }];
+
+    const response = await client.messages.create({
+      model: "claude-opus-4-5",
+      max_tokens: 1500,
+      messages: [{ role: "user", content: messageContent }],
     });
 
     const raw = (response.content[0] as any).text.trim();
