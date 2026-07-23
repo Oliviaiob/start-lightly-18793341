@@ -7,6 +7,23 @@ const corsHeaders = {
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 
+// Reliable base64 encoder — works directly on Uint8Array without btoa
+function uint8ToBase64(data: Uint8Array): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  let result = "";
+  const len = data.length;
+  for (let i = 0; i < len; i += 3) {
+    const b0 = data[i];
+    const b1 = i + 1 < len ? data[i + 1] : 0;
+    const b2 = i + 2 < len ? data[i + 2] : 0;
+    result += chars[b0 >> 2];
+    result += chars[((b0 & 3) << 4) | (b1 >> 4)];
+    result += i + 1 < len ? chars[((b1 & 15) << 2) | (b2 >> 6)] : "=";
+    result += i + 2 < len ? chars[b2 & 63] : "=";
+  }
+  return result;
+}
+
 // ── Per-document rules ────────────────────────────────────────────────────────
 
 const RULES: Record<string, string> = {
@@ -175,10 +192,14 @@ Deno.serve(async (req) => {
             text: `Note: The uploaded file (${doc.file_name}, ${(contentLength / 1024 / 1024).toFixed(1)}MB) exceeds the 5MB analysis limit. Please ask the candidate to upload a smaller/compressed version. This check cannot be completed automatically.`,
           });
         } else if (contentType.startsWith("image/")) {
-          // Use URL source — bucket is public so Anthropic can access it directly
+          // Supabase storage URLs are blocked by Anthropic — must use base64
+          const imgBuffer = await (await fetch(doc.file_url)).arrayBuffer();
+          const imgBytes = new Uint8Array(imgBuffer);
+          const safeMediaType = (["image/jpeg","image/png","image/gif","image/webp"] as const)
+            .find(t => t === contentType) ?? "image/jpeg";
           messageContent.push({
             type: "image",
-            source: { type: "url", url: doc.file_url },
+            source: { type: "base64", media_type: safeMediaType, data: uint8ToBase64(imgBytes) },
           });
           messageContent.push({ type: "text", text: `File name: ${doc.file_name}` });
         } else if (contentType === "application/pdf") {
