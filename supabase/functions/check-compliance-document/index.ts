@@ -155,9 +155,19 @@ Deno.serve(async (req) => {
       if (doc?.file_url) {
         // Fetch headers only first to get content-type and size
         const headRes = await fetch(doc.file_url, { method: "HEAD" });
-        const contentType = headRes.headers.get("content-type") ?? "image/jpeg";
+        let contentType = headRes.headers.get("content-type") ?? "";
         const contentLength = Number(headRes.headers.get("content-length") ?? "0");
         const MAX_BYTES = 5 * 1024 * 1024; // 5MB limit
+
+        // Supabase storage sometimes returns application/octet-stream — fall back to extension
+        if (!contentType.startsWith("image/") && contentType !== "application/pdf") {
+          const ext = (doc.file_name ?? "").split(".").pop()?.toLowerCase() ?? "";
+          if (["jpg", "jpeg"].includes(ext)) contentType = "image/jpeg";
+          else if (ext === "png") contentType = "image/png";
+          else if (ext === "gif") contentType = "image/gif";
+          else if (ext === "webp") contentType = "image/webp";
+          else if (ext === "pdf") contentType = "application/pdf";
+        }
 
         if (contentLength > MAX_BYTES) {
           messageContent.push({
