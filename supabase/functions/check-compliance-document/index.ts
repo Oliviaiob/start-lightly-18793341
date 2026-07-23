@@ -175,10 +175,22 @@ Deno.serve(async (req) => {
             text: `Note: The uploaded file (${doc.file_name}, ${(contentLength / 1024 / 1024).toFixed(1)}MB) exceeds the 5MB analysis limit. Please ask the candidate to upload a smaller/compressed version. This check cannot be completed automatically.`,
           });
         } else if (contentType.startsWith("image/")) {
-          // Use URL source — no base64 needed, no size issues, bucket is public
+          // Download and base64-encode — URL source fails on private Supabase buckets
+          const imgBuffer = await (await fetch(doc.file_url)).arrayBuffer();
+          const imgBytes = new Uint8Array(imgBuffer);
+          let imgBinary = "";
+          const CHUNK = 8192;
+          for (let i = 0; i < imgBytes.length; i += CHUNK) {
+            imgBinary += String.fromCharCode(...imgBytes.subarray(i, Math.min(i + CHUNK, imgBytes.length)));
+          }
+          const validImageTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
+          type ValidImageType = typeof validImageTypes[number];
+          const mediaType: ValidImageType = validImageTypes.includes(contentType as ValidImageType)
+            ? (contentType as ValidImageType)
+            : "image/jpeg";
           messageContent.push({
             type: "image",
-            source: { type: "url", url: doc.file_url },
+            source: { type: "base64", media_type: mediaType, data: btoa(imgBinary) },
           });
           messageContent.push({ type: "text", text: `File name: ${doc.file_name}` });
         } else if (contentType === "application/pdf") {
@@ -246,6 +258,9 @@ Use "manual_review" if you cannot determine pass/fail from the content provided 
     });
 
     const anthropicData = await anthropicRes.json();
+    if (anthropicData.error) {
+      throw new Error(`Anthropic API error: ${anthropicData.error.type} — ${anthropicData.error.message}`);
+    }
     const rawText = anthropicData.content?.[0]?.text ?? "{}";
 
     // Parse JSON from response

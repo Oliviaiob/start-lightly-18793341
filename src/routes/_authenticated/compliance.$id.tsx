@@ -320,21 +320,15 @@ function ChecklistSection({
                 {aiResult.extracted && typeof aiResult.extracted === "string" && aiResult.extracted !== "AI check initiated — results will appear once processed." && (
                   <p className="text-[11px] text-muted-foreground">{aiResult.extracted}</p>
                 )}
-                {/* Reasons if flagged */}
-                {aiResult.status === "flagged" && aiResult.reasons && Array.isArray(aiResult.reasons) && aiResult.reasons.length > 0 && (
+                {/* Reasons — shown for all statuses */}
+                {aiResult.reasons && Array.isArray(aiResult.reasons) && aiResult.reasons.length > 0 && (
                   <ul className="space-y-0.5">
                     {(aiResult.reasons as string[]).map((r, i) => (
-                      <li key={i} className="text-[11px] text-red-700 flex items-start gap-1">
-                        <span className="shrink-0 mt-0.5">•</span>{r}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {/* Manual review instructions */}
-                {aiResult.status === "manual_review" && aiResult.reasons && Array.isArray(aiResult.reasons) && aiResult.reasons.length > 0 && (
-                  <ul className="space-y-0.5">
-                    {(aiResult.reasons as string[]).map((r, i) => (
-                      <li key={i} className="text-[11px] text-amber-700 flex items-start gap-1">
+                      <li key={i} className={`text-[11px] flex items-start gap-1 ${
+                        aiResult.status === "flagged" ? "text-red-700"
+                        : aiResult.status === "manual_review" ? "text-amber-700"
+                        : "text-green-700"
+                      }`}>
                         <span className="shrink-0 mt-0.5">•</span>{r}
                       </li>
                     ))}
@@ -1232,7 +1226,8 @@ function Page() {
         confidence_score: confidenceScore,
         due_status: (aiStatus === "verified" || aiStatus === "approved") ? "no_action_needed" : undefined,
       });
-      if (data?.status === "flagged") toast.error("AI check flagged an issue — review notes");
+      if (data?.status === "verified") toast.success("AI check passed");
+      else if (data?.status === "flagged") toast.error("AI check flagged an issue — review notes");
       else toast.info("Manual review required for this item");
     } catch (e: any) {
       toast.error("AI check failed: " + (e?.message ?? "Unknown error"));
