@@ -175,22 +175,10 @@ Deno.serve(async (req) => {
             text: `Note: The uploaded file (${doc.file_name}, ${(contentLength / 1024 / 1024).toFixed(1)}MB) exceeds the 5MB analysis limit. Please ask the candidate to upload a smaller/compressed version. This check cannot be completed automatically.`,
           });
         } else if (contentType.startsWith("image/")) {
-          // Download and base64-encode — URL source fails on private Supabase buckets
-          const imgBuffer = await (await fetch(doc.file_url)).arrayBuffer();
-          const imgBytes = new Uint8Array(imgBuffer);
-          let imgBinary = "";
-          const CHUNK = 8192;
-          for (let i = 0; i < imgBytes.length; i += CHUNK) {
-            imgBinary += String.fromCharCode(...imgBytes.subarray(i, Math.min(i + CHUNK, imgBytes.length)));
-          }
-          const validImageTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
-          type ValidImageType = typeof validImageTypes[number];
-          const mediaType: ValidImageType = validImageTypes.includes(contentType as ValidImageType)
-            ? (contentType as ValidImageType)
-            : "image/jpeg";
+          // Use URL source — bucket is public so Anthropic can access it directly
           messageContent.push({
             type: "image",
-            source: { type: "base64", media_type: mediaType, data: btoa(imgBinary) },
+            source: { type: "url", url: doc.file_url },
           });
           messageContent.push({ type: "text", text: `File name: ${doc.file_name}` });
         } else if (contentType === "application/pdf") {
@@ -241,14 +229,18 @@ Use "verified" if the document clearly passes all rules.
 Use "flagged" if the document fails one or more rules.
 Use "manual_review" if you cannot determine pass/fail from the content provided (e.g. DBS Update Service — requires gov website check).`;
 
+    // Only use the PDF beta when content actually includes a PDF document
+    const hasPdf = messageContent.some((m: any) => m.type === "document");
+    const anthropicHeaders: Record<string, string> = {
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    };
+    if (hasPdf) anthropicHeaders["anthropic-beta"] = "pdfs-2024-09-25";
+
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "anthropic-beta": "pdfs-2024-09-25",
-        "content-type": "application/json",
-      },
+      headers: anthropicHeaders,
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 1024,
@@ -258,18 +250,22 @@ Use "manual_review" if you cannot determine pass/fail from the content provided 
     });
 
     const anthropicData = await anthropicRes.json();
-    if (anthropicData.error) {
-      throw new Error(`Anthropic API error: ${anthropicData.error.type} — ${anthropicData.error.message}`);
-    }
-    const rawText = anthropicData.content?.[0]?.text ?? "{}";
 
-    // Parse JSON from response
+    // Parse JSON from response — handle Anthropic errors gracefully
     let result: Record<string, unknown>;
-    try {
-      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-      result = JSON.parse(jsonMatch ? jsonMatch[0] : rawText);
-    } catch {
-      result = { status: "manual_review", summary: "Could not parse AI response", reasons: [rawText], extracted: {}, confidence: 0 };
+    const rawText = anthropicData.content?.[0]?.text;
+    if (!rawText) {
+      // Anthropic returned an error or empty content — fall back to manual review
+      const errMsg = anthropicData.error?.message ?? "AI returned no content";
+      console.error("Anthropic error:", JSON.stringify(anthropicData));
+      result = { status: "manual_review", summary: `Manual review required: ${errMsg}`, reasons: [], extracted: {}, confidence: 0 };
+    } else {
+      try {
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        result = JSON.parse(jsonMatch ? jsonMatch[0] : rawText);
+      } catch {
+        result = { status: "manual_review", summary: "Could not parse AI response", reasons: [rawText], extracted: {}, confidence: 0 };
+      }
     }
 
     // Save result back to compliance_checklist ai_results
