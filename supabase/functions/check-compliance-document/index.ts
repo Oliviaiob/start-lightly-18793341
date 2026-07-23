@@ -171,63 +171,73 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (doc?.file_url) {
-        // Fetch headers only first to get content-type and size
-        const headRes = await fetch(doc.file_url, { method: "HEAD" });
-        let contentType = headRes.headers.get("content-type") ?? "";
-        const contentLength = Number(headRes.headers.get("content-length") ?? "0");
-        const MAX_BYTES = 5 * 1024 * 1024; // 5MB limit
+        // ── Download via service-role storage client ─────────────────────────
+        // Avoids public-URL restrictions (works even if bucket is private).
+        // Extract bucket + path from the stored URL.
+        // URL format: https://{project}.supabase.co/storage/v1/object/public/{bucket}/{path}
+        const urlObj = new URL(doc.file_url);
+        const parts = urlObj.pathname.split("/").filter(Boolean);
+        // parts: ["storage","v1","object","public","{bucket}","{...path}"]
+        const bucketIdx = parts.indexOf("public") + 1;
+        const bucket = parts[bucketIdx] ?? "compliance";
+        const storagePath = parts.slice(bucketIdx + 1).join("/");
 
-        // Supabase storage sometimes returns application/octet-stream — fall back to extension
-        if (!contentType.startsWith("image/") && contentType !== "application/pdf") {
+        const { data: fileBlob, error: dlErr } = await supabase.storage.from(bucket).download(storagePath);
+
+        if (dlErr || !fileBlob) {
+          console.error(`Storage download failed for ${doc.file_name}: ${dlErr?.message}`);
+          unsupportedFormat = `Could not retrieve "${doc.file_name}" from storage: ${dlErr?.message ?? "unknown error"}. `
+            + `The file may not have uploaded correctly. Please delete this document and re-upload.`;
+        } else {
+          const MAX_BYTES = 5 * 1024 * 1024;
+          const fileSize = fileBlob.size;
+
+          // Determine content type — trust file extension over blob type
           const ext = (doc.file_name ?? "").split(".").pop()?.toLowerCase() ?? "";
-          if (["jpg", "jpeg"].includes(ext)) contentType = "image/jpeg";
-          else if (ext === "png") contentType = "image/png";
-          else if (ext === "gif") contentType = "image/gif";
-          else if (ext === "webp") contentType = "image/webp";
-          else if (ext === "pdf") contentType = "application/pdf";
-        }
+          let contentType = fileBlob.type || "";
+          if (!contentType.startsWith("image/") && contentType !== "application/pdf") {
+            if (["jpg", "jpeg"].includes(ext)) contentType = "image/jpeg";
+            else if (ext === "png") contentType = "image/png";
+            else if (ext === "gif") contentType = "image/gif";
+            else if (ext === "webp") contentType = "image/webp";
+            else if (ext === "pdf") contentType = "application/pdf";
+          }
 
-        if (contentLength > MAX_BYTES) {
-          messageContent.push({
-            type: "text",
-            text: `Note: The uploaded file (${doc.file_name}, ${(contentLength / 1024 / 1024).toFixed(1)}MB) exceeds the 5MB analysis limit. Please ask the candidate to upload a smaller/compressed version. This check cannot be completed automatically.`,
-          });
-        } else if (contentType.startsWith("image/")) {
-          // Supabase storage URLs are blocked by Anthropic — must use base64
-          const imgRes = await fetch(doc.file_url);
-          if (!imgRes.ok) {
-            // Storage returned an error (e.g. file deleted / not found)
-            const errBody = await imgRes.text();
-            console.error(`Storage fetch failed for ${doc.file_name}: HTTP ${imgRes.status} — ${errBody.slice(0, 200)}`);
-            unsupportedFormat = `Could not retrieve "${doc.file_name}" from storage (HTTP ${imgRes.status}). `
-              + `The file may have been deleted or the upload did not complete. Please ask the candidate to re-upload.`;
-          } else {
-            const imgBuffer = await imgRes.arrayBuffer();
+          if (fileSize > MAX_BYTES) {
+            messageContent.push({
+              type: "text",
+              text: `Note: The uploaded file (${doc.file_name}, ${(fileSize / 1024 / 1024).toFixed(1)}MB) exceeds the 5MB analysis limit. Please ask the candidate to upload a smaller/compressed version.`,
+            });
+          } else if (contentType === "application/pdf") {
+            const fileBuffer = await fileBlob.arrayBuffer();
+            const bytes = new Uint8Array(fileBuffer);
+            let binary = "";
+            const CHUNK = 8192;
+            for (let i = 0; i < bytes.length; i += CHUNK) {
+              binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
+            }
+            messageContent.push({
+              type: "document",
+              source: { type: "base64", media_type: "application/pdf", data: btoa(binary) },
+            });
+            messageContent.push({ type: "text", text: `File name: ${doc.file_name}` });
+          } else if (contentType.startsWith("image/")) {
+            const imgBuffer = await fileBlob.arrayBuffer();
             const imgBytes = new Uint8Array(imgBuffer);
 
-            // ── Magic byte detection ─────────────────────────────────────────
-            // Verify the file is actually a supported image format.
+            // ── Magic byte detection ───────────────────────────────────────
+            // Verify actual format — can't trust extension or declared content-type.
             // iPhone "JPEG" files are often HEIC/HEIF with a .jpeg extension.
-            // Supabase storage may also return a JSON error body with HTTP 200.
             const b = imgBytes;
             const isJpeg = b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF;
             const isPng  = b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47;
             const isGif  = b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46;
             const isWebp = b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46
                         && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50;
-            // Detect JSON error body masquerading as image (Supabase storage error)
-            const isJson = b[0] === 0x7B; // starts with '{'
 
             const hex = Array.from(b.slice(0, 8)).map((x: number) => x.toString(16).padStart(2, "0")).join(" ");
 
-            if (isJson) {
-              // Storage returned an error JSON with HTTP 200 (common Supabase behaviour)
-              const bodyText = new TextDecoder().decode(b).slice(0, 300);
-              console.error(`Storage returned JSON for "${doc.file_name}" (bytes: ${hex}): ${bodyText}`);
-              unsupportedFormat = `Could not retrieve "${doc.file_name}" from storage — the file may not have uploaded correctly. `
-                + `Please ask the candidate to delete this document and re-upload it.`;
-            } else if (!isJpeg && !isPng && !isGif && !isWebp) {
-              // Unsupported format — likely HEIC/HEIF from a newer iPhone
+            if (!isJpeg && !isPng && !isGif && !isWebp) {
               console.log(`Unsupported image format for "${doc.file_name}" — magic bytes: ${hex}`);
               unsupportedFormat = `The file "${doc.file_name}" is not a supported image format (detected header: ${hex}). `
                 + `iPhone photos are often saved in HEIF/HEIC format even with a .jpeg extension. `
@@ -241,23 +251,9 @@ Deno.serve(async (req) => {
               });
               messageContent.push({ type: "text", text: `File name: ${doc.file_name}` });
             }
+          } else {
+            messageContent.push({ type: "text", text: `File name: ${doc.file_name} (unsupported format — manual review required)` });
           }
-        } else if (contentType === "application/pdf") {
-          // PDFs need base64 — use chunked encoding to avoid stack overflow on large files
-          const fileBuffer = await (await fetch(doc.file_url)).arrayBuffer();
-          const bytes = new Uint8Array(fileBuffer);
-          let binary = "";
-          const CHUNK = 8192;
-          for (let i = 0; i < bytes.length; i += CHUNK) {
-            binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
-          }
-          messageContent.push({
-            type: "document",
-            source: { type: "base64", media_type: "application/pdf", data: btoa(binary) },
-          });
-          messageContent.push({ type: "text", text: `File name: ${doc.file_name}` });
-        } else {
-          messageContent.push({ type: "text", text: `File name: ${doc.file_name} (unsupported format — manual review required)` });
         }
       }
     }
