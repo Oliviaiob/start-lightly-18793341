@@ -155,6 +155,7 @@ Deno.serve(async (req) => {
 
     // Build message content for Claude
     const messageContent: unknown[] = [];
+    let unsupportedFormat: string | null = null;  // set if image can't be decoded (e.g. HEIC)
 
     // If it's a text-only check (NI, RTW declaration)
     if (text_content) {
@@ -195,13 +196,33 @@ Deno.serve(async (req) => {
           // Supabase storage URLs are blocked by Anthropic — must use base64
           const imgBuffer = await (await fetch(doc.file_url)).arrayBuffer();
           const imgBytes = new Uint8Array(imgBuffer);
-          const safeMediaType = (["image/jpeg","image/png","image/gif","image/webp"] as const)
-            .find(t => t === contentType) ?? "image/jpeg";
-          messageContent.push({
-            type: "image",
-            source: { type: "base64", media_type: safeMediaType, data: uint8ToBase64(imgBytes) },
-          });
-          messageContent.push({ type: "text", text: `File name: ${doc.file_name}` });
+
+          // ── Magic byte detection ─────────────────────────────────────────
+          // iPhone "JPEG" files are often actually HEIC/HEIF with a .jpeg ext.
+          // Detect via magic bytes rather than trusting file extension.
+          const b = imgBytes;
+          const isJpeg = b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF;
+          const isPng  = b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47;
+          const isGif  = b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46;
+          const isWebp = b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46
+                      && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50;
+
+          if (!isJpeg && !isPng && !isGif && !isWebp) {
+            // Unsupported — probably HEIC/HEIF from a newer iPhone
+            const hex = Array.from(b.slice(0, 8)).map((x: number) => x.toString(16).padStart(2, "0")).join(" ");
+            console.log(`Unsupported image format for "${doc.file_name}" — magic bytes: ${hex}`);
+            unsupportedFormat = `The file "${doc.file_name}" is not a supported image format (magic bytes: ${hex}). `
+              + `iPhone photos saved in HEIF/HEIC format cannot be processed automatically. `
+              + `Please ask the candidate to upload a standard JPEG or PNG photo.`;
+          } else {
+            const actualMediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp" =
+              isJpeg ? "image/jpeg" : isPng ? "image/png" : isGif ? "image/gif" : "image/webp";
+            messageContent.push({
+              type: "image",
+              source: { type: "base64", media_type: actualMediaType, data: uint8ToBase64(imgBytes) },
+            });
+            messageContent.push({ type: "text", text: `File name: ${doc.file_name}` });
+          }
         } else if (contentType === "application/pdf") {
           // PDFs need base64 — use chunked encoding to avoid stack overflow on large files
           const fileBuffer = await (await fetch(doc.file_url)).arrayBuffer();
@@ -250,42 +271,57 @@ Use "verified" if the document clearly passes all rules.
 Use "flagged" if the document fails one or more rules.
 Use "manual_review" if you cannot determine pass/fail from the content provided (e.g. DBS Update Service — requires gov website check).`;
 
-    // Only use the PDF beta when content actually includes a PDF document
-    const hasPdf = messageContent.some((m: any) => m.type === "document");
-    const anthropicHeaders: Record<string, string> = {
-      "x-api-key": ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    };
-    if (hasPdf) anthropicHeaders["anthropic-beta"] = "pdfs-2024-09-25";
-
-    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: anthropicHeaders,
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1024,
-        system: systemPrompt,
-        messages: [{ role: "user", content: messageContent }],
-      }),
-    });
-
-    const anthropicData = await anthropicRes.json();
-
-    // Parse JSON from response — handle Anthropic errors gracefully
+    // ── Short-circuit if format was unsupported (e.g. HEIC) ───────────────────
     let result: Record<string, unknown>;
-    const rawText = anthropicData.content?.[0]?.text;
-    if (!rawText) {
-      // Anthropic returned an error or empty content — fall back to manual review
-      const errMsg = anthropicData.error?.message ?? "AI returned no content";
-      console.error("Anthropic error:", JSON.stringify(anthropicData));
-      result = { status: "manual_review", summary: `Manual review required: ${errMsg}`, reasons: [], extracted: {}, confidence: 0 };
+
+    if (unsupportedFormat) {
+      result = {
+        status: "manual_review",
+        summary: unsupportedFormat,
+        reasons: [
+          "Unsupported image format — standard JPEG or PNG required.",
+          "iPhone photos are often saved as HEIF/HEIC even with a .jpeg extension. The candidate should open the photo on their device, use 'Share → Save as JPEG', or take a screenshot and upload that instead.",
+        ],
+        extracted: {},
+        confidence: 0,
+      };
     } else {
-      try {
-        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-        result = JSON.parse(jsonMatch ? jsonMatch[0] : rawText);
-      } catch {
-        result = { status: "manual_review", summary: "Could not parse AI response", reasons: [rawText], extracted: {}, confidence: 0 };
+      // Only use the PDF beta when content actually includes a PDF document
+      const hasPdf = messageContent.some((m: any) => m.type === "document");
+      const anthropicHeaders: Record<string, string> = {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      };
+      if (hasPdf) anthropicHeaders["anthropic-beta"] = "pdfs-2024-09-25";
+
+      const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: anthropicHeaders,
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 1024,
+          system: systemPrompt,
+          messages: [{ role: "user", content: messageContent }],
+        }),
+      });
+
+      const anthropicData = await anthropicRes.json();
+
+      // Parse JSON from response — handle Anthropic errors gracefully
+      const rawText = anthropicData.content?.[0]?.text;
+      if (!rawText) {
+        // Anthropic returned an error or empty content — fall back to manual review
+        const errMsg = anthropicData.error?.message ?? "AI returned no content";
+        console.error("Anthropic error:", JSON.stringify(anthropicData));
+        result = { status: "manual_review", summary: `Manual review required: ${errMsg}`, reasons: [], extracted: {}, confidence: 0 };
+      } else {
+        try {
+          const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+          result = JSON.parse(jsonMatch ? jsonMatch[0] : rawText);
+        } catch {
+          result = { status: "manual_review", summary: "Could not parse AI response", reasons: [rawText], extracted: {}, confidence: 0 };
+        }
       }
     }
 
