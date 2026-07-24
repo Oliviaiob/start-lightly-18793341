@@ -1351,6 +1351,21 @@ function Page() {
 
       {CHECKLIST_ITEMS.map((item) => {
         const status = ((checklist?.[item.key] ?? "not_submitted") as ItemStatus);
+
+        // References group: show a read-only chip row that links to the Reference Tracker.
+        if (item.group === "References") {
+          return (
+            <ReferenceChipRow
+              key={item.key}
+              label={item.label}
+              status={(checklist?.[item.key] ?? "not_submitted") as string}
+              required={item.required}
+              onStatusChange={(val) => updateItem(item.key, val)}
+              saving={savingItem === item.key}
+            />
+          );
+        }
+
         // Latest doc for this item type
         const doc = docs.find((d) => d.document_type === item.key) ?? null;
         const aiResult = checklist?.ai_results?.[item.key] ?? null;
