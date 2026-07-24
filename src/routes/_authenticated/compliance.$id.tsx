@@ -2819,7 +2819,7 @@ function RefExtraSections({
         <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">AI Review</p>
         {!ref.document_path ? (
           <p className="text-xs text-gray-500">Upload a document first to run an AI review.</p>
-        ) : aiStatus === "pending" || aiStatus === "running" ? (
+        ) : aiBusy || aiStatus === "pending" || aiStatus === "running" ? (
           <div className="flex items-center gap-2 text-xs text-gray-600">
             <Loader2 className="h-3.5 w-3.5 animate-spin text-teal-600" />
             AI review in progress…
@@ -2827,9 +2827,10 @@ function RefExtraSections({
         ) : (aiStatus === "passed" || aiStatus === "complete" || aiStatus === "flagged") ? (
           <div className="space-y-2">
             {(() => {
-              const verdict = ref.ai_review_result?.verdict;
-              const passed = aiStatus === "passed" || verdict === "pass";
-              const flagged = aiStatus === "flagged" || verdict === "flag" || verdict === "fail";
+              const rStatus = aiResult?.status;
+              const verdict = aiResult?.verdict;
+              const passed = aiStatus === "passed" || rStatus === "verified" || verdict === "pass";
+              const flagged = aiStatus === "flagged" || rStatus === "flagged" || rStatus === "manual_review" || verdict === "flag" || verdict === "fail";
               if (passed) {
                 return (
                   <span className="inline-flex items-center gap-1 h-6 px-2 rounded-full text-[11px] font-semibold bg-green-100 text-green-700">
@@ -2850,10 +2851,28 @@ function RefExtraSections({
                 </span>
               );
             })()}
-            {ref.ai_review_result?.summary && (
+            {aiResult?.summary && (
               <div className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2 text-xs text-gray-700">
-                {ref.ai_review_result.summary}
+                {aiResult.summary}
               </div>
+            )}
+            {typeof aiResult?.confidence === "number" && (
+              <p className="text-[11px] text-gray-500">{Math.round(aiResult.confidence * 100)}% confidence</p>
+            )}
+            {Array.isArray(aiResult?.reasons) && aiResult.reasons.length > 0 && (
+              <ul className="list-disc pl-5 text-xs text-gray-700 space-y-0.5">
+                {aiResult.reasons.map((r: string, i: number) => <li key={i}>{r}</li>)}
+              </ul>
+            )}
+            {aiReviewedAt && (
+              <p className="text-[11px] text-gray-400">Reviewed {fmtDateTime(aiReviewedAt)}</p>
+            )}
+            <button
+              onClick={runAi} disabled={aiBusy}
+              className="h-7 px-3 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+              Re-run AI Review
+            </button>
+          </div>
             )}
             {ref.ai_reviewed_at && (
               <p className="text-[11px] text-gray-400">Reviewed {fmtDateTime(ref.ai_reviewed_at)}</p>
