@@ -2491,3 +2491,512 @@ function ReferenceChipRow({
   );
 }
 
+// ── RefExtraSections ──────────────────────────────────────────────────────────
+// Renders Document, AI Review, Decision, and Timeline sections inside the
+// expanded reference row. Self-contained state; fetches activity on mount.
+
+type RefActivityEvt = {
+  id: string; event_type: string; actor_id: string | null; actor_name: string | null;
+  metadata: any; created_at: string;
+};
+
+const BUCKET = "compliance-documents";
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+function refRelTime(iso: string): string {
+  const d = new Date(iso);
+  const diff = Date.now() - d.getTime();
+  const week = 7 * 24 * 60 * 60 * 1000;
+  if (diff < week) {
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins} min${mins === 1 ? "" : "s"} ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs} hour${hrs === 1 ? "" : "s"} ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days} day${days === 1 ? "" : "s"} ago`;
+  }
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) +
+    " at " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+}
+
+function RefExtraSections({
+  reference: ref, candidateId, onRefresh,
+}: {
+  reference: ReferenceRecord;
+  candidateId: string;
+  onRefresh: () => Promise<void>;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [uploadPct, setUploadPct] = useState(0);
+  const [replacing, setReplacing] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiLocalStatus, setAiLocalStatus] = useState<string | null>(null);
+
+  const [notes, setNotes] = useState(ref.recruiter_notes ?? "");
+  const [notesSavedAt, setNotesSavedAt] = useState<number | null>(null);
+  const [savingNotes, setSavingNotes] = useState(false);
+
+  const [approving, setApproving] = useState(false);
+  const [showReject, setShowReject] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+
+  const [activity, setActivity] = useState<RefActivityEvt[] | null>(null);
+  const [actorNames, setActorNames] = useState<Record<string, string>>({});
+
+  useEffect(() => { setNotes(ref.recruiter_notes ?? ""); }, [ref.recruiter_notes]);
+
+  // Resolve UUIDs → names for document_uploaded_by, approved_by, and activity actors
+  useEffect(() => {
+    const ids = new Set<string>();
+    if (ref.document_uploaded_by) ids.add(ref.document_uploaded_by);
+    if (ref.approved_by) ids.add(ref.approved_by);
+    (activity ?? []).forEach(a => { if (a.actor_id && !a.actor_name) ids.add(a.actor_id); });
+    const missing = [...ids].filter(id => !(id in actorNames));
+    if (missing.length === 0) return;
+    (async () => {
+      const { data } = await supabase.from("profiles").select("id, first_name, last_name").in("id", missing);
+      const next = { ...actorNames };
+      (data ?? []).forEach((p: any) => {
+        next[p.id] = [p.first_name, p.last_name].filter(Boolean).join(" ") || "Unknown";
+      });
+      setActorNames(next);
+    })();
+  }, [ref.document_uploaded_by, ref.approved_by, activity]);
+
+  // Fetch activity when mounted (row expanded)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.functions.invoke("manage-reference", {
+        body: { action: "get_activity", reference_id: ref.id },
+      });
+      if (cancelled) return;
+      if (error) { setActivity([]); return; }
+      setActivity((data?.activity ?? data?.events ?? []) as RefActivityEvt[]);
+    })();
+    return () => { cancelled = true; };
+  }, [ref.id]);
+
+  const refreshActivity = async () => {
+    const { data } = await supabase.functions.invoke("manage-reference", {
+      body: { action: "get_activity", reference_id: ref.id },
+    });
+    setActivity((data?.activity ?? data?.events ?? []) as RefActivityEvt[]);
+  };
+
+  const handleFile = async (file: File) => {
+    if (file.size > MAX_UPLOAD_BYTES) { toast.error("File exceeds 10 MB"); return; }
+    setUploading(true); setUploadPct(10);
+    try {
+      const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+      const filePath = `references/${candidateId}/${ref.id}/${safeName}`;
+      const { error: upErr } = await supabase.storage.from(BUCKET)
+        .upload(filePath, file, { upsert: true, contentType: file.type || "application/octet-stream" });
+      if (upErr) throw upErr;
+      setUploadPct(70);
+
+      // Register with edge function (also sets status/received_at + logs event)
+      const form = new FormData();
+      form.append("action", "manual_upload");
+      form.append("reference_id", ref.id);
+      form.append("file", file);
+      const { error: fnErr } = await supabase.functions.invoke("manage-reference", { body: form });
+      if (fnErr) throw fnErr;
+      setUploadPct(100);
+      toast.success("Document uploaded");
+      setReplacing(false);
+      await onRefresh();
+      await refreshActivity();
+    } catch (e: any) {
+      toast.error(e.message || "Upload failed");
+    } finally {
+      setUploading(false);
+      setTimeout(() => setUploadPct(0), 400);
+    }
+  };
+
+  const openDocument = async () => {
+    if (!ref.document_path) return;
+    const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(ref.document_path, 60);
+    if (error || !data?.signedUrl) { toast.error("Could not open document"); return; }
+    window.open(data.signedUrl, "_blank");
+  };
+
+  const runAi = async () => {
+    setAiBusy(true); setAiLocalStatus("pending");
+    try {
+      const { error } = await supabase.functions.invoke("manage-reference", {
+        body: { action: "run_ai_review", reference_id: ref.id },
+      });
+      if (error) throw error;
+      await onRefresh();
+      await refreshActivity();
+    } catch (e: any) {
+      toast.error(e.message || "AI review failed");
+      setAiLocalStatus(null);
+    } finally { setAiBusy(false); }
+  };
+
+  const saveNotes = async () => {
+    if ((notes ?? "") === (ref.recruiter_notes ?? "")) return;
+    setSavingNotes(true);
+    try {
+      const { error } = await supabase.functions.invoke("manage-reference", {
+        body: { action: "set_notes", reference_id: ref.id, notes, recruiter_notes: notes },
+      });
+      if (error) throw error;
+      setNotesSavedAt(Date.now());
+      setTimeout(() => setNotesSavedAt(v => (v && Date.now() - v >= 1900 ? null : v)), 2000);
+      await onRefresh();
+      await refreshActivity();
+    } catch (e: any) {
+      toast.error(e.message || "Could not save notes");
+    } finally { setSavingNotes(false); }
+  };
+
+  const approve = async () => {
+    setApproving(true);
+    try {
+      const { error } = await supabase.functions.invoke("manage-reference", {
+        body: { action: "approve", reference_id: ref.id },
+      });
+      if (error) throw error;
+      toast.success("Reference approved");
+      await onRefresh();
+      await refreshActivity();
+    } catch (e: any) {
+      toast.error(e.message || "Approve failed");
+    } finally { setApproving(false); }
+  };
+
+  const reject = async () => {
+    setApproving(true);
+    try {
+      const { error } = await supabase.functions.invoke("manage-reference", {
+        body: { action: "reject", reference_id: ref.id, rejection_reason: rejectReason, reason: rejectReason },
+      });
+      if (error) throw error;
+      toast.success("Reference rejected");
+      setShowReject(false); setRejectReason("");
+      await onRefresh();
+      await refreshActivity();
+    } catch (e: any) {
+      toast.error(e.message || "Reject failed");
+    } finally { setApproving(false); }
+  };
+
+  const resetApproval = async () => {
+    if (!window.confirm("This will reopen the reference for re-review. Continue?")) return;
+    try {
+      const { error } = await supabase.functions.invoke("manage-reference", {
+        body: { action: "reset_approval", reference_id: ref.id },
+      });
+      if (error) throw error;
+      toast.success("Approval reset");
+      await onRefresh();
+      await refreshActivity();
+    } catch (e: any) {
+      toast.error(e.message || "Reset failed");
+    }
+  };
+
+  const aiStatus = aiLocalStatus ?? ref.ai_review_status ?? "not_reviewed";
+  const resolveName = (id: string | null | undefined, fallbackName?: string | null) =>
+    fallbackName || (id ? (actorNames[id] || "Unknown") : "Automated");
+
+  return (
+    <>
+      {/* ── Document ─────────────────────────────────────────────────────── */}
+      <div className="rounded-xl border border-gray-100 bg-white px-4 py-3">
+        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Document</p>
+        {ref.document_path && !replacing ? (
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <button onClick={openDocument}
+                className="inline-flex items-center gap-2 text-sm font-medium text-teal-700 hover:underline">
+                <FileText className="h-4 w-4" />
+                {ref.document_file_name || "Reference document"}
+              </button>
+              <p className="text-[11px] text-gray-500 mt-1">
+                Uploaded {ref.document_uploaded_at ? fmtDateTime(ref.document_uploaded_at) : "—"}
+                {" · by "}
+                {ref.document_uploaded_by
+                  ? resolveName(ref.document_uploaded_by)
+                  : "Referee (submitted via form)"}
+              </p>
+            </div>
+            <button
+              onClick={() => setReplacing(true)}
+              className="h-7 px-3 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-700 hover:bg-gray-50">
+              Replace
+            </button>
+          </div>
+        ) : (
+          <div>
+            <div
+              onClick={() => !uploading && fileRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                const f = e.dataTransfer.files?.[0];
+                if (f) handleFile(f);
+              }}
+              className={`rounded-lg border-2 border-dashed px-4 py-6 text-center cursor-pointer transition-colors
+                ${uploading ? "border-teal-300 bg-teal-50/40" : "border-gray-300 hover:border-teal-400 hover:bg-gray-50"}`}
+            >
+              <UploadCloud className="h-6 w-6 mx-auto text-gray-400 mb-1" />
+              <p className="text-sm text-gray-600">Drop a reference document here or click to browse</p>
+              <p className="text-[11px] text-gray-400 mt-1">Accepted: PDF, DOCX, JPG, PNG. Max 10 MB.</p>
+            </div>
+            {uploading && (
+              <div className="mt-2 h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+                <div className="h-full bg-teal-500 transition-all" style={{ width: `${uploadPct}%` }} />
+              </div>
+            )}
+            {replacing && ref.document_path && (
+              <button
+                onClick={() => setReplacing(false)}
+                className="mt-2 text-[11px] text-gray-500 hover:underline">
+                Cancel replace
+              </button>
+            )}
+            <input
+              ref={fileRef} type="file" className="hidden"
+              accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* ── AI Review ────────────────────────────────────────────────────── */}
+      <div className="rounded-xl border border-gray-100 bg-white px-4 py-3">
+        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">AI Review</p>
+        {!ref.document_path ? (
+          <p className="text-xs text-gray-500">Upload a document first to run an AI review.</p>
+        ) : aiStatus === "pending" || aiStatus === "running" ? (
+          <div className="flex items-center gap-2 text-xs text-gray-600">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-teal-600" />
+            AI review in progress…
+          </div>
+        ) : (aiStatus === "passed" || aiStatus === "complete" || aiStatus === "flagged") ? (
+          <div className="space-y-2">
+            {(() => {
+              const verdict = ref.ai_review_result?.verdict;
+              const passed = aiStatus === "passed" || verdict === "pass";
+              const flagged = aiStatus === "flagged" || verdict === "flag" || verdict === "fail";
+              if (passed) {
+                return (
+                  <span className="inline-flex items-center gap-1 h-6 px-2 rounded-full text-[11px] font-semibold bg-green-100 text-green-700">
+                    <CheckCircle2 className="h-3 w-3" /> AI Check Passed
+                  </span>
+                );
+              }
+              if (flagged) {
+                return (
+                  <span className="inline-flex items-center gap-1 h-6 px-2 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700">
+                    <AlertCircle className="h-3 w-3" /> Flagged for Review
+                  </span>
+                );
+              }
+              return (
+                <span className="inline-flex items-center gap-1 h-6 px-2 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700">
+                  Reviewed
+                </span>
+              );
+            })()}
+            {ref.ai_review_result?.summary && (
+              <div className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2 text-xs text-gray-700">
+                {ref.ai_review_result.summary}
+              </div>
+            )}
+            {ref.ai_reviewed_at && (
+              <p className="text-[11px] text-gray-400">Reviewed {fmtDateTime(ref.ai_reviewed_at)}</p>
+            )}
+            <button
+              onClick={runAi} disabled={aiBusy}
+              className="h-7 px-3 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+              Re-run AI Review
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <p className="text-xs text-gray-500 flex-1">No AI review yet.</p>
+            <button
+              onClick={runAi} disabled={aiBusy}
+              className="inline-flex items-center gap-1.5 h-7 px-3 rounded-lg bg-[#2DD4BF] text-[#1B2B4B] text-xs font-semibold hover:opacity-90 disabled:opacity-50">
+              <Sparkles className="h-3 w-3" /> Run AI Review
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Decision ─────────────────────────────────────────────────────── */}
+      <div className="rounded-xl border border-gray-100 bg-white px-4 py-3">
+        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Decision</p>
+
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-gray-500">Recruiter notes</label>
+            {savingNotes ? (
+              <span className="text-[11px] text-gray-400">Saving…</span>
+            ) : notesSavedAt ? (
+              <span className="text-[11px] text-green-600 transition-opacity">Saved ✓</span>
+            ) : null}
+          </div>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            onBlur={saveNotes}
+            rows={3}
+            placeholder="Add internal notes about this reference…"
+            className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-teal-400"
+          />
+        </div>
+
+        {ref.document_path && (
+          <div className="mt-3">
+            {ref.approval_status === "approved" ? (
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="inline-flex items-center gap-1 h-6 px-2 rounded-full text-[11px] font-semibold bg-green-100 text-green-700">
+                  <CheckCircle2 className="h-3 w-3" /> Approved
+                </span>
+                <span className="text-[11px] text-gray-500">
+                  by {resolveName(ref.approved_by)}
+                  {ref.approved_at ? ` on ${fmtDateTime(ref.approved_at)}` : ""}
+                </span>
+                <button onClick={resetApproval} className="text-[11px] text-gray-500 hover:underline">Undo</button>
+              </div>
+            ) : ref.approval_status === "rejected" ? (
+              <div className="space-y-1">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="inline-flex items-center gap-1 h-6 px-2 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">
+                    <XCircle className="h-3 w-3" /> Rejected
+                  </span>
+                  <span className="text-[11px] text-gray-500">
+                    by {resolveName(ref.approved_by)}
+                    {ref.approved_at ? ` on ${fmtDateTime(ref.approved_at)}` : ""}
+                  </span>
+                  <button onClick={resetApproval} className="text-[11px] text-gray-500 hover:underline">Undo</button>
+                </div>
+                {ref.rejection_reason && (
+                  <p className="text-[11px] italic text-gray-500">"{ref.rejection_reason}"</p>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={approve} disabled={approving}
+                  className="inline-flex items-center gap-1.5 h-7 px-3 rounded-lg bg-green-600 text-white text-xs font-semibold hover:bg-green-700 disabled:opacity-50">
+                  <CheckCircle2 className="h-3 w-3" /> Approve
+                </button>
+                {!showReject ? (
+                  <button
+                    onClick={() => setShowReject(true)} disabled={approving}
+                    className="inline-flex items-center gap-1.5 h-7 px-3 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 disabled:opacity-50">
+                    <XCircle className="h-3 w-3" /> Reject
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2 flex-1 min-w-[240px]">
+                    <input
+                      value={rejectReason}
+                      onChange={(e) => setRejectReason(e.target.value)}
+                      placeholder="Reason for rejection (optional)"
+                      className="flex-1 h-7 px-2 rounded-lg border border-gray-300 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-red-400"
+                    />
+                    <button
+                      onClick={reject} disabled={approving}
+                      className="h-7 px-3 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 disabled:opacity-50">
+                      Confirm
+                    </button>
+                    <button
+                      onClick={() => { setShowReject(false); setRejectReason(""); }}
+                      className="h-7 px-2 text-xs text-gray-500 hover:underline">
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Timeline ─────────────────────────────────────────────────────── */}
+      <div className="rounded-xl border border-gray-100 bg-white px-4 py-3">
+        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Timeline</p>
+        {activity === null ? (
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" /> Loading activity…
+          </div>
+        ) : activity.length === 0 ? (
+          <p className="text-xs text-gray-500">No activity yet.</p>
+        ) : (
+          <ol className="space-y-2.5">
+            {activity.slice().sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map((evt) => {
+              const meta = evt.metadata ?? {};
+              let Icon: any = Circle;
+              let label = evt.event_type;
+              let iconColor = "text-gray-400";
+              switch (evt.event_type) {
+                case "request_sent":
+                  Icon = Send; iconColor = "text-blue-500";
+                  label = `Request sent to ${meta.referee_email ?? "referee"}`; break;
+                case "reminder_sent":
+                  Icon = Bell; iconColor = "text-amber-500";
+                  label = `Reminder ${meta.reminder_number ?? ""} sent${meta.referee_email ? ` to ${meta.referee_email}` : ""}`.trim(); break;
+                case "received":
+                  Icon = Inbox; iconColor = "text-teal-600";
+                  label = `Reference received from ${meta.referee_name ?? "referee"}`; break;
+                case "document_uploaded":
+                case "manual_upload":
+                  Icon = UploadCloud; iconColor = "text-teal-600";
+                  label = `Document uploaded${meta.file_name ? `: ${meta.file_name}` : ""}`; break;
+                case "ai_review_started":
+                  Icon = Sparkles; iconColor = "text-violet-500";
+                  label = "AI review started"; break;
+                case "ai_review_completed":
+                case "ai_review": {
+                  const result = meta.result?.verdict ?? meta.result ?? "complete";
+                  const failed = result === "flag" || result === "fail" || result === "flagged";
+                  Icon = failed ? AlertCircle : CheckCircle2;
+                  iconColor = failed ? "text-amber-500" : "text-green-500";
+                  label = `AI review ${typeof result === "string" ? result : "completed"}${meta.result?.summary ? ` — ${meta.result.summary}` : ""}`; break;
+                }
+                case "approved":
+                  Icon = CheckCircle2; iconColor = "text-green-600";
+                  label = "Reference approved"; break;
+                case "rejected":
+                  Icon = XCircle; iconColor = "text-red-600";
+                  label = "Reference rejected"; break;
+                case "approval_reset":
+                  Icon = RotateCcw; iconColor = "text-gray-500";
+                  label = "Approval reset — reopened for review"; break;
+                case "notes_updated":
+                  Icon = Pencil; iconColor = "text-gray-500";
+                  label = "Recruiter notes updated"; break;
+                default:
+                  label = evt.event_type.replace(/_/g, " ");
+              }
+              const actor = evt.actor_name || (evt.actor_id ? actorNames[evt.actor_id] : null) || "Automated";
+              return (
+                <li key={evt.id} className="flex items-start gap-2.5">
+                  <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${iconColor}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-gray-700">{label}</p>
+                    <p className="text-[11px] text-gray-400">{actor} · {refRelTime(evt.created_at)}</p>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </div>
+    </>
+  );
+}
+
+
