@@ -1362,12 +1362,19 @@ function Page() {
 
         // References group: show a read-only chip row that links to the Reference Tracker.
         if (item.group === "References") {
+          const refMatch =
+            item.key === "work_reference_1" ? references.find(r => r.ref_type === "work" && r.ref_number === 1) :
+            item.key === "work_reference_2" ? references.find(r => r.ref_type === "work" && r.ref_number === 2) :
+            item.key === "character_reference" ? references.find(r => r.ref_type === "character") :
+            null;
           return (
             <ReferenceChipRow
               key={item.key}
               label={item.label}
               status={(checklist?.[item.key] ?? "not_submitted") as string}
               required={item.required}
+              refereeName={refMatch?.referee_name ?? null}
+              companyName={refMatch?.company_name ?? null}
               onStatusChange={(val) => updateItem(item.key, val)}
               saving={savingItem === item.key}
             />
