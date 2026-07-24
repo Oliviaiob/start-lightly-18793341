@@ -203,20 +203,53 @@ type Doc = {
 
 type Reference = {
   id: string;
+  candidate_id: string;
   referee_name: string | null;
   referee_email: string | null;
   referee_phone: string | null;
   referee_job_title: string | null;
   relationship_to_candidate: string | null;
   company_name: string | null;
+  company_address: string | null;
+  candidate_position: string | null;
+  employment_start_date: string | null;
+  employment_end_date: string | null;
+  reason_for_leaving: string | null;
+  is_current_role: boolean | null;
+  known_duration: string | null;
   ref_type: string | null;
   ref_number: number | null;
   status: string | null;
   requested_at: string | null;
   received_at: string | null;
   reminder_stage: number | null;
+  last_reminder_at: string | null;
   next_reminder_at: string | null;
   short_code: string | null;
+  unique_token: string | null;
+  document_path: string | null;
+  document_file_name: string | null;
+  document_uploaded_at: string | null;
+  document_uploaded_by: string | null;
+  ai_review_status: string | null;
+  ai_review_result: any;
+  ai_reviewed_at: string | null;
+  recruiter_notes: string | null;
+  approval_status: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  rejection_reason: string | null;
+  response_relationship: string | null;
+  response_known_duration: string | null;
+  response_honesty_rating: string | null;
+  response_teamwork_rating: string | null;
+  response_conduct_rating: string | null;
+  response_suitable_for_children: boolean | null;
+  response_suitability_notes: string | null;
+  response_disciplinary_awareness: boolean | null;
+  response_disciplinary_notes: string | null;
+  response_additional_comments: string | null;
+  response_submitted_at: string | null;
 };
 
 const STATUS_OPTIONS = [
@@ -417,7 +450,7 @@ function Page() {
           .order("uploaded_at", { ascending: false }),
         supabase
           .from("references")
-          .select("id, referee_name, referee_email, referee_phone, referee_job_title, relationship_to_candidate, company_name, ref_type, ref_number, status, requested_at, received_at, reminder_stage, next_reminder_at, short_code")
+          .select("*")
           .eq("candidate_id", id)
           .order("ref_number", { ascending: true }),
         supabase
