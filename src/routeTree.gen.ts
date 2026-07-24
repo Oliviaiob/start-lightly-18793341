@@ -18,9 +18,8 @@ import { Route as TimesheetApprovalTokenRouteImport } from './routes/timesheet-a
 import { Route as ReferenceTokenRouteImport } from './routes/reference.$token'
 import { Route as ApplyRefRouteImport } from './routes/apply.$ref'
 import { Route as AuthenticatedTimesheetsRouteImport } from './routes/_authenticated/timesheets'
+import { Route as AuthenticatedTempsRouteImport } from './routes/_authenticated/temps'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
-import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings.index'
-import { Route as AuthenticatedSettingsCompanyRouteImport } from './routes/_authenticated/settings.company'
 import { Route as AuthenticatedSammieRouteImport } from './routes/_authenticated/sammie'
 import { Route as AuthenticatedPlacementsRouteImport } from './routes/_authenticated/placements'
 import { Route as AuthenticatedMapRouteImport } from './routes/_authenticated/map'
@@ -33,14 +32,16 @@ import { Route as AuthenticatedCandidatesRouteImport } from './routes/_authentic
 import { Route as AuthenticatedBookingsRouteImport } from './routes/_authenticated/bookings'
 import { Route as AuthenticatedApplicationsRouteImport } from './routes/_authenticated/applications'
 import { Route as AuthenticatedAccountRouteImport } from './routes/_authenticated/account'
-import { Route as AuthenticatedTempsRouteImport } from './routes/_authenticated/temps'
 import { Route as AuthenticatedTimesheetsIndexRouteImport } from './routes/_authenticated/timesheets.index'
+import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings.index'
 import { Route as AuthenticatedJobsIndexRouteImport } from './routes/_authenticated/jobs.index'
 import { Route as AuthenticatedComplianceIndexRouteImport } from './routes/_authenticated/compliance.index'
 import { Route as AuthenticatedClientsIndexRouteImport } from './routes/_authenticated/clients.index'
 import { Route as AuthenticatedCandidatesIndexRouteImport } from './routes/_authenticated/candidates.index'
 import { Route as AuthenticatedBookingsIndexRouteImport } from './routes/_authenticated/bookings.index'
 import { Route as AuthenticatedTimesheetsIdRouteImport } from './routes/_authenticated/timesheets.$id'
+import { Route as AuthenticatedSettingsTeamRouteImport } from './routes/_authenticated/settings.team'
+import { Route as AuthenticatedSettingsCompanyRouteImport } from './routes/_authenticated/settings.company'
 import { Route as AuthenticatedJobsIdRouteImport } from './routes/_authenticated/jobs.$id'
 import { Route as AuthenticatedComplianceIdRouteImport } from './routes/_authenticated/compliance.$id'
 import { Route as AuthenticatedClientsIdRouteImport } from './routes/_authenticated/clients.$id'
@@ -92,23 +93,16 @@ const AuthenticatedTimesheetsRoute = AuthenticatedTimesheetsRouteImport.update({
   path: '/timesheets',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedTempsRoute = AuthenticatedTempsRouteImport.update({
+  id: '/temps',
+  path: '/temps',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedSettingsIndexRoute =
-  AuthenticatedSettingsIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => AuthenticatedSettingsRoute,
-  } as any)
-const AuthenticatedSettingsCompanyRoute =
-  AuthenticatedSettingsCompanyRouteImport.update({
-    id: '/company',
-    path: '/company',
-    getParentRoute: () => AuthenticatedSettingsRoute,
-  } as any)
 const AuthenticatedSammieRoute = AuthenticatedSammieRouteImport.update({
   id: '/sammie',
   path: '/sammie',
@@ -170,16 +164,17 @@ const AuthenticatedAccountRoute = AuthenticatedAccountRouteImport.update({
   path: '/account',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedTempsRoute = AuthenticatedTempsRouteImport.update({
-  id: '/temps',
-  path: '/temps',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedTimesheetsIndexRoute =
   AuthenticatedTimesheetsIndexRouteImport.update({
     id: '/',
     path: '/',
     getParentRoute: () => AuthenticatedTimesheetsRoute,
+  } as any)
+const AuthenticatedSettingsIndexRoute =
+  AuthenticatedSettingsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedSettingsRoute,
   } as any)
 const AuthenticatedJobsIndexRoute = AuthenticatedJobsIndexRouteImport.update({
   id: '/',
@@ -215,6 +210,18 @@ const AuthenticatedTimesheetsIdRoute =
     id: '/$id',
     path: '/$id',
     getParentRoute: () => AuthenticatedTimesheetsRoute,
+  } as any)
+const AuthenticatedSettingsTeamRoute =
+  AuthenticatedSettingsTeamRouteImport.update({
+    id: '/team',
+    path: '/team',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsCompanyRoute =
+  AuthenticatedSettingsCompanyRouteImport.update({
+    id: '/company',
+    path: '/company',
+    getParentRoute: () => AuthenticatedSettingsRoute,
   } as any)
 const AuthenticatedJobsIdRoute = AuthenticatedJobsIdRouteImport.update({
   id: '/$id',
@@ -267,8 +274,6 @@ export interface FileRoutesByFullPath {
   '/placements': typeof AuthenticatedPlacementsRoute
   '/sammie': typeof AuthenticatedSammieRoute
   '/settings': typeof AuthenticatedSettingsRouteWithChildren
-  '/settings/': typeof AuthenticatedSettingsIndexRoute
-  '/settings/company': typeof AuthenticatedSettingsCompanyRoute
   '/temps': typeof AuthenticatedTempsRoute
   '/timesheets': typeof AuthenticatedTimesheetsRouteWithChildren
   '/apply/$ref': typeof ApplyRefRoute
@@ -281,12 +286,15 @@ export interface FileRoutesByFullPath {
   '/clients/$id': typeof AuthenticatedClientsIdRoute
   '/compliance/$id': typeof AuthenticatedComplianceIdRoute
   '/jobs/$id': typeof AuthenticatedJobsIdRoute
+  '/settings/company': typeof AuthenticatedSettingsCompanyRoute
+  '/settings/team': typeof AuthenticatedSettingsTeamRoute
   '/timesheets/$id': typeof AuthenticatedTimesheetsIdRoute
   '/bookings/': typeof AuthenticatedBookingsIndexRoute
   '/candidates/': typeof AuthenticatedCandidatesIndexRoute
   '/clients/': typeof AuthenticatedClientsIndexRoute
   '/compliance/': typeof AuthenticatedComplianceIndexRoute
   '/jobs/': typeof AuthenticatedJobsIndexRoute
+  '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/timesheets/': typeof AuthenticatedTimesheetsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -298,9 +306,7 @@ export interface FileRoutesByTo {
   '/map': typeof AuthenticatedMapRoute
   '/placements': typeof AuthenticatedPlacementsRoute
   '/sammie': typeof AuthenticatedSammieRoute
-  '/settings': typeof AuthenticatedSettingsRouteWithChildren
-  '/settings/': typeof AuthenticatedSettingsIndexRoute
-  '/settings/company': typeof AuthenticatedSettingsCompanyRoute
+  '/temps': typeof AuthenticatedTempsRoute
   '/apply/$ref': typeof ApplyRefRoute
   '/reference/$token': typeof ReferenceTokenRoute
   '/timesheet-approval/$token': typeof TimesheetApprovalTokenRoute
@@ -312,13 +318,15 @@ export interface FileRoutesByTo {
   '/clients/$id': typeof AuthenticatedClientsIdRoute
   '/compliance/$id': typeof AuthenticatedComplianceIdRoute
   '/jobs/$id': typeof AuthenticatedJobsIdRoute
+  '/settings/company': typeof AuthenticatedSettingsCompanyRoute
+  '/settings/team': typeof AuthenticatedSettingsTeamRoute
   '/timesheets/$id': typeof AuthenticatedTimesheetsIdRoute
   '/bookings': typeof AuthenticatedBookingsIndexRoute
   '/candidates': typeof AuthenticatedCandidatesIndexRoute
   '/clients': typeof AuthenticatedClientsIndexRoute
   '/compliance': typeof AuthenticatedComplianceIndexRoute
   '/jobs': typeof AuthenticatedJobsIndexRoute
-  '/temps': typeof AuthenticatedTempsRoute
+  '/settings': typeof AuthenticatedSettingsIndexRoute
   '/timesheets': typeof AuthenticatedTimesheetsIndexRoute
 }
 export interface FileRoutesById {
@@ -339,8 +347,7 @@ export interface FileRoutesById {
   '/_authenticated/placements': typeof AuthenticatedPlacementsRoute
   '/_authenticated/sammie': typeof AuthenticatedSammieRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRouteWithChildren
-  '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
-  '/_authenticated/settings/company': typeof AuthenticatedSettingsCompanyRoute
+  '/_authenticated/temps': typeof AuthenticatedTempsRoute
   '/_authenticated/timesheets': typeof AuthenticatedTimesheetsRouteWithChildren
   '/apply/$ref': typeof ApplyRefRoute
   '/reference/$token': typeof ReferenceTokenRoute
@@ -353,12 +360,15 @@ export interface FileRoutesById {
   '/_authenticated/clients/$id': typeof AuthenticatedClientsIdRoute
   '/_authenticated/compliance/$id': typeof AuthenticatedComplianceIdRoute
   '/_authenticated/jobs/$id': typeof AuthenticatedJobsIdRoute
+  '/_authenticated/settings/company': typeof AuthenticatedSettingsCompanyRoute
+  '/_authenticated/settings/team': typeof AuthenticatedSettingsTeamRoute
   '/_authenticated/timesheets/$id': typeof AuthenticatedTimesheetsIdRoute
   '/_authenticated/bookings/': typeof AuthenticatedBookingsIndexRoute
   '/_authenticated/candidates/': typeof AuthenticatedCandidatesIndexRoute
   '/_authenticated/clients/': typeof AuthenticatedClientsIndexRoute
   '/_authenticated/compliance/': typeof AuthenticatedComplianceIndexRoute
   '/_authenticated/jobs/': typeof AuthenticatedJobsIndexRoute
+  '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
   '/_authenticated/timesheets/': typeof AuthenticatedTimesheetsIndexRoute
 }
 export interface FileRouteTypes {
@@ -380,8 +390,6 @@ export interface FileRouteTypes {
     | '/placements'
     | '/sammie'
     | '/settings'
-    | '/settings/'
-    | '/settings/company'
     | '/temps'
     | '/timesheets'
     | '/apply/$ref'
@@ -394,12 +402,15 @@ export interface FileRouteTypes {
     | '/clients/$id'
     | '/compliance/$id'
     | '/jobs/$id'
+    | '/settings/company'
+    | '/settings/team'
     | '/timesheets/$id'
     | '/bookings/'
     | '/candidates/'
     | '/clients/'
     | '/compliance/'
     | '/jobs/'
+    | '/settings/'
     | '/timesheets/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -411,9 +422,7 @@ export interface FileRouteTypes {
     | '/map'
     | '/placements'
     | '/sammie'
-    | '/settings'
-    | '/settings/'
-    | '/settings/company'
+    | '/temps'
     | '/apply/$ref'
     | '/reference/$token'
     | '/timesheet-approval/$token'
@@ -425,12 +434,15 @@ export interface FileRouteTypes {
     | '/clients/$id'
     | '/compliance/$id'
     | '/jobs/$id'
+    | '/settings/company'
+    | '/settings/team'
     | '/timesheets/$id'
     | '/bookings'
     | '/candidates'
     | '/clients'
     | '/compliance'
     | '/jobs'
+    | '/settings'
     | '/timesheets'
   id:
     | '__root__'
@@ -450,8 +462,6 @@ export interface FileRouteTypes {
     | '/_authenticated/placements'
     | '/_authenticated/sammie'
     | '/_authenticated/settings'
-    | '/_authenticated/settings/'
-    | '/_authenticated/settings/company'
     | '/_authenticated/temps'
     | '/_authenticated/timesheets'
     | '/apply/$ref'
@@ -465,12 +475,15 @@ export interface FileRouteTypes {
     | '/_authenticated/clients/$id'
     | '/_authenticated/compliance/$id'
     | '/_authenticated/jobs/$id'
+    | '/_authenticated/settings/company'
+    | '/_authenticated/settings/team'
     | '/_authenticated/timesheets/$id'
     | '/_authenticated/bookings/'
     | '/_authenticated/candidates/'
     | '/_authenticated/clients/'
     | '/_authenticated/compliance/'
     | '/_authenticated/jobs/'
+    | '/_authenticated/settings/'
     | '/_authenticated/timesheets/'
   fileRoutesById: FileRoutesById
 }
@@ -547,26 +560,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTimesheetsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/temps': {
+      id: '/_authenticated/temps'
+      path: '/temps'
+      fullPath: '/temps'
+      preLoaderRoute: typeof AuthenticatedTempsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/settings': {
       id: '/_authenticated/settings'
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/settings/': {
-      id: '/_authenticated/settings/'
-      path: '/'
-      fullPath: '/settings/'
-      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
-      parentRoute: typeof AuthenticatedSettingsRoute
-    }
-    '/_authenticated/settings/company': {
-      id: '/_authenticated/settings/company'
-      path: '/company'
-      fullPath: '/settings/company'
-      preLoaderRoute: typeof AuthenticatedSettingsCompanyRouteImport
-      parentRoute: typeof AuthenticatedSettingsRoute
     }
     '/_authenticated/sammie': {
       id: '/_authenticated/sammie'
@@ -645,13 +651,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedApplicationsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/temps': {
-      id: '/_authenticated/temps'
-      path: '/temps'
-      fullPath: '/temps'
-      preLoaderRoute: typeof AuthenticatedTempsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/account': {
       id: '/_authenticated/account'
       path: '/account'
@@ -665,6 +664,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/timesheets/'
       preLoaderRoute: typeof AuthenticatedTimesheetsIndexRouteImport
       parentRoute: typeof AuthenticatedTimesheetsRoute
+    }
+    '/_authenticated/settings/': {
+      id: '/_authenticated/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
     }
     '/_authenticated/jobs/': {
       id: '/_authenticated/jobs/'
@@ -707,6 +713,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/timesheets/$id'
       preLoaderRoute: typeof AuthenticatedTimesheetsIdRouteImport
       parentRoute: typeof AuthenticatedTimesheetsRoute
+    }
+    '/_authenticated/settings/team': {
+      id: '/_authenticated/settings/team'
+      path: '/team'
+      fullPath: '/settings/team'
+      preLoaderRoute: typeof AuthenticatedSettingsTeamRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/company': {
+      id: '/_authenticated/settings/company'
+      path: '/company'
+      fullPath: '/settings/company'
+      preLoaderRoute: typeof AuthenticatedSettingsCompanyRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
     }
     '/_authenticated/jobs/$id': {
       id: '/_authenticated/jobs/$id'
@@ -828,6 +848,23 @@ const AuthenticatedJobsRouteChildren: AuthenticatedJobsRouteChildren = {
 const AuthenticatedJobsRouteWithChildren =
   AuthenticatedJobsRoute._addFileChildren(AuthenticatedJobsRouteChildren)
 
+interface AuthenticatedSettingsRouteChildren {
+  AuthenticatedSettingsCompanyRoute: typeof AuthenticatedSettingsCompanyRoute
+  AuthenticatedSettingsTeamRoute: typeof AuthenticatedSettingsTeamRoute
+  AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
+}
+
+const AuthenticatedSettingsRouteChildren: AuthenticatedSettingsRouteChildren = {
+  AuthenticatedSettingsCompanyRoute: AuthenticatedSettingsCompanyRoute,
+  AuthenticatedSettingsTeamRoute: AuthenticatedSettingsTeamRoute,
+  AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
+}
+
+const AuthenticatedSettingsRouteWithChildren =
+  AuthenticatedSettingsRoute._addFileChildren(
+    AuthenticatedSettingsRouteChildren,
+  )
+
 interface AuthenticatedTimesheetsRouteChildren {
   AuthenticatedTimesheetsIdRoute: typeof AuthenticatedTimesheetsIdRoute
   AuthenticatedTimesheetsIndexRoute: typeof AuthenticatedTimesheetsIndexRoute
@@ -842,19 +879,6 @@ const AuthenticatedTimesheetsRouteChildren: AuthenticatedTimesheetsRouteChildren
 const AuthenticatedTimesheetsRouteWithChildren =
   AuthenticatedTimesheetsRoute._addFileChildren(
     AuthenticatedTimesheetsRouteChildren,
-  )
-
-interface AuthenticatedSettingsRouteChildren {
-  AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
-  AuthenticatedSettingsCompanyRoute: typeof AuthenticatedSettingsCompanyRoute
-}
-const AuthenticatedSettingsRouteChildren: AuthenticatedSettingsRouteChildren = {
-  AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
-  AuthenticatedSettingsCompanyRoute: AuthenticatedSettingsCompanyRoute,
-}
-const AuthenticatedSettingsRouteWithChildren =
-  AuthenticatedSettingsRoute._addFileChildren(
-    AuthenticatedSettingsRouteChildren,
   )
 
 interface AuthenticatedRouteRouteChildren {
@@ -920,13 +944,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
