@@ -1331,95 +1331,20 @@ function Page() {
           </TabsContent>
 
           <TabsContent value="refs" className="mt-5">
-            {(() => {
-              const CHASE_LABELS_SHORT = ["Initial request sent","1st chase sent","2nd chase sent","3rd chase sent","4th chase sent","5th chase sent","Final chase sent"];
-              const refSummary = refs.reduce(
-                (acc, r) => {
-                  if (r.status === "received" || r.received_at) acc.received++;
-                  else if (r.requested_at) acc.chasing++;
-                  else acc.pending++;
-                  return acc;
-                },
-                { received: 0, chasing: 0, pending: 0 }
-              );
-              return (
-                <>
-                  {/* Summary bar */}
-                  {refs.length > 0 && (
-                    <div className="flex items-center gap-3 mb-4 p-3 rounded-xl bg-gray-50 border border-gray-100">
-                      {refSummary.received > 0 && <span className="text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2.5 py-0.5">{refSummary.received} received</span>}
-                      {refSummary.chasing > 0 && <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-0.5">{refSummary.chasing} chasing</span>}
-                      {refSummary.pending > 0 && <span className="text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2.5 py-0.5">{refSummary.pending} pending</span>}
-                      <a
-                        href={`/compliance/${c.id}`}
-                        className="ml-auto text-xs text-[#2DD4BF] font-medium hover:underline flex items-center gap-1"
-                      >
-                        Manage in Compliance →
-                      </a>
-                    </div>
-                  )}
-
-                  {refs.length === 0 ? (
-                    <div className="text-sm text-muted-foreground py-4">
-                      No references on file.{" "}
-                      <a href={`/compliance/${c.id}`} className="text-[#2DD4BF] hover:underline">Add via Compliance →</a>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {refs.map((r) => {
-                        const isReceived = r.status === "received" || !!r.received_at;
-                        const isPending = !r.requested_at;
-                        const isChasing = !isReceived && !isPending;
-                        const stage = r.reminder_stage ?? 0;
-                        const stageLabel = CHASE_LABELS_SHORT[Math.min(stage, 6)];
-                        const typeLabel = r.ref_type === "character" ? "Character" : "Work";
-                        return (
-                          <div key={r.id} className="rounded-xl border border-gray-100 bg-white px-4 py-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-sm font-medium text-gray-900">{r.referee_name || "—"}</span>
-                                  {r.short_code && (
-                                    <span
-                                      title="Short code — click to copy"
-                                      onClick={() => { navigator.clipboard.writeText(r.short_code!); }}
-                                      className="font-mono text-[10px] tracking-widest bg-slate-100 text-slate-500 border border-slate-200 rounded px-1.5 py-0.5 cursor-pointer hover:bg-slate-200 transition-colors select-all"
-                                    >{r.short_code}</span>
-                                  )}
-                                </div>
-                                <p className="text-xs text-gray-400 mt-0.5">
-                                  {typeLabel} Reference {r.ref_number != null ? `#${r.ref_number}` : ""}
-                                  {r.company_name ? ` · ${r.company_name}` : ""}
-                                  {(r.referee_job_title || r.relationship_to_candidate) ? ` · ${r.referee_job_title || r.relationship_to_candidate}` : ""}
-                                </p>
-                                {r.referee_email && (
-                                  <p className="text-xs text-gray-400 mt-0.5">{r.referee_email}{r.referee_phone ? ` · ${r.referee_phone}` : ""}</p>
-                                )}
-                              </div>
-                              <div className="shrink-0 text-right">
-                                {isReceived ? (
-                                  <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">Received</span>
-                                ) : isPending ? (
-                                  <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700">Pending Send</span>
-                                ) : (
-                                  <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">Chasing</span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="mt-2 text-[11px] text-gray-400">
-                              {isReceived && r.received_at && <span className="text-green-600">Received {relTime(r.received_at)}</span>}
-                              {isChasing && <span className="text-amber-600">{stageLabel} · {stage >= 6 ? "Chase sequence complete" : `Next chase ${r.next_reminder_at ? new Date(r.next_reminder_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—"}`}</span>}
-                              {isPending && <span className="text-blue-500">Not yet sent</span>}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
-              );
-            })()}
+            <ReferencesTracker
+              candidateId={c.id}
+              refs={refs}
+              onChanged={async () => {
+                const { data } = await supabase
+                  .from("references")
+                  .select("*")
+                  .eq("candidate_id", c.id)
+                  .order("ref_number", { ascending: true });
+                setRefs((data as Reference[]) || []);
+              }}
+            />
           </TabsContent>
+
 
           {isTemp && (
             <TabsContent value="availability" className="mt-5">
