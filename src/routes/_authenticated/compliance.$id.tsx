@@ -743,7 +743,7 @@ function Page() {
       supabase.from("candidates").select("id,first_name,last_name,email,phone,qualification_level,status_temp,source,dbs_next_check_due,paediatric_first_aid_expiry,onboarding_email_sent_at,bank_details_token").eq("id", id).maybeSingle(),
       supabase.from("compliance_checklists").select("*").eq("candidate_id", id).maybeSingle(),
       supabase.from("candidate_documents").select("id,document_type,file_name,file_url,status,uploaded_at,file_size").eq("candidate_id", id).order("uploaded_at", { ascending: false }),
-      supabase.from("references").select("id,referee_name,referee_email,referee_phone,referee_job_title,company_name,ref_type,ref_number,candidate_position,employment_start_date,employment_end_date,is_current_role,reason_for_leaving,relationship_to_candidate,known_duration,status,requested_at,received_at,reminder_stage,next_reminder_at,short_code").eq("candidate_id", id).order("ref_number", { ascending: true }),
+      supabase.from("references").select("*").eq("candidate_id", id).order("ref_number", { ascending: true }),
       (supabase as any).from("messages").select("content,direction,created_at").eq("candidate_id", id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("candidate_qualifications").select("*").eq("candidate_id", id).order("created_at", { ascending: true }),
     ]);
