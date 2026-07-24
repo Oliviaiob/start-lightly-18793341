@@ -6,6 +6,7 @@ import {
   ArrowLeft, CheckCircle, AlertTriangle, Clock, Minus, Circle,
   Upload, FileText, RefreshCw, ExternalLink, Smartphone, Sparkles, Copy,
   Mail, Link2, BanIcon, PartyPopper, ChevronRight, Trash2, Plus, X, Bell, Layers, CheckCheck, SkipForward, Loader2,
+  Send, Inbox, UploadCloud, CheckCircle2, XCircle, RotateCcw, Pencil, AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { WorkflowPanel, type WorkflowStateData, type WorkflowActivityData, type ActionOwner, type DerivedWorkflowState } from "@/components/workflow-panel";
