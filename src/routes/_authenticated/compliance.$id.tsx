@@ -1574,7 +1574,9 @@ function Page() {
       )}
 
       {/* ── References Tracker ─────────────────────────────── */}
-      <ReferencesTracker candidateId={id} references={references} onRefresh={loadAll} />
+      <div id="references-tracker">
+        <ReferencesTracker candidateId={id} references={references} onRefresh={loadAll} />
+      </div>
 
       {/* ── Onboarding ──────────────────────────────────────── */}
       <div className="bg-card rounded-2xl shadow-[var(--shadow-card)] overflow-hidden">
