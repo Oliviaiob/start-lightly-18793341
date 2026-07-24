@@ -3784,6 +3784,68 @@ export type Database = {
         Returns: Json
       }
       generate_short_code: { Args: never; Returns: string }
+      get_reference_by_token: {
+        Args: { p_token: string }
+        Returns: {
+          ai_review_result: Json | null
+          ai_review_status: string | null
+          ai_reviewed_at: string | null
+          approval_status: string | null
+          approved_at: string | null
+          approved_by: string | null
+          candidate_id: string | null
+          candidate_position: string | null
+          company_address: string | null
+          company_name: string | null
+          created_at: string | null
+          document_file_name: string | null
+          document_path: string | null
+          document_uploaded_at: string | null
+          document_uploaded_by: string | null
+          employment_end_date: string | null
+          employment_start_date: string | null
+          id: string
+          is_current_role: boolean | null
+          known_duration: string | null
+          last_reminder_at: string | null
+          next_reminder_at: string | null
+          reason_for_leaving: string | null
+          received_at: string | null
+          recruiter_notes: string | null
+          ref_number: number | null
+          ref_type: string | null
+          referee_email: string | null
+          referee_job_title: string | null
+          referee_name: string | null
+          referee_phone: string | null
+          rejection_reason: string | null
+          relationship_to_candidate: string | null
+          reminder_stage: number | null
+          requested_at: string | null
+          response_additional_comments: string | null
+          response_conduct_rating: string | null
+          response_declaration_agreed: boolean | null
+          response_disciplinary_awareness: boolean | null
+          response_disciplinary_notes: string | null
+          response_honesty_rating: string | null
+          response_known_duration: string | null
+          response_relationship: string | null
+          response_signature_name: string | null
+          response_submitted_at: string | null
+          response_suitability_notes: string | null
+          response_suitable_for_children: boolean | null
+          response_teamwork_rating: string | null
+          short_code: string
+          status: string | null
+          unique_token: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "references"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
