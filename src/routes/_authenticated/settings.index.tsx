@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   Settings as SettingsIcon, Upload, Eye, EyeOff, UserPlus,
-  Loader2, X, Building2, Users, User, ChevronRight
+  Loader2, X, Building2, Users, User, ChevronRight, Shield
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
@@ -24,6 +24,7 @@ const SECTION_TITLE = "text-base font-semibold text-foreground";
 function SettingsPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Profile
@@ -71,7 +72,9 @@ function SettingsPage() {
     ]);
     if (prof) { setProfile(prof as Profile); setPf({ first_name: prof.first_name ?? "", last_name: prof.last_name ?? "", display_name: prof.display_name ?? "", job_title: prof.job_title ?? "", phone: (prof as any).phone ?? "" }); }
     const admin = (roleRows as any[])?.some((r: any) => r.role === "admin" || r.role === "owner") ?? false;
+    const owner = (roleRows as any[])?.some((r: any) => r.role === "owner") ?? false;
     setIsAdmin(admin);
+    setIsOwner(owner);
     if (admin) { loadAgency(); loadTeam(); }
     setLoading(false);
   };
@@ -214,6 +217,22 @@ function SettingsPage() {
         </Link>
       )}
 
+      {/* ── USER MANAGEMENT (owner only) ── */}
+      {isOwner && (
+        <Link to="/settings/team" className="block group">
+          <div className="flex items-center gap-4 p-4 rounded-2xl border border-amber-400/30 bg-amber-500/5 hover:bg-amber-500/10 transition-colors">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/15 flex items-center justify-center shrink-0">
+              <Shield className="h-4 w-4 text-amber-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-foreground">User Management</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Manage accounts, roles, and access</div>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
+          </div>
+        </Link>
+      )}
+
       {/* ── MY PROFILE ── */}
       <Card className="p-6 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card space-y-5">
         <div className="flex items-center gap-2 mb-1"><User className="h-4 w-4 text-muted-foreground" /><h2 className={SECTION_TITLE}>My Profile</h2></div>
@@ -324,90 +343,6 @@ function SettingsPage() {
         </Card>
       )}
 
-      {/* ── TEAM ── */}
-      {isAdmin && (
-        <Card className="p-6 rounded-2xl border-transparent shadow-[var(--shadow-card)] bg-card">
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-2"><Users className="h-4 w-4 text-muted-foreground" /><h2 className={SECTION_TITLE}>Team</h2></div>
-            <button className={SAVE_BTN} onClick={() => setInviteOpen(true)}>
-              <UserPlus className="h-4 w-4" /> Invite
-            </button>
-          </div>
-
-          {loadingTeam
-            ? <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-            : <div className="space-y-2">
-                {team.map(m => (
-                  <div key={m.id} className={`flex items-center gap-3 p-3.5 rounded-xl border transition-opacity ${m.is_active === false ? "opacity-50 border-border/30" : "border-border/50"} bg-background/50`}>
-                    <div className="w-8 h-8 rounded-full bg-navy/10 flex items-center justify-center text-xs font-semibold text-navy shrink-0 uppercase">
-                      {(m.first_name?.[0] ?? "") + (m.last_name?.[0] ?? "")}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate">
-                        {m.display_name ?? (`${m.first_name ?? ""} ${m.last_name ?? ""}`.trim() || "Unnamed")}
-                        {m.id === userId && <span className="ml-1.5 text-xs text-muted-foreground font-normal">(you)</span>}
-                      </div>
-                      <div className="text-xs text-muted-foreground truncate">{m.email}</div>
-                    </div>
-                    <select
-                      className="text-xs border border-border rounded-lg px-2 py-1.5 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-teal/50 disabled:opacity-40 cursor-pointer"
-                      value={m.role}
-                      disabled={m.id === userId || !!updatingRoleId}
-                      onChange={e => setRole(m.id, e.target.value)}
-                    >
-                      <option value="admin">Admin</option>
-                      <option value="recruiter">Recruiter</option>
-                    </select>
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${m.is_active === false ? "bg-red-500/10 text-red-500" : "bg-teal/10 text-teal"}`}>
-                      {m.is_active === false ? "Inactive" : "Active"}
-                    </span>
-                    {m.id !== userId && (
-                      <button
-                        className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors disabled:opacity-40 shrink-0 ${m.is_active === false ? "border-teal/40 text-teal hover:bg-teal/10" : "border-red-400/40 text-red-500 hover:bg-red-500/10"}`}
-                        onClick={() => toggleActive(m)}
-                        disabled={!!togglingId}
-                      >
-                        {togglingId === m.id ? <Loader2 className="h-3 w-3 animate-spin" /> : m.is_active === false ? "Reactivate" : "Deactivate"}
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-          }
-        </Card>
-      )}
-
-      {/* ── INVITE MODAL ── */}
-      {inviteOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={e => e.target === e.currentTarget && setInviteOpen(false)}>
-          <div className="w-full max-w-md bg-card rounded-2xl p-6 shadow-2xl border border-border/50 mx-4">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-base font-semibold">Invite Team Member</h3>
-              <button onClick={() => setInviteOpen(false)} className="text-muted-foreground hover:text-foreground transition-colors"><X className="h-5 w-5" /></button>
-            </div>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className={LABEL}>First Name</label><input className={INPUT} value={inv.first_name} onChange={e => setInv(f => ({ ...f, first_name: e.target.value }))} /></div>
-                <div><label className={LABEL}>Last Name</label><input className={INPUT} value={inv.last_name} onChange={e => setInv(f => ({ ...f, last_name: e.target.value }))} /></div>
-              </div>
-              <div><label className={LABEL}>Email</label><input className={INPUT} type="email" value={inv.email} onChange={e => setInv(f => ({ ...f, email: e.target.value }))} placeholder="recruiter@example.com" /></div>
-              <div>
-                <label className={LABEL}>Role</label>
-                <select className={INPUT} value={inv.role} onChange={e => setInv(f => ({ ...f, role: e.target.value }))}>
-                  <option value="recruiter">Recruiter</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <div className="flex gap-3 pt-1">
-                <button className="flex-1 py-2 text-sm rounded-xl border border-border hover:bg-muted/40 transition-colors" onClick={() => setInviteOpen(false)}>Cancel</button>
-                <button className={SAVE_BTN + " flex-1 justify-center"} onClick={inviteUser} disabled={inviting}>
-                  {inviting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Send Invite
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
