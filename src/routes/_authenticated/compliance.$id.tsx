@@ -2316,6 +2316,13 @@ function ReferencesTracker({ candidateId, references, onRefresh }: {
                       ))}
                     </div>
 
+                    <RefExtraSections
+                      key={ref.id}
+                      reference={ref}
+                      candidateId={candidateId}
+                      onRefresh={onRefresh}
+                    />
+
                     {/* Email timeline */}
                     {timeline.length > 0 && (
                       <div>
