@@ -86,6 +86,13 @@ type ReferenceRecord = {
   status: string | null; requested_at: string | null; received_at: string | null;
   reminder_stage: number | null; next_reminder_at: string | null;
   short_code: string | null;
+  document_path: string | null; document_file_name: string | null;
+  document_uploaded_at: string | null; document_uploaded_by: string | null;
+  ai_review_status: string | null; ai_review_result: any;
+  ai_reviewed_at: string | null;
+  recruiter_notes: string | null;
+  approval_status: string | null; approved_by: string | null;
+  approved_at: string | null; rejection_reason: string | null;
 };
 
 type DocumentRecord = {
