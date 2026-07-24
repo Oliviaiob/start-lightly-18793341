@@ -2551,6 +2551,8 @@ function RefExtraSections({
 
   const [aiBusy, setAiBusy] = useState(false);
   const [aiLocalStatus, setAiLocalStatus] = useState<string | null>(null);
+  const [aiLocalResult, setAiLocalResult] = useState<any>(null);
+  const [aiLocalReviewedAt, setAiLocalReviewedAt] = useState<string | null>(null);
 
   const [notes, setNotes] = useState(ref.recruiter_notes ?? "");
   const [notesSavedAt, setNotesSavedAt] = useState<number | null>(null);
