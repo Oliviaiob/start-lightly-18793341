@@ -2608,22 +2608,37 @@ function RefExtraSections({
     if (file.size > MAX_UPLOAD_BYTES) { toast.error("File exceeds 10 MB"); return; }
     setUploading(true); setUploadPct(10);
     try {
-      const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-      const filePath = `references/${candidateId}/${ref.id}/${safeName}`;
-      const { error: upErr } = await supabase.storage.from(BUCKET)
-        .upload(filePath, file, { upsert: true, contentType: file.type || "application/octet-stream" });
-      if (upErr) throw upErr;
+      const filePath = `references/${candidateId}/${ref.id}/${file.name}`;
+      const { error: storageError } = await supabase.storage
+        .from(BUCKET)
+        .upload(filePath, file, { upsert: true });
+
+      if (storageError) {
+        toast.error(`Storage upload failed: ${storageError.message}`);
+        return;
+      }
       setUploadPct(70);
 
-      // Register with edge function (also sets status/received_at + logs event)
-      const form = new FormData();
-      form.append("action", "manual_upload");
-      form.append("reference_id", ref.id);
-      form.append("file", file);
-      const { error: fnErr } = await supabase.functions.invoke("manage-reference", { body: form });
-      if (fnErr) throw fnErr;
+      const { data: fnData, error: fnError } = await supabase.functions.invoke("manage-reference", {
+        body: {
+          action: "manual_upload",
+          reference_id: ref.id,
+          document_path: filePath,
+          document_file_name: file.name,
+        },
+      });
+
+      if (fnError) {
+        let message = fnError.message;
+        try {
+          const body = await fnError.context?.json?.();
+          if (body?.error) message = body.error;
+        } catch {}
+        toast.error(`Upload failed: ${message}`);
+        return;
+      }
       setUploadPct(100);
-      toast.success("Document uploaded");
+      toast.success("Document uploaded successfully");
       setReplacing(false);
       await onRefresh();
       await refreshActivity();
