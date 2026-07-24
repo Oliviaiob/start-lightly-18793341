@@ -203,20 +203,53 @@ type Doc = {
 
 type Reference = {
   id: string;
+  candidate_id: string;
   referee_name: string | null;
   referee_email: string | null;
   referee_phone: string | null;
   referee_job_title: string | null;
   relationship_to_candidate: string | null;
   company_name: string | null;
+  company_address: string | null;
+  candidate_position: string | null;
+  employment_start_date: string | null;
+  employment_end_date: string | null;
+  reason_for_leaving: string | null;
+  is_current_role: boolean | null;
+  known_duration: string | null;
   ref_type: string | null;
   ref_number: number | null;
   status: string | null;
   requested_at: string | null;
   received_at: string | null;
   reminder_stage: number | null;
+  last_reminder_at: string | null;
   next_reminder_at: string | null;
   short_code: string | null;
+  unique_token: string | null;
+  document_path: string | null;
+  document_file_name: string | null;
+  document_uploaded_at: string | null;
+  document_uploaded_by: string | null;
+  ai_review_status: string | null;
+  ai_review_result: any;
+  ai_reviewed_at: string | null;
+  recruiter_notes: string | null;
+  approval_status: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  rejection_reason: string | null;
+  response_relationship: string | null;
+  response_known_duration: string | null;
+  response_honesty_rating: string | null;
+  response_teamwork_rating: string | null;
+  response_conduct_rating: string | null;
+  response_suitable_for_children: boolean | null;
+  response_suitability_notes: string | null;
+  response_disciplinary_awareness: boolean | null;
+  response_disciplinary_notes: string | null;
+  response_additional_comments: string | null;
+  response_submitted_at: string | null;
 };
 
 const STATUS_OPTIONS = [
@@ -417,7 +450,7 @@ function Page() {
           .order("uploaded_at", { ascending: false }),
         supabase
           .from("references")
-          .select("id, referee_name, referee_email, referee_phone, referee_job_title, relationship_to_candidate, company_name, ref_type, ref_number, status, requested_at, received_at, reminder_stage, next_reminder_at, short_code")
+          .select("*")
           .eq("candidate_id", id)
           .order("ref_number", { ascending: true }),
         supabase
@@ -1298,95 +1331,20 @@ function Page() {
           </TabsContent>
 
           <TabsContent value="refs" className="mt-5">
-            {(() => {
-              const CHASE_LABELS_SHORT = ["Initial request sent","1st chase sent","2nd chase sent","3rd chase sent","4th chase sent","5th chase sent","Final chase sent"];
-              const refSummary = refs.reduce(
-                (acc, r) => {
-                  if (r.status === "received" || r.received_at) acc.received++;
-                  else if (r.requested_at) acc.chasing++;
-                  else acc.pending++;
-                  return acc;
-                },
-                { received: 0, chasing: 0, pending: 0 }
-              );
-              return (
-                <>
-                  {/* Summary bar */}
-                  {refs.length > 0 && (
-                    <div className="flex items-center gap-3 mb-4 p-3 rounded-xl bg-gray-50 border border-gray-100">
-                      {refSummary.received > 0 && <span className="text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2.5 py-0.5">{refSummary.received} received</span>}
-                      {refSummary.chasing > 0 && <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-0.5">{refSummary.chasing} chasing</span>}
-                      {refSummary.pending > 0 && <span className="text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2.5 py-0.5">{refSummary.pending} pending</span>}
-                      <a
-                        href={`/compliance/${c.id}`}
-                        className="ml-auto text-xs text-[#2DD4BF] font-medium hover:underline flex items-center gap-1"
-                      >
-                        Manage in Compliance →
-                      </a>
-                    </div>
-                  )}
-
-                  {refs.length === 0 ? (
-                    <div className="text-sm text-muted-foreground py-4">
-                      No references on file.{" "}
-                      <a href={`/compliance/${c.id}`} className="text-[#2DD4BF] hover:underline">Add via Compliance →</a>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {refs.map((r) => {
-                        const isReceived = r.status === "received" || !!r.received_at;
-                        const isPending = !r.requested_at;
-                        const isChasing = !isReceived && !isPending;
-                        const stage = r.reminder_stage ?? 0;
-                        const stageLabel = CHASE_LABELS_SHORT[Math.min(stage, 6)];
-                        const typeLabel = r.ref_type === "character" ? "Character" : "Work";
-                        return (
-                          <div key={r.id} className="rounded-xl border border-gray-100 bg-white px-4 py-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-sm font-medium text-gray-900">{r.referee_name || "—"}</span>
-                                  {r.short_code && (
-                                    <span
-                                      title="Short code — click to copy"
-                                      onClick={() => { navigator.clipboard.writeText(r.short_code!); }}
-                                      className="font-mono text-[10px] tracking-widest bg-slate-100 text-slate-500 border border-slate-200 rounded px-1.5 py-0.5 cursor-pointer hover:bg-slate-200 transition-colors select-all"
-                                    >{r.short_code}</span>
-                                  )}
-                                </div>
-                                <p className="text-xs text-gray-400 mt-0.5">
-                                  {typeLabel} Reference {r.ref_number != null ? `#${r.ref_number}` : ""}
-                                  {r.company_name ? ` · ${r.company_name}` : ""}
-                                  {(r.referee_job_title || r.relationship_to_candidate) ? ` · ${r.referee_job_title || r.relationship_to_candidate}` : ""}
-                                </p>
-                                {r.referee_email && (
-                                  <p className="text-xs text-gray-400 mt-0.5">{r.referee_email}{r.referee_phone ? ` · ${r.referee_phone}` : ""}</p>
-                                )}
-                              </div>
-                              <div className="shrink-0 text-right">
-                                {isReceived ? (
-                                  <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">Received</span>
-                                ) : isPending ? (
-                                  <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700">Pending Send</span>
-                                ) : (
-                                  <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">Chasing</span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="mt-2 text-[11px] text-gray-400">
-                              {isReceived && r.received_at && <span className="text-green-600">Received {relTime(r.received_at)}</span>}
-                              {isChasing && <span className="text-amber-600">{stageLabel} · {stage >= 6 ? "Chase sequence complete" : `Next chase ${r.next_reminder_at ? new Date(r.next_reminder_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—"}`}</span>}
-                              {isPending && <span className="text-blue-500">Not yet sent</span>}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
-              );
-            })()}
+            <ReferencesTracker
+              candidateId={c.id}
+              refs={refs}
+              onChanged={async () => {
+                const { data } = await supabase
+                  .from("references")
+                  .select("*")
+                  .eq("candidate_id", c.id)
+                  .order("ref_number", { ascending: true });
+                setRefs((data as Reference[]) || []);
+              }}
+            />
           </TabsContent>
+
 
           {isTemp && (
             <TabsContent value="availability" className="mt-5">
@@ -2889,3 +2847,396 @@ function AppInfoTab({ candidate }: { candidate: any }) {
     </div>
   );
 }
+
+// ── ReferencesTracker ────────────────────────────────────────────────────────
+type RefActivity = {
+  id: string; event_type: string; actor_name: string | null;
+  metadata: any; created_at: string;
+};
+
+function ReferencesTracker({
+  candidateId, refs, onChanged,
+}: { candidateId: string; refs: Reference[]; onChanged: () => Promise<void> | void }) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const summary = refs.reduce(
+    (acc, r) => {
+      if (r.approval_status === "approved") acc.approved++;
+      else if (r.approval_status === "rejected") acc.rejected++;
+      else if (r.status === "received" || r.received_at) acc.received++;
+      else if (r.requested_at) acc.chasing++;
+      else acc.pending++;
+      return acc;
+    },
+    { pending: 0, chasing: 0, received: 0, approved: 0, rejected: 0 }
+  );
+
+  return (
+    <div>
+      {refs.length > 0 && (
+        <div className="flex items-center gap-2 mb-4 p-3 rounded-xl bg-muted/40 border border-border/60 flex-wrap">
+          {summary.approved > 0 && <span className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5">{summary.approved} approved</span>}
+          {summary.received > 0 && <span className="text-xs font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded-full px-2.5 py-0.5">{summary.received} received</span>}
+          {summary.chasing > 0 && <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-0.5">{summary.chasing} chasing</span>}
+          {summary.pending > 0 && <span className="text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2.5 py-0.5">{summary.pending} pending</span>}
+          {summary.rejected > 0 && <span className="text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-full px-2.5 py-0.5">{summary.rejected} rejected</span>}
+          <a href={`/compliance/${candidateId}`} className="ml-auto text-xs text-teal font-medium hover:underline">
+            Manage in Compliance →
+          </a>
+        </div>
+      )}
+      {refs.length === 0 ? (
+        <div className="text-sm text-muted-foreground py-6 text-center border rounded-xl">
+          No references on file.{" "}
+          <a href={`/compliance/${candidateId}`} className="text-teal hover:underline">Add via Compliance →</a>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {refs.map((r) => (
+            <ReferenceRow
+              key={r.id} r={r}
+              isOpen={!!expanded[r.id]}
+              onToggle={() => setExpanded((s) => ({ ...s, [r.id]: !s[r.id] }))}
+              onChanged={onChanged}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReferenceRow({
+  r, isOpen, onToggle, onChanged,
+}: { r: Reference; isOpen: boolean; onToggle: () => void; onChanged: () => Promise<void> | void }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [notes, setNotes] = useState(r.recruiter_notes ?? "");
+  const [rejectReason, setRejectReason] = useState("");
+  const [showReject, setShowReject] = useState(false);
+  const [activity, setActivity] = useState<RefActivity[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { setNotes(r.recruiter_notes ?? ""); }, [r.recruiter_notes]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    (async () => {
+      const { data, error } = await supabase.functions.invoke("manage-reference", {
+        body: { action: "get_activity", reference_id: r.id },
+      });
+      if (!error && data?.activity) setActivity(data.activity as RefActivity[]);
+    })();
+  }, [isOpen, r.id]);
+
+  const call = async (action: string, body: Record<string, unknown> = {}) => {
+    setBusy(action);
+    try {
+      const { data, error } = await supabase.functions.invoke("manage-reference", {
+        body: { action, reference_id: r.id, ...body },
+      });
+      if (error) throw error;
+      return data;
+    } catch (e: any) {
+      toast.error(e.message || "Action failed");
+      return null;
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const sendRequest = async () => {
+    setBusy("send");
+    try {
+      const { error } = await supabase.functions.invoke("send-reference-request", {
+        body: { reference_id: r.id },
+      });
+      if (error) throw error;
+      toast.success("Reference request sent");
+      await onChanged();
+    } catch (e: any) {
+      toast.error(e.message || "Send failed");
+    } finally { setBusy(null); }
+  };
+
+  const uploadFile = async (file: File) => {
+    setBusy("upload");
+    try {
+      const form = new FormData();
+      form.append("action", "manual_upload");
+      form.append("reference_id", r.id);
+      form.append("file", file);
+      const { error } = await supabase.functions.invoke("manage-reference", { body: form });
+      if (error) throw error;
+      toast.success("Document uploaded");
+      await onChanged();
+    } catch (e: any) {
+      toast.error(e.message || "Upload failed");
+    } finally { setBusy(null); }
+  };
+
+  const viewDocument = async () => {
+    const data = await call("get_document_url");
+    if (data?.url) window.open(data.url, "_blank");
+  };
+
+  const runAI = async () => {
+    const data = await call("run_ai_review");
+    if (data?.success) { toast.success("AI review complete"); await onChanged(); }
+  };
+
+  const saveNotes = async () => {
+    const data = await call("set_notes", { notes });
+    if (data?.success) { toast.success("Notes saved"); await onChanged(); }
+  };
+
+  const approve = async () => {
+    const data = await call("approve");
+    if (data?.success) { toast.success("Reference approved"); await onChanged(); }
+  };
+
+  const reject = async () => {
+    if (!rejectReason.trim()) { toast.error("Reason required"); return; }
+    const data = await call("reject", { reason: rejectReason });
+    if (data?.success) {
+      toast.success("Reference rejected");
+      setShowReject(false); setRejectReason("");
+      await onChanged();
+    }
+  };
+
+  const resetApproval = async () => {
+    const data = await call("reset_approval");
+    if (data?.success) { toast.success("Approval reset"); await onChanged(); }
+  };
+
+  const typeLabel = r.ref_type === "character" ? "Character" : "Work";
+  const statusChip = (() => {
+    if (r.approval_status === "approved") return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Approved</span>;
+    if (r.approval_status === "rejected") return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Rejected</span>;
+    if (r.status === "received" || r.received_at) return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">Received</span>;
+    if (r.requested_at) return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Chasing</span>;
+    return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Pending Send</span>;
+  })();
+
+  const lastAction = r.approved_at ?? r.ai_reviewed_at ?? r.document_uploaded_at ?? r.received_at ?? r.last_reminder_at ?? r.requested_at ?? null;
+
+  return (
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full px-4 py-3 flex items-center justify-between gap-4 hover:bg-muted/30 transition-colors text-left"
+      >
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground w-20">
+            {typeLabel} #{r.ref_number ?? "?"}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium text-foreground truncate">
+              {r.referee_name || "—"}{r.company_name ? ` · ${r.company_name}` : ""}
+            </div>
+            <div className="text-xs text-muted-foreground truncate">
+              {lastAction ? `Last: ${relTime(lastAction)}` : "No activity"}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {statusChip}
+          <span className={`text-xs text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`}>▶</span>
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="border-t border-border bg-muted/10 px-4 py-4 space-y-5">
+          {/* Request section */}
+          <section>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Request</h4>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+              <div><span className="text-muted-foreground">Referee:</span> {r.referee_name || "—"}</div>
+              <div><span className="text-muted-foreground">Email:</span> {r.referee_email || "—"}</div>
+              <div><span className="text-muted-foreground">Phone:</span> {r.referee_phone || "—"}</div>
+              <div><span className="text-muted-foreground">Job title:</span> {r.referee_job_title || "—"}</div>
+              <div><span className="text-muted-foreground">Company:</span> {r.company_name || "—"}</div>
+              <div><span className="text-muted-foreground">Relationship:</span> {r.relationship_to_candidate || "—"}</div>
+              <div><span className="text-muted-foreground">Requested:</span> {r.requested_at ? relTime(r.requested_at) : "—"}</div>
+              <div><span className="text-muted-foreground">Reminders sent:</span> {r.reminder_stage ?? 0}</div>
+              <div><span className="text-muted-foreground">Next reminder:</span> {r.next_reminder_at ? new Date(r.next_reminder_at).toLocaleDateString("en-GB") : "—"}</div>
+              <div><span className="text-muted-foreground">Short code:</span> {r.short_code ? <code className="font-mono">{r.short_code}</code> : "—"}</div>
+            </div>
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={sendRequest} disabled={busy === "send" || !r.referee_email}
+                className="text-xs font-medium px-3 py-1.5 rounded-lg bg-teal text-white hover:bg-teal/90 disabled:opacity-50"
+              >
+                {busy === "send" ? "Sending…" : r.requested_at ? "Resend request" : "Send request"}
+              </button>
+            </div>
+          </section>
+
+          {/* Document section */}
+          <section>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Document</h4>
+            {r.document_path ? (
+              <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-card">
+                <div className="text-sm">
+                  <div className="font-medium">{r.document_file_name || "Reference document"}</div>
+                  <div className="text-xs text-muted-foreground">Uploaded {r.document_uploaded_at ? relTime(r.document_uploaded_at) : "—"}</div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={viewDocument} disabled={busy === "get_document_url"}
+                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-border hover:bg-muted">
+                    View
+                  </button>
+                  <button onClick={() => fileRef.current?.click()} disabled={busy === "upload"}
+                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-border hover:bg-muted">
+                    Replace
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <button onClick={() => fileRef.current?.click()} disabled={busy === "upload"}
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-dashed border-border hover:bg-muted">
+                  {busy === "upload" ? "Uploading…" : "Upload document manually"}
+                </button>
+              </div>
+            )}
+            <input
+              ref={fileRef} type="file" className="hidden"
+              accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ""; }}
+            />
+          </section>
+
+          {/* AI Review */}
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">AI Review</h4>
+              <button
+                onClick={runAI} disabled={busy === "run_ai_review" || (!r.document_path && !r.response_submitted_at)}
+                className="text-xs font-medium px-3 py-1 rounded-lg bg-navy text-white hover:bg-navy/90 disabled:opacity-50"
+              >
+                {busy === "run_ai_review" ? "Reviewing…" : r.ai_review_status === "complete" ? "Re-run AI review" : "Run AI review"}
+              </button>
+            </div>
+            {r.ai_review_result ? (
+              <div className="p-3 rounded-lg border border-border bg-card text-sm space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                    r.ai_review_result.verdict === "pass" ? "bg-emerald-100 text-emerald-700" :
+                    r.ai_review_result.verdict === "fail" ? "bg-red-100 text-red-700" :
+                    "bg-amber-100 text-amber-700"
+                  }`}>
+                    {(r.ai_review_result.verdict || "review").toUpperCase()}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {r.ai_reviewed_at ? relTime(r.ai_reviewed_at) : ""}
+                  </span>
+                </div>
+                {r.ai_review_result.summary && <p className="text-sm">{r.ai_review_result.summary}</p>}
+                {Array.isArray(r.ai_review_result.strengths) && r.ai_review_result.strengths.length > 0 && (
+                  <div><span className="text-xs font-semibold text-emerald-700">Strengths:</span>
+                    <ul className="list-disc list-inside text-xs text-muted-foreground">{r.ai_review_result.strengths.map((s: string, i: number) => <li key={i}>{s}</li>)}</ul>
+                  </div>
+                )}
+                {Array.isArray(r.ai_review_result.concerns) && r.ai_review_result.concerns.length > 0 && (
+                  <div><span className="text-xs font-semibold text-amber-700">Concerns:</span>
+                    <ul className="list-disc list-inside text-xs text-muted-foreground">{r.ai_review_result.concerns.map((s: string, i: number) => <li key={i}>{s}</li>)}</ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {r.ai_review_status === "running" ? "AI review running…" :
+                 (!r.document_path && !r.response_submitted_at) ? "Upload a document or receive a referee submission first." :
+                 "No AI review yet."}
+              </p>
+            )}
+          </section>
+
+          {/* Decision */}
+          <section>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Decision</h4>
+            <Textarea
+              value={notes} onChange={(e) => setNotes(e.target.value)}
+              placeholder="Recruiter notes…" rows={3}
+              className="bg-card mb-2"
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={saveNotes} disabled={busy === "set_notes"}
+                className="text-xs font-medium px-3 py-1.5 rounded-lg border border-border hover:bg-muted">
+                {busy === "set_notes" ? "Saving…" : "Save notes"}
+              </button>
+              {r.approval_status !== "approved" && (
+                <button onClick={approve} disabled={busy === "approve"}
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">
+                  {busy === "approve" ? "Approving…" : "Approve"}
+                </button>
+              )}
+              {r.approval_status !== "rejected" && (
+                <button onClick={() => setShowReject((v) => !v)}
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 text-red-700 hover:bg-red-50">
+                  Reject
+                </button>
+              )}
+              {r.approval_status && (
+                <button onClick={resetApproval} disabled={busy === "reset_approval"}
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-border hover:bg-muted">
+                  Reset decision
+                </button>
+              )}
+            </div>
+            {showReject && (
+              <div className="mt-2 flex gap-2">
+                <Input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Reason for rejection" className="bg-card" />
+                <button onClick={reject} disabled={busy === "reject"}
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700">
+                  Confirm reject
+                </button>
+              </div>
+            )}
+            {r.approval_status === "rejected" && r.rejection_reason && (
+              <p className="mt-2 text-xs text-red-700">Rejected: {r.rejection_reason}</p>
+            )}
+          </section>
+
+          {/* Timeline */}
+          <section>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Timeline</h4>
+            {activity.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No activity yet.</p>
+            ) : (
+              <ol className="relative border-l border-border ml-2 space-y-2">
+                {activity.map((a) => (
+                  <li key={a.id} className="ml-3 pl-2">
+                    <div className="absolute -left-1.5 mt-1.5 h-2 w-2 rounded-full bg-teal" />
+                    <div className="text-sm">{formatEvent(a)}</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {a.actor_name ? `${a.actor_name} · ` : ""}{relTime(a.created_at)}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatEvent(a: RefActivity): string {
+  switch (a.event_type) {
+    case "request_sent": return `Request sent to ${a.metadata?.referee_email ?? "referee"}`;
+    case "reminder_sent": return `Reminder #${a.metadata?.reminder_number ?? "?"} sent`;
+    case "received": return `Reference received from ${a.metadata?.referee_name ?? "referee"}`;
+    case "manual_upload": return `Document uploaded manually${a.metadata?.file_name ? ` (${a.metadata.file_name})` : ""}`;
+    case "ai_review": return `AI review completed${a.metadata?.result?.verdict ? ` — ${a.metadata.result.verdict}` : ""}`;
+    case "approved": return "Reference approved";
+    case "rejected": return `Reference rejected${a.metadata?.reason ? `: ${a.metadata.reason}` : ""}`;
+    case "approval_reset": return "Approval decision reset";
+    default: return a.event_type;
+  }
+}
+

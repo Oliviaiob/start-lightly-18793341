@@ -181,7 +181,7 @@ export default function TimesheetDetailPage() {
     if (newStatus === "approved") patch.approved_at = new Date().toISOString();
     if (newStatus === "paid") patch.paid_at = new Date().toISOString();
 
-    const { error } = await supabase.from("timesheet_submissions").update(patch).eq("id", id);
+    const { error } = await supabase.from("timesheet_submissions").update(patch as any).eq("id", id);
     if (error) { toast.error("Update failed"); setApproving(false); return; }
     await supabase.from("timesheet_status_log").insert({
       submission_id: id, previous_status: prev, new_status: newStatus,
