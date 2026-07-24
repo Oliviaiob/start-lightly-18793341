@@ -171,7 +171,7 @@ function SettingsPage() {
   const setRole = async (memberId: string, role: string) => {
     if (memberId === userId) return toast.error("Can't change your own role");
     setUpdatingRoleId(memberId);
-    await supabase.from("user_roles").update({ role }).eq("user_id", memberId);
+    await supabase.from("user_roles").update({ role: role as any }).eq("user_id", memberId);
     setUpdatingRoleId(null);
     toast.success("Role updated");
     loadTeam();

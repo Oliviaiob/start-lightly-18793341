@@ -151,7 +151,7 @@ export default function ApplicationsCentre() {
           candidate_type: app.open_to_temp ? "temporary" : "permanent",
           qualifications: app.qualifications,
           source: "jobs_site",
-        })
+        } as any)
         .select("id")
         .single();
 
@@ -223,7 +223,7 @@ export default function ApplicationsCentre() {
           qualifications: app.qualifications,
           source: "jobs_site",
           status: "rejected",
-        })
+        } as any)
         .select("id")
         .single();
 

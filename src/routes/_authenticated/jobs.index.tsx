@@ -638,7 +638,7 @@ function Page() {
                           <Briefcase className="h-4 w-4 text-navy" />
                         </div>
                         <div className="font-medium">{r.title}</div>
-                        {r.job_reference && <div className="text-[10px] font-mono text-muted-foreground">{r.job_reference}</div>}
+                        {(r as any).job_reference && <div className="text-[10px] font-mono text-muted-foreground">{(r as any).job_reference}</div>}
                       </div>
                     </td>
                     <td className="py-3 px-3 text-xs text-foreground">{r.client_name ?? "—"}</td>
