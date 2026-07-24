@@ -2660,13 +2660,19 @@ function RefExtraSections({
   };
 
   const runAi = async () => {
-    setAiBusy(true); setAiLocalStatus("pending");
+    setAiBusy(true); setAiLocalStatus("running");
     try {
-      const { error } = await supabase.functions.invoke("manage-reference", {
+      const { data, error } = await supabase.functions.invoke("manage-reference", {
         body: { action: "run_ai_review", reference_id: ref.id },
       });
-      if (error) throw error;
-      await onRefresh();
+      if (error || !data?.success) {
+        toast.error("AI review failed");
+        setAiLocalStatus(null);
+        return;
+      }
+      setAiLocalStatus(data.status ?? "passed");
+      setAiLocalResult(data.result ?? null);
+      setAiLocalReviewedAt(new Date().toISOString());
       await refreshActivity();
     } catch (e: any) {
       toast.error(e.message || "AI review failed");
