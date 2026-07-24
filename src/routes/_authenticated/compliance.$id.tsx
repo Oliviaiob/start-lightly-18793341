@@ -2443,11 +2443,13 @@ const REF_CHIP_STYLES: Record<string, { bg: string; text: string; label: string 
 };
 
 function ReferenceChipRow({
-  label, status, required, onStatusChange, saving,
+  label, status, required, refereeName, companyName, onStatusChange, saving,
 }: {
   label: string;
   status: string;
   required: boolean;
+  refereeName?: string | null;
+  companyName?: string | null;
   onStatusChange: (val: ItemStatus) => void;
   saving: boolean;
 }) {
@@ -2458,14 +2460,22 @@ function ReferenceChipRow({
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const subtitle = [refereeName, companyName].filter(Boolean).join(" · ");
+
   return (
     <div className="bg-card rounded-2xl border border-border/50 px-5 py-3 flex items-center gap-3">
-      <div className="flex-1 min-w-0 flex items-center gap-2">
-        <span className="text-sm font-medium">{label}</span>
-        {!required && (
-          <span className="text-[10px] text-muted-foreground/60 font-normal">optional</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">{label}</span>
+          {!required && (
+            <span className="text-[10px] text-muted-foreground/60 font-normal">optional</span>
+          )}
+        </div>
+        {subtitle && (
+          <div className="text-xs text-muted-foreground mt-0.5 truncate">{subtitle}</div>
         )}
       </div>
+
       <span
         className="inline-flex items-center h-6 px-2.5 rounded-full text-[11px] font-medium"
         style={{ backgroundColor: style.bg, color: style.text }}
