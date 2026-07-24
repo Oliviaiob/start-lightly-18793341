@@ -2407,3 +2407,72 @@ function ReferencesTracker({ candidateId, references, onRefresh }: {
   );
 }
 
+// ── ReferenceChipRow ──────────────────────────────────────────────────────────
+// Read-only status chip for reference checklist items. Actual reference actions
+// (request/upload/approve/reject) live in the Reference Tracker below.
+
+const REF_CHIP_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  not_submitted: { bg: "#F3F4F6", text: "#6B7280", label: "Not Submitted" },
+  pending:       { bg: "#DBEAFE", text: "#1D4ED8", label: "Requested" },
+  uploaded:      { bg: "#FEF3C7", text: "#D97706", label: "Uploaded" },
+  approved:      { bg: "#D1FAE5", text: "#065F46", label: "Approved" },
+  rejected:      { bg: "#FEE2E2", text: "#991B1B", label: "Rejected" },
+  not_required:  { bg: "#EDE9FE", text: "#5B21B6", label: "Not Required" },
+};
+
+function ReferenceChipRow({
+  label, status, required, onStatusChange, saving,
+}: {
+  label: string;
+  status: string;
+  required: boolean;
+  onStatusChange: (val: ItemStatus) => void;
+  saving: boolean;
+}) {
+  const style = REF_CHIP_STYLES[status] ?? REF_CHIP_STYLES.not_submitted;
+
+  const scrollToTracker = () => {
+    const el = document.getElementById("references-tracker");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  return (
+    <div className="bg-card rounded-2xl border border-border/50 px-5 py-3 flex items-center gap-3">
+      <div className="flex-1 min-w-0 flex items-center gap-2">
+        <span className="text-sm font-medium">{label}</span>
+        {!required && (
+          <span className="text-[10px] text-muted-foreground/60 font-normal">optional</span>
+        )}
+      </div>
+      <span
+        className="inline-flex items-center h-6 px-2.5 rounded-full text-[11px] font-medium"
+        style={{ backgroundColor: style.bg, color: style.text }}
+      >
+        {style.label}
+      </span>
+      <button
+        type="button"
+        onClick={scrollToTracker}
+        className="text-xs text-teal font-medium hover:underline"
+      >
+        View in Tracker →
+      </button>
+      {/* Not Required override — kept in parity with other compliance items */}
+      <Select
+        value={status === "not_required" ? "not_required" : "active"}
+        onValueChange={(v) => {
+          if (v === "not_required") onStatusChange("not_required");
+          else onStatusChange("not_submitted");
+        }}
+        disabled={saving}
+      >
+        <SelectTrigger className="h-7 w-32 text-[11px] rounded-lg"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="active">Required</SelectItem>
+          <SelectItem value="not_required">Not Required</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
