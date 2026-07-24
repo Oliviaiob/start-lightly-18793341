@@ -2744,6 +2744,8 @@ function RefExtraSections({
   };
 
   const aiStatus = aiLocalStatus ?? ref.ai_review_status ?? "not_reviewed";
+  const aiResult = aiLocalResult ?? ref.ai_review_result;
+  const aiReviewedAt = aiLocalReviewedAt ?? ref.ai_reviewed_at;
   const resolveName = (id: string | null | undefined, fallbackName?: string | null) =>
     fallbackName || (id ? (actorNames[id] || "Unknown") : "Automated");
 
