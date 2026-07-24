@@ -2873,16 +2873,6 @@ function RefExtraSections({
               Re-run AI Review
             </button>
           </div>
-            )}
-            {ref.ai_reviewed_at && (
-              <p className="text-[11px] text-gray-400">Reviewed {fmtDateTime(ref.ai_reviewed_at)}</p>
-            )}
-            <button
-              onClick={runAi} disabled={aiBusy}
-              className="h-7 px-3 rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-              Re-run AI Review
-            </button>
-          </div>
         ) : (
           <div className="flex items-center gap-3">
             <p className="text-xs text-gray-500 flex-1">No AI review yet.</p>
